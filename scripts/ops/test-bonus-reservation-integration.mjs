@@ -15,7 +15,9 @@ import { readFileSync } from "node:fs";
 import crypto from "node:crypto";
 import assert from "node:assert/strict";
 
-const NET = "ener-bonus-it-net", PG = "ener-bonus-it-pg", PGRST = "ener-bonus-it-pgrst";
+// ชื่อ container/network/worktree ไม่ซ้ำต่อรอบ — cleanup เฉพาะที่รอบนี้สร้าง
+const RUN = `${process.pid}-${crypto.randomBytes(3).toString("hex")}`;
+const NET = `ener-bonus-it-${RUN}-net`, PG = `ener-bonus-it-${RUN}-pg`, PGRST = `ener-bonus-it-${RUN}-pgrst`;
 const PORT = 30000 + (process.pid % 20000);
 const JWT_SECRET = crypto.randomBytes(32).toString("hex");
 const root = new URL("../../", import.meta.url);
@@ -35,17 +37,17 @@ function teardown() {
 
 if (!process.env.ENER_BONUS_IT_CHILD) {
   process.on("uncaughtException", (e) => { console.error(e); teardown(); process.exit(1); });
-  teardown();
   sh("docker", ["network", "create", NET]);
   sh("docker", ["run", "-d", "--name", PG, "--network", NET, "-e", "POSTGRES_PASSWORD=pg", "postgres:16-alpine"]);
-  for (let i = 0; i < 60; i++) {
-    try { psql("select 1"); break; } catch { execFileSync("sleep", ["0.5"]); }
-  }
-  psql("CREATE DATABASE bonus_it");
+  let created = false;
+  for (let i = 0; i < 120 && !created; i++) { try { psql("CREATE DATABASE bonus_it"); created = true; } catch { execFileSync("sleep", ["0.5"]); } }
+  if (!created) { teardown(); assert.ok(created, "Postgres ไม่พร้อม"); }
   psql(readFileSync(new URL("fixtures/scanv2-bonus-schema.sql", import.meta.url), "utf8"), "bonus_it");
   psql(readFileSync(new URL("sql/057_new_customer_trial.sql", root), "utf8"), "bonus_it");
   const m064 = readFileSync(new URL("sql/064_bonus_reservation.sql", root), "utf8");
   psql(m064, "bonus_it"); psql(m064, "bonus_it"); // idempotent
+  const m065 = readFileSync(new URL("sql/065_trial_dedup_evidence.sql", root), "utf8");
+  psql(m065, "bonus_it"); psql(m065, "bonus_it"); // idempotent
   sh("docker", ["run", "-d", "--name", PGRST, "--network", NET, "-p", `127.0.0.1:${PORT}:3000`,
     "-e", `PGRST_DB_URI=postgres://authenticator:authenticator@${PG}:5432/bonus_it`,
     "-e", "PGRST_DB_SCHEMA=public", "-e", "PGRST_DB_ANON_ROLE=web_anon", "-e", `PGRST_JWT_SECRET=${JWT_SECRET}`,
@@ -57,20 +59,17 @@ if (!process.env.ENER_BONUS_IT_CHILD) {
   }
   if (!up) { teardown(); assert.ok(up, "PostgREST ไม่ขึ้น"); }
   const OLD_SHA = process.env.ROLLBACK_SHA || "be67a98";
-  const OLD_ROOT = `/tmp/ener-bonus-it-rollback-${OLD_SHA}`;
-  spawnSync("git", ["-C", new URL(".", root).pathname, "worktree", "remove", "--force", OLD_ROOT], { stdio: "ignore" });
+  const OLD_ROOT = `/tmp/ener-bonus-it-rollback-${OLD_SHA}-${RUN}`;
   sh("git", ["-C", new URL(".", root).pathname, "worktree", "add", "--detach", OLD_ROOT, OLD_SHA]);
   sh("ln", ["-s", new URL("node_modules", root).pathname, `${OLD_ROOT}/node_modules`]);
-  const env = {
-    ...process.env, ENER_BONUS_IT_CHILD: "1", ENER_BONUS_IT_OLD_ROOT: OLD_ROOT, ENER_BONUS_IT_OLD_SHA: OLD_SHA, ENER_BONUS_IT_PG: PG, ENER_BONUS_IT_PORT: String(PORT),
+  const { buildChildEnv } = await import("./fixtures/it-child-env.mjs");
+  const env = buildChildEnv(root, {
+    ENER_BONUS_IT_CHILD: "1", ENER_BONUS_IT_OLD_ROOT: OLD_ROOT, ENER_BONUS_IT_OLD_SHA: OLD_SHA, ENER_BONUS_IT_PG: PG, ENER_BONUS_IT_PORT: String(PORT),
     LOCAL_POSTGREST_URL: `http://127.0.0.1:${PORT}`, LOCAL_POSTGREST_ANON_KEY: jwt("web_anon"),
     LOCAL_POSTGREST_SERVICE_KEY: jwt("service_role"), SUPABASE_URL: "http://127.0.0.1:9", SUPABASE_SERVICE_ROLE_KEY: "x",
     OPENAI_API_KEY: "sk-test", CHANNEL_ACCESS_TOKEN: "t", CHANNEL_SECRET: "s", GEMINI_API_KEY: "g", REDIS_URL: "",
     IMAGE_DEDUP_ENABLED: "true", SCAN_V2_UPLOAD_BUCKET: "it-bucket", NODE_ENV: "test",
-  };
-  for (const line of readFileSync(new URL(".env.example", root), "utf8").split("\n")) {
-    const m = line.match(/^([A-Z_]+)=/); if (m && !env[m[1]]) env[m[1]] = "test-placeholder";
-  }
+  });
   const r = spawnSync(process.execPath, ["--import", new URL("fixtures/bonus-it-hooks.mjs", import.meta.url).pathname, new URL(import.meta.url).pathname],
     { env, stdio: "inherit" });
   teardown();
@@ -81,15 +80,9 @@ if (!process.env.ENER_BONUS_IT_CHILD) {
 // ───────────────────────── child: ทดสอบกับของจริง ─────────────────────────
 const PGC = process.env.ENER_BONUS_IT_PG;
 const q = (s, db = "bonus_it") => sh("docker", ["exec", "-i", PGC, "psql", "-U", "postgres", "-d", db, "-X", "-qAt", "-v", "ON_ERROR_STOP=1"], { input: s });
-// spy: การเรียกออกนอกเครื่อง (OpenAI/Gemini/vision sidecar/LINE ใช้ global fetch) — ต้องเป็น 0 ในทุกเส้นที่ถูกกันก่อน AI
-// (วางก่อน import โมดูลแอป เพราะ SDK จับ fetch ตอนสร้าง client)
-const externalCalls = [];
-const REAL_FETCH = globalThis.fetch;
-globalThis.fetch = function spiedFetch(input, init) {
-  const u = String(input instanceof Request ? input.url : input);
-  if (!/^https?:\/\/127\.0\.0\.1(:|\/)/.test(u)) externalCalls.push(u.replace(/^(https?:\/\/[^/]+).*/, "$1"));
-  return REAL_FETCH.call(this, input, init);
-};
+// กันเครือข่ายออกนอกเครื่องก่อนส่ง (ทุกช่องทาง TCP/TLS) — import ก่อนโมดูลแอป (Codex 1 ต.ค.: ไม่ใช่แค่บันทึกแล้วปล่อยผ่าน)
+const { blockedAttempts: externalCalls, selfTestGuard } = await import("./fixtures/it-network-guard.mjs");
+await selfTestGuard(); // ยืนยันว่าบล็อกก่อนส่งจริง ก่อนโหลดโมดูลแอป
 const { checkScanAccess } = await import(new URL("src/services/paymentAccess.service.js", root));
 const { ingestScanImageAsyncV2, quotaGuardCodeFromError } = await import(new URL("src/services/scanV2/webhookImageIngestion.service.js", root));
 const { processScanJob, failJob } = await import(new URL("src/services/scanV2/processScanJob.service.js", root));
@@ -121,7 +114,7 @@ async function ingest(uid, mid, buf, access) {
   finally { r(); }
 }
 const results = [];
-async function t(name, fn) { try { await fn(); results.push(`PASS ${name}`); } catch (e) { results.push(`FAIL ${name}: ${e?.message || e}`); process.exitCode = 1; } }
+async function t(name, fn) { try { await fn(); results.push(`PASS ${name}`); } catch (e) { results.push(`FAIL ${name}: ${e?.message || e}${e?.stderr ? " :: " + String(e.stderr).trim().slice(0, 300) : ""}`); process.exitCode = 1; } }
 
 await t("0 ดูสิทธิ์ (checkScanAccess ทั้ง consumeBonus true/false) ไม่แตะ bonus_scans", async () => {
   const u = await newUser();
@@ -385,7 +378,6 @@ async function rights(uid, expect) {
   }
   return a;
 }
-const extBefore = externalCalls.length;
 
 q(`select set_new_customer_trial_policy(true)`);
 try {
@@ -442,33 +434,60 @@ try {
     assert.equal(jobsOf(u.uid).filter((x) => !/\|failed\|/.test(x)).length, 2);
   });
 
-  await t("14 รูปซ้ำ (processScanJob จริง → dedup → หลักฐาน skipQuotaDecrement) ไม่นับสิทธิ์ทดลอง · inbound ซ้ำ (message id เดิม) ไม่นับซ้ำ", async () => {
-    const u = await newUser({ bonus: 0, dailyExhausted: false });
-    const old = await ingest(u.uid, "mid-14a-" + u.uid, image("T10"), await gate(u.uid));
-    const resId = q(`insert into scan_results_v2(scan_job_id,line_user_id,app_user_id,report_url) values('${old.jobId}','${u.uid}','${u.id}','https://example.test/r/t') returning id`);
-    await updateScanJob(old.jobId, { status: "completed", result_id: resId });
-    assert.equal(trialUsed(u.id), 1);
-    // inbound เดิมถูก LINE ส่งซ้ำ → งานเดียว
-    const again = await ingest(u.uid, "mid-14a-" + u.uid, image("T10"), await gate(u.uid));
-    assert.equal(again.ok && again.duplicate, true); assert.equal(jobsOf(u.uid).length, 1); assert.equal(trialUsed(u.id), 1);
-    // รูปเดิม message ใหม่ → จองช่องที่ 2 ตอน INSERT แล้ว worker พบรูปซ้ำ → ไม่นับ
-    const dup = await ingest(u.uid, "mid-14b-" + u.uid, image("T10"), await gate(u.uid));
-    assert.equal(dup.ok, true); assert.equal(trialUsed(u.id), 2, "จองไว้ก่อนระหว่างรอ worker");
-    q(`update scan_jobs set status='processing', locked_at=now(), worker_id='it' where id='${dup.jobId}'`);
-    const row = await getScanJobById(dup.jobId);
-    const r = quiet(); try { await processScanJob("it-worker", row); } finally { r(); }
-    assert.equal((await getScanJobById(dup.jobId)).status, "completed");
-    assert.equal(q(`select count(*) from outbound_messages where related_job_id='${dup.jobId}' and kind='scan_result' and status='queued' and payload_json->>'skipQuotaDecrement'='true'`), "1");
-    // กติกา 057: หลักฐานรูปซ้ำนับเมื่อข้อความถูก "ส่งแล้ว" (status='sent') — ระหว่างรอ delivery worker ช่องยังถูกถือไว้ (กันใช้เกิน)
-    assert.equal(trialUsed(u.id), 2, "ระหว่าง queued ยังถือช่องไว้");
-    q(`update outbound_messages set status='sent' where related_job_id='${dup.jobId}' and kind='scan_result'`); // delivery worker ส่งสำเร็จ
-    assert.equal(trialUsed(u.id), 1, "รูปซ้ำไม่กินสิทธิ์ทดลองหลังส่งข้อความสำเร็จ");
-    await rights(u.uid, { state: "trial_left", total: 1, freeLeft: 1 });
-    const j3 = await ingest(u.uid, "mid-14c-" + u.uid, image("T18"), await gate(u.uid));
-    assert.equal(j3.ok, true, "ใช้ช่องที่คืนมาได้จริง"); assert.equal(trialUsed(u.id), 2);
-  });
+  await t("14 รูปซ้ำ (processScanJob จริง → dedup → หลักฐาน skipQuotaDecrement queued) → 065 คืนช่องทันที ไม่รอ sent · inbound ซ้ำไม่นับซ้ำ", async () => {
+  const u = await newUser({ bonus: 0, dailyExhausted: false });
+  const old = await ingest(u.uid, "mid-14a-" + u.uid, image("T10"), await gate(u.uid));
+  const resId = q(`insert into scan_results_v2(scan_job_id,line_user_id,app_user_id,report_url) values('${old.jobId}','${u.uid}','${u.id}','https://example.test/r/t') returning id`);
+  await updateScanJob(old.jobId, { status: "completed", result_id: resId });
+  assert.equal(trialUsed(u.id), 1);
+  const again = await ingest(u.uid, "mid-14a-" + u.uid, image("T10"), await gate(u.uid));
+  assert.equal(again.ok && again.duplicate, true); assert.equal(jobsOf(u.uid).length, 1); assert.equal(trialUsed(u.id), 1);
+  const dup = await ingest(u.uid, "mid-14b-" + u.uid, image("T10"), await gate(u.uid));
+  assert.equal(dup.ok, true); assert.equal(trialUsed(u.id), 2, "จองไว้ก่อนระหว่างรอ worker");
+  q(`update scan_jobs set status='processing', locked_at=now(), worker_id='it' where id='${dup.jobId}'`);
+  const row = await getScanJobById(dup.jobId);
+  const r = quiet(); try { await processScanJob("it-worker", row); } finally { r(); }
+  assert.equal((await getScanJobById(dup.jobId)).status, "completed");
+  assert.equal(q(`select count(*) from outbound_messages where related_job_id='${dup.jobId}' and kind='scan_result' and status='queued' and payload_json->>'skipQuotaDecrement'='true'`), "1", "หลักฐานยัง queued");
+  assert.equal(trialUsed(u.id), 1, "065: หลักฐานที่บันทึกแล้วคืนช่องทันที");
+  await rights(u.uid, { state: "trial_left", total: 1, freeLeft: 1 });
+  const j3 = await ingest(u.uid, "mid-14c-" + u.uid, image("T18"), await gate(u.uid));
+  assert.equal(j3.ok, true, "ใช้ช่องที่คืนมาได้จริง"); assert.equal(trialUsed(u.id), 2);
+});
 
-  await t("15 ส่ง 3 รูปพร้อมกันด้วย snapshot สิทธิ์เดียวกัน (เหลือ 2) → งาน 2 · ถูกกันที่ DB 1 · ไม่เกินยอด", async () => {
+await t("14b 065 lifecycle หลักฐาน: delivery failed ถาวร/retry/ส่งสำเร็จ/crash → คืนครั้งเดียว · งานสำเร็จปกตินับ · หลักฐานของงานอื่น/ผู้ใช้อื่นไม่คืนผิดงาน · concurrent หลังคืน = งานเดียว", async () => {
+  const u = await newUser({ bonus: 0, dailyExhausted: false });
+  const j1 = await ingest(u.uid, "mid-14b1-" + u.uid, image("T19"), await gate(u.uid));
+  const j2 = await ingest(u.uid, "mid-14b2-" + u.uid, image("T20"), await gate(u.uid));
+  assert.equal(trialUsed(u.id), 2);
+  // j1 = รูปซ้ำ (worker เขียนหลักฐานแล้ว crash — ไม่มีใครเรียกอะไรต่อ)
+  q(`update scan_jobs set status='completed' where id='${j1.jobId}'`);
+  q(`insert into outbound_messages(line_user_id,kind,related_job_id,payload_json,status) values('${u.uid}','scan_result','${j1.jobId}','{"skipQuotaDecrement":true,"dedupHit":true}','queued')`);
+  assert.equal(trialUsed(u.id), 1, "crash หลังเขียนหลักฐาน → คืนแล้ว");
+  // delivery ล้มถาวร
+  q(`update outbound_messages set status='failed' where related_job_id='${j1.jobId}'`); assert.equal(trialUsed(u.id), 1, "failed ถาวรยังคืน");
+  // retry: failed→queued→sent + แถว retry ใหม่ซ้ำอีกแถว → ยังคืนครั้งเดียว (นับ ไม่บวก)
+  q(`update outbound_messages set status='queued' where related_job_id='${j1.jobId}'`); assert.equal(trialUsed(u.id), 1);
+  q(`update outbound_messages set status='sent' where related_job_id='${j1.jobId}'`); assert.equal(trialUsed(u.id), 1);
+  q(`insert into outbound_messages(line_user_id,kind,related_job_id,payload_json,status) values('${u.uid}','scan_result','${j1.jobId}','{"skipQuotaDecrement":true}','sent')`); assert.equal(trialUsed(u.id), 1, "หลักฐานซ้ำไม่คืนซ้ำ");
+  // j2 = งานสำเร็จปกติ (skipQuotaDecrement=false) ต้องยังนับ · หลักฐานชนิดอื่น (kind ไม่ใช่ scan_result) ไม่คืน
+  q(`update scan_jobs set status='delivered' where id='${j2.jobId}'`);
+  q(`insert into outbound_messages(line_user_id,kind,related_job_id,payload_json,status) values('${u.uid}','scan_result','${j2.jobId}','{"skipQuotaDecrement":false}','sent')`);
+  q(`insert into outbound_messages(line_user_id,kind,related_job_id,payload_json,status) values('${u.uid}','pre_scan_ack','${j2.jobId}','{"skipQuotaDecrement":true}','sent')`); // kind อื่นที่ schema อนุญาต
+  assert.equal(trialUsed(u.id), 1, "งานสำเร็จปกติยังนับ · kind อื่นไม่ใช่หลักฐาน");
+  // หลักฐานของงานผู้ใช้อื่น ไม่คืนช่องให้ u
+  const v = await newUser({ bonus: 0, dailyExhausted: false });
+  const jv = await ingest(v.uid, "mid-14bv-" + v.uid, image("T21"), await gate(v.uid));
+  q(`insert into outbound_messages(line_user_id,kind,related_job_id,payload_json,status) values('${v.uid}','scan_result','${jv.jobId}','{"skipQuotaDecrement":true}','queued')`);
+  assert.equal(trialUsed(u.id), 1, "หลักฐานของ v ไม่กระทบ u"); assert.equal(trialUsed(v.id), 0);
+  // concurrent ช่องสุดท้ายหลังคืน: 3 รูปพร้อมกัน → งานเดียว
+  const a = await gate(u.uid); assert.equal(a.freeScansRemaining, 1);
+  const rs = await Promise.all(["T22", "T23", "T24"].map((s, i) => ingest(u.uid, `mid-14bc-${i}-` + u.uid, image(s), a)));
+  assert.equal(rs.filter((r) => r.ok).length, 1, JSON.stringify(rs)); assert.equal(trialUsed(u.id), 2);
+  await rights(u.uid, { state: "trial_exhausted", total: 0 });
+});
+
+await t("15 ส่ง 3 รูปพร้อมกันด้วย snapshot สิทธิ์เดียวกัน (เหลือ 2) → งาน 2 · ถูกกันที่ DB 1 · ไม่เกินยอด", async () => {
     const u = await newUser({ bonus: 0, dailyExhausted: false });
     const a = await gate(u.uid);
     const rs = await Promise.all(["T11", "T12", "T13"].map((s, i) => ingest(u.uid, `mid-15-${i}-` + u.uid, image(s), a)));
@@ -505,11 +524,11 @@ try {
     await rights(u.uid, { state: "bonus", total: 1, bonusLeft: 1 });
   });
 
-  await t("17 ตลอดชุด trial: ไม่มีการเรียกออกนอกเครื่อง (AI/LINE) แม้แต่ครั้งเดียว — ทุกครั้งที่ 3 ถูกกันก่อน worker", async () => {
-    const ext = externalCalls.slice(extBefore);
-    assert.deepEqual(ext, [], `เรียกออกนอก: ${JSON.stringify([...new Set(ext)])}`);
+  await t("17 ตลอดชุด (โบนัส+trial): ไม่มีการเรียกออกนอกเครื่อง — guard บล็อกก่อนส่ง (blocked=0)", async () => {
+    assert.deepEqual(externalCalls, [], `พยายามออกนอก: ${JSON.stringify([...new Set(externalCalls)])}`);
   });
 } finally { q(`select set_new_customer_trial_policy(false)`); }
 
 out(results.join("\n"));
-out(process.exitCode ? "RESULT: FAIL" : "RESULT: PASS (bonus reservation + new-customer trial integration)");
+out(`blocked external attempts: ${externalCalls.length}`);
+out(process.exitCode ? "RESULT: FAIL" : "RESULT: PASS (bonus reservation + new-customer trial integration · 065)");

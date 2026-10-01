@@ -5,6 +5,7 @@
  *
  * ของจริง: express + `line.middleware` (ตรวจลายเซ็นจริง) + `lineWebhookRouter` + handleEvent/handleImageMessage/finalizeAcceptedImage
  *          + checkScanAccess + ingestScanImageAsyncV2 + trigger 057/064 บน Postgres 16 (schema เต็มของ staging, ไม่มีข้อมูล) + PostgREST
+ * guard: net.Socket#connect บล็อกทุก host ที่ไม่ใช่ loopback ก่อนส่ง (fixtures/it-network-guard.mjs) · child ไม่สืบทอด env จริง (fixtures/it-child-env.mjs)
  * ของปลอม (ผ่าน --import hook): @line/bot-sdk Client (บันทึก reply · ส่งรูปจาก memory) · objectCheck AI → single_supported · S3 · thumbnail
  * สิ่งที่ยังไม่ใช่ของจริง: LINE platform เอง (ลายเซ็น/การส่ง), AI, worker สแกน (จำลองการส่งมอบด้วย updateScanJob)
  *
@@ -15,7 +16,9 @@ import { readFileSync } from "node:fs";
 import crypto from "node:crypto";
 import assert from "node:assert/strict";
 
-const NET = "ener-line-it-net", PG = "ener-line-it-pg", PGRST = "ener-line-it-pgrst";
+// ชื่อ container/network ไม่ซ้ำต่อรอบ — cleanup เฉพาะที่รอบนี้สร้าง (ไม่ rm -f ชื่อคงที่ของรอบอื่น)
+const RUN = process.env.ENER_LINE_IT_RUN || `${process.pid}-${crypto.randomBytes(3).toString("hex")}`;
+const NET = `ener-line-it-${RUN}-net`, PG = `ener-line-it-${RUN}-pg`, PGRST = `ener-line-it-${RUN}-pgrst`;
 const PORT = 31000 + (process.pid % 20000);
 const JWT_SECRET = crypto.randomBytes(32).toString("hex");
 const CHANNEL_SECRET = "it-channel-secret-" + crypto.randomBytes(8).toString("hex");
@@ -35,7 +38,6 @@ function teardown() {
 
 if (!process.env.ENER_LINE_IT_CHILD) {
   process.on("uncaughtException", (e) => { console.error(e); teardown(); process.exit(1); });
-  teardown();
   sh("docker", ["network", "create", NET]);
   sh("docker", ["run", "-d", "--name", PG, "--network", NET, "-e", "POSTGRES_PASSWORD=pg", "pgvector/pgvector:pg16"]);
   // init script ของ image รีสตาร์ต server หนึ่งครั้ง — ต้องรอจน CREATE DATABASE สำเร็จจริง ไม่ใช่แค่ select 1 ครั้งแรก
@@ -45,6 +47,7 @@ if (!process.env.ENER_LINE_IT_CHILD) {
   psql(readFileSync(new URL("fixtures/staging-schema-2026-10-01.sql", import.meta.url), "utf8"), "line_it");
   psql(readFileSync(new URL("sql/057_new_customer_trial.sql", root), "utf8"), "line_it");
   psql(readFileSync(new URL("sql/064_bonus_reservation.sql", root), "utf8"), "line_it");
+  psql(readFileSync(new URL("sql/065_trial_dedup_evidence.sql", root), "utf8"), "line_it");
   sh("docker", ["run", "-d", "--name", PGRST, "--network", NET, "-p", `127.0.0.1:${PORT}:3000`,
     "-e", `PGRST_DB_URI=postgres://authenticator:authenticator@${PG}:5432/line_it`,
     "-e", "PGRST_DB_SCHEMA=public", "-e", "PGRST_DB_ANON_ROLE=web_anon", "-e", `PGRST_JWT_SECRET=${JWT_SECRET}`,
@@ -55,17 +58,15 @@ if (!process.env.ENER_LINE_IT_CHILD) {
     if (!up) execFileSync("sleep", ["0.5"]);
   }
   if (!up) { teardown(); assert.ok(up, "PostgREST ไม่ขึ้น"); }
-  const env = {
-    ...process.env, ENER_LINE_IT_CHILD: "1", ENER_LINE_IT_PG: PG,
+  const { buildChildEnv } = await import("./fixtures/it-child-env.mjs");
+  const env = buildChildEnv(root, {
+    ENER_LINE_IT_CHILD: "1", ENER_LINE_IT_PG: PG, ENER_LINE_IT_APP_LOG: process.env.ENER_LINE_IT_APP_LOG || "",
     LOCAL_POSTGREST_URL: `http://127.0.0.1:${PORT}`, LOCAL_POSTGREST_ANON_KEY: jwt("web_anon"),
     LOCAL_POSTGREST_SERVICE_KEY: jwt("service_role"), SUPABASE_URL: "http://127.0.0.1:9", SUPABASE_SERVICE_ROLE_KEY: "x",
     OPENAI_API_KEY: "sk-test", CHANNEL_ACCESS_TOKEN: "it-token", CHANNEL_SECRET, GEMINI_API_KEY: "g", REDIS_URL: "",
     IMAGE_DEDUP_ENABLED: "true", SCAN_V2_UPLOAD_BUCKET: "it-bucket", NODE_ENV: "test", ENABLE_ASYNC_SCAN_V2: "true",
     LIFF_ID: "2000000000-abcdefgh", SESSION_SECRET: "it-session-secret", ADMIN_LINE_USER_ID: "U" + "a".repeat(32),
-  };
-  for (const line of readFileSync(new URL(".env.example", root), "utf8").split("\n")) {
-    const m = line.match(/^([A-Z_]+)=/); if (m && !env[m[1]]) env[m[1]] = "test-placeholder";
-  }
+  });
   const r = spawnSync(process.execPath, ["--import", new URL("fixtures/line-it-hooks.mjs", import.meta.url).pathname, new URL(import.meta.url).pathname],
     { env, stdio: "inherit" });
   teardown();
@@ -76,16 +77,11 @@ if (!process.env.ENER_LINE_IT_CHILD) {
 const PGC = process.env.ENER_LINE_IT_PG;
 const q = (s, db = "line_it") => sh("docker", ["exec", "-i", PGC, "psql", "-U", "postgres", "-d", db, "-X", "-qAt", "-v", "ON_ERROR_STOP=1"], { input: s });
 
-// spy: fetch ออกนอกเครื่อง — loading animation ของ LINE ตัดจบในเครื่อง (ไม่ยิงจริง) · อย่างอื่นบันทึก host
-const externalCalls = [];
-const REAL_FETCH = globalThis.fetch;
-globalThis.fetch = function spiedFetch(input, init) {
-  const u = String(input instanceof Request ? input.url : input);
-  if (/^https:\/\/api\.line\.me\/v2\/bot\/chat\/loading\/start/.test(u)) { externalCalls.push("line:loading(short-circuit)"); return Promise.resolve(new Response("{}", { status: 200 })); }
-  if (!/^https?:\/\/127\.0\.0\.1(:|\/)/.test(u)) externalCalls.push(u.replace(/^(https?:\/\/[^/]+).*/, "$1"));
-  return REAL_FETCH.call(this, input, init);
-};
-
+// กันเครือข่ายออกนอกเครื่องก่อนส่ง (ทุกช่องทาง TCP/TLS) — import ก่อนโมดูลแอป · loading animation ของ LINE ตัดจบในเครื่อง
+const { blockedAttempts, shortCircuitFetch, selfTestGuard } = await import("./fixtures/it-network-guard.mjs");
+await selfTestGuard(); // ยืนยันว่าบล็อกก่อนส่งจริง ก่อนโหลดโมดูลแอป
+const loadingHits = [];
+shortCircuitFetch(/^https:\/\/api\.line\.me\/v2\/bot\/chat\/loading\/start/, undefined, (u) => loadingHits.push(u));
 const express = (await import("express")).default;
 const line = (await import("@line/bot-sdk")).default;
 const { lineWebhookRouter } = await import(new URL("src/routes/lineWebhook.js", root));
@@ -94,6 +90,8 @@ const { updateScanJob } = await import(new URL("src/stores/scanV2/scanJobs.db.js
 const { resolveLiffRights } = await import(new URL("src/routes/liff.routes.js", root));
 const { findForbiddenPhrase } = await import(new URL("src/services/entitlementCopy.service.js", root));
 const { checkScanAccess } = await import(new URL("src/services/paymentAccess.service.js", root));
+const { processScanJob } = await import(new URL("src/services/scanV2/processScanJob.service.js", root));
+const { getScanJobById } = await import(new URL("src/stores/scanV2/scanJobs.db.js", root));
 
 const lineCfg = { channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN, channelSecret: process.env.CHANNEL_SECRET };
 const app = express();
@@ -113,7 +111,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const sign = (body) => crypto.createHmac("sha256", process.env.CHANNEL_SECRET).update(body).digest("base64");
 async function post(events, { badSignature = false } = {}) {
   const body = JSON.stringify({ destination: "Ubot", events });
-  const r = await REAL_FETCH(`http://127.0.0.1:${port}/webhook/line`, { method: "POST", headers: { "content-type": "application/json", "x-line-signature": badSignature ? "bad" : sign(body) }, body });
+  const r = await fetch(`http://127.0.0.1:${port}/webhook/line`, { method: "POST", headers: { "content-type": "application/json", "x-line-signature": badSignature ? "bad" : sign(body) }, body });
   return r.status;
 }
 async function waitFor(fn, { timeoutMs = 20000, label = "" } = {}) {
@@ -134,7 +132,7 @@ const deliver = async (uid) => { for (const j of jobsOf(uid)) { const id = j.spl
 let n = 0;
 const newUid = () => `Uline${String(++n).padStart(3, "0")}${"b".repeat(24)}`;
 const results = [];
-async function t(name, fn) { try { await fn(); results.push(`PASS ${name}`); } catch (e) { results.push(`FAIL ${name}: ${e?.message || e}`); process.exitCode = 1; } }
+async function t(name, fn) { try { await fn(); results.push(`PASS ${name}`); } catch (e) { results.push(`FAIL ${name}: ${e?.message || e}${e?.stderr ? " :: " + String(e.stderr).trim().slice(0, 300) : ""}`); process.exitCode = 1; } }
 const noForbidden = (text, where) => { const f = findForbiddenPhrase(text, "new_customer"); assert.equal(f, null, `${where}: คำต้องห้าม "${f}" ใน: ${text.slice(0, 300)}`); };
 
 /** ส่งรูปผ่าน webhook จริง แล้วรอจน handler ตอบ (reply ของ messageId นี้) หรือสร้างงาน */
@@ -229,9 +227,36 @@ await t("5 บัญชีเก่า (created_at ก่อน cutoff) ส่�
   assert.match(txt, /เติมสิทธิ์เพื่อสแกนองค์ใหม่|ยังไม่มีสิทธิ์/, txt); noForbidden(txt, "old-account paywall");
 });
 
-await t("6 ตลอดชุด: ไม่มีการเรียก AI/LINE จริง (fetch ออกนอก = เฉพาะ loading ที่ตัดจบในเครื่อง)", async () => {
-  const bad = externalCalls.filter((h) => h !== "line:loading(short-circuit)");
-  assert.deepEqual(bad, [], JSON.stringify([...new Set(bad)]));
+await t("6 รูปซ้ำ (065): งานที่ 2 เป็นรูปเดิม → worker จริงพบซ้ำ → หลักฐาน queued → สิทธิ์คืนทันทีไม่รอส่ง → รูปใหม่ได้งาน", async () => {
+  const C = newUid();
+  assert.equal(await post([evFollow(C)]), 200);
+  await waitFor(() => q(`select count(*) from app_users where line_user_id='${C}'`) === "1", { label: "follow C" });
+  q(`insert into users(id,birthdate) values('${C}','1992-02-02') on conflict (id) do update set birthdate=excluded.birthdate`);
+  const r1 = await sendImage(C, "mid-C-1", "V", { expectJob: 1 });
+  assert.equal(jobsOf(C).length, 1, JSON.stringify(r1.replies.map((c) => c.messages.map(textOf))));
+  const j1 = jobsOf(C)[0].split("|")[0];
+  const appUserId = q(`select app_user_id from scan_jobs where id='${j1}'`);
+  const resId = q(`insert into scan_results_v2(scan_job_id,line_user_id,app_user_id,report_url) values('${j1}','${C}','${appUserId}','https://example.test/r/c1') returning id`);
+  await updateScanJob(j1, { status: "processing" }); await updateScanJob(j1, { status: "completed", result_id: resId }); await updateScanJob(j1, { status: "delivered" });
+  // รูปเดิม (bytes เดิม) message ใหม่ → ผ่าน router → งานที่ 2 (จองช่องสุดท้ายไว้ก่อน)
+  const r2 = await sendImage(C, "mid-C-2", "V", { expectJob: 2 });
+  assert.equal(jobsOf(C).length, 2, JSON.stringify(r2.replies.map((c) => c.messages.map(textOf))));
+  assert.equal(Number(q(`select new_customer_trial_used('${appUserId}')`)), 2);
+  const j2 = jobsOf(C)[1].split("|")[0];
+  q(`update scan_jobs set status='processing', locked_at=now(), worker_id='it' where id='${j2}'`);
+  const row = await getScanJobById(j2);
+  await processScanJob("it-worker", row); // worker จริง: sha256 dedup → outbound skipQuotaDecrement=true (queued)
+  assert.equal(q(`select count(*) from outbound_messages where related_job_id='${j2}' and kind='scan_result' and status='queued' and payload_json->>'skipQuotaDecrement'='true'`), "1", "หลักฐานรูปซ้ำยัง queued (ยังไม่ส่ง)");
+  assert.equal(Number(q(`select new_customer_trial_used('${appUserId}')`)), 1, "065: คืนทันทีจากหลักฐาน ไม่รอ sent");
+  const liff = await resolveLiffRights(C); assert.equal(liff.total, 1); assert.equal(liff.freeLeft, 1);
+  const r3 = await sendImage(C, "mid-C-3", "W", { expectJob: 3 });
+  assert.equal(jobsOf(C).length, 3, "ช่องที่คืนมาใช้ได้จริง " + JSON.stringify(r3.replies.map((c) => c.messages.map(textOf))));
+  assert.equal(Number(q(`select new_customer_trial_used('${appUserId}')`)), 2);
+});
+
+await t("7 ตลอดชุด: ไม่มีการเรียกออกนอกเครื่อง — guard บล็อกก่อนส่ง (blocked=0) · loading ตัดจบในเครื่อง", async () => {
+  assert.deepEqual(blockedAttempts, [], JSON.stringify([...new Set(blockedAttempts)]));
+  assert.ok(loadingHits.length > 0, "loading animation ต้องถูกตัดจบในเครื่อง (ยืนยันว่า guard/short-circuit ทำงาน)");
 });
 
 q(`select set_new_customer_trial_policy(false)`);
@@ -240,5 +265,6 @@ console.log = ORIG.log; console.error = ORIG.error; console.warn = ORIG.warn;
 if (process.env.ENER_LINE_IT_APP_LOG) { (await import("node:fs")).writeFileSync(process.env.ENER_LINE_IT_APP_LOG, appLogs.join("\n")); }
 else if (process.exitCode) { out("── app log ท้าย ๆ (ช่วยวินิจฉัย; ตั้ง ENER_LINE_IT_APP_LOG=ไฟล์ เพื่อเก็บทั้งหมด) ──"); out(appLogs.slice(-60).map((l) => l.slice(0, 220)).join("\n")); }
 out(results.join("\n"));
-out(process.exitCode ? "RESULT: FAIL" : "RESULT: PASS (LINE webhook router → trial → paywall)");
+out(`blocked external attempts: ${blockedAttempts.length} · loading short-circuit hits: ${loadingHits.length}`);
+out(process.exitCode ? "RESULT: FAIL" : "RESULT: PASS (LINE webhook router → trial → paywall · 065)");
 process.exit(process.exitCode || 0);

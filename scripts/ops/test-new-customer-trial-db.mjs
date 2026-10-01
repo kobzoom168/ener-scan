@@ -33,6 +33,8 @@ try {
   // 064 (โบนัสจอง/คืนที่ scan_jobs) ต้องไม่เปลี่ยนกติกา trial ของ 057 — apply ทับแล้วรันชุดเดิม
   const m064 = readFileSync(new URL("../../sql/064_bonus_reservation.sql", import.meta.url),"utf8");
   sql(m064); sql(m064);
+  const m065 = readFileSync(new URL("../../sql/065_trial_dedup_evidence.sql", import.meta.url),"utf8");
+  sql(m065); sql(m065); // 065: หลักฐานรูปซ้ำนับทันที ไม่ขึ้นกับ delivery status
   assert.equal(JSON.parse(sql("SELECT new_customer_trial_status(NULL)" )).enabled,false);
   sql(insert(1)); sql(insert(1)); sql(insert(1)); // OFF retains daily admission behavior
   sql("SET ROLE web_anon; SELECT set_new_customer_trial_policy(true); RESET ROLE;");
@@ -58,6 +60,11 @@ try {
   sql(insert(3)); const cachedId = uid(jid);
   sql(`INSERT INTO outbound_messages(related_job_id,kind,status,payload_json) VALUES ('${cachedId}','scan_result','sent','{"skipQuotaDecrement":true}');`);
   assert.equal(JSON.parse(sql("SELECT new_customer_trial_status('user3')")).used,0);
+  sql(insert(3)); const queuedEv = uid(jid);
+  sql(`INSERT INTO outbound_messages(related_job_id,kind,status,payload_json) VALUES ('${queuedEv}','scan_result','queued','{"skipQuotaDecrement":true}');`);
+  assert.equal(JSON.parse(sql("SELECT new_customer_trial_status('user3')")).used,0, "065: หลักฐาน queued ก็ไม่นับ");
+  sql(`UPDATE outbound_messages SET status='failed' WHERE related_job_id='${queuedEv}';`);
+  assert.equal(JSON.parse(sql("SELECT new_customer_trial_status('user3')")).used,0, "065: delivery failed ถาวรก็ไม่นับ");
   sql(insert(3)); sql(insert(3)); assert.throws(() => sql(insert(3)), /trial_quota_exhausted/);
   // Two concurrent connections compete for the final slot; the first retains
   // its transaction lock so the second really waits before checking usage.
@@ -73,7 +80,7 @@ try {
   sql(migration);
   assert.equal(JSON.parse(sql("SELECT new_customer_trial_status(NULL)")).eligible_since, first);
   assert.throws(() => sql(insert(4)), /trial_quota_exhausted/);
-  console.log("PASS: idempotent migration, OFF/ON, cohort, paid/bonus, failure/retry, delivered, cache skip, toggle persistence, concurrent last slot");
+  console.log("PASS: idempotent migration (057/064/065), OFF/ON, cohort, paid/bonus, failure/retry, delivered, cache skip (sent/queued/failed), toggle persistence, concurrent last slot");
 } finally {
   sql(`DROP DATABASE ${db} WITH (FORCE);`,"postgres");
   console.log(`Removed synthetic database ${db}; no customer data used.`);

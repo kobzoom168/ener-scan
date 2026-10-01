@@ -89,7 +89,8 @@ test("LIFF total>0 ⇔ gate อนุญาต — ครบเมทริก�
     { name: "ฟรีวันนี้ยังเหลือ", user: baseUser(), scanCountToday: 0 },
     { name: "ฟรีวันนี้หมด ไม่มีอย่างอื่น", user: baseUser(), scanCountToday: 5 },
     { name: "ฟรีหมดแต่มีโบนัส", user: { ...baseUser(), bonus_scans: 1 }, scanCountToday: 5 },
-    { name: "แพ็กซื้อยังไม่หมดอายุ", user: { ...baseUser(), paid_until: "2026-10-01T00:00:00Z", paid_remaining_scans: 4 }, scanCountToday: 5 },
+    // วันหมดอายุต้องสัมพัทธ์กับเวลาจริง (resolveLiffRights ใช้ Date.now()) — ค่าคงที่ 2026-10-01 เคยหมดอายุพอดีวันที่ 1 ต.ค. 2026 ทำให้เทสต์ล้มเอง
+    { name: "แพ็กซื้อยังไม่หมดอายุ", user: { ...baseUser(), paid_until: new Date(Date.now() + 30 * 864e5).toISOString(), paid_remaining_scans: 4 }, scanCountToday: 5 },
     { name: "แพ็กหมดอายุ + ฟรีหมด (สภาพบัญชีกบ)", user: { ...baseUser(), paid_until: "2026-08-11T18:35:26Z", paid_remaining_scans: 999977 }, scanCountToday: 5 },
     { name: "trial ON เก่าไม่ eligible", user: baseUser(), scanCountToday: 0, trialEnabled: true, trialEligible: false },
     { name: "trial ON ใหม่ ใช้ไป 1", user: baseUser(), scanCountToday: 0, trialEnabled: true, trialEligible: true, trialUsed: 1 },

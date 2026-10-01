@@ -9,13 +9,14 @@ branch: `release/three-tasks` · **ยังไม่ deploy Pro · ไม่ br
 | 2 ปลดล็อกคลัง/รายงานย้อนหลัง | `845c4ec` | **ไม่มีสวิตช์ — กติกาถาวร** | ผลทันทีเมื่อ deploy |
 | 3 อนุมัติสลิปผ่าน Telegram | `e414938` | `TELEGRAM_SLIP_APPROVAL_ENABLED` + 4 ตัวประกอบ | **ปิด** (ยังไม่มีรายชื่อผู้อนุมัติ) |
 
-## Migration ที่ต้อง apply (ตามลำดับ ก่อน deploy โค้ดเสมอ)
+## Migration ที่ต้อง apply (ตามลำดับ ก่อน deploy โค้ดเสมอ): 057 → 061 → 062 → 063 → 064 → 065
 | ไฟล์ | งาน | หมายเหตุ |
 |---|---|---|
 | `sql/057_new_customer_trial.sql` | 1 | idempotent · ไม่ backfill · policy เริ่มต้น OFF |
 | `sql/061_telegram_slip_approval.sql` | 3 | idempotent · ตาราง token/audit ถูก REVOKE จาก web_anon เข้าได้ผ่าน RPC เท่านั้น |
 | `sql/062_atomic_payment_approval.sql` | 3 | atomic grant/audit + durable notification intent |
 | `sql/063_payment_approval_snapshot.sql` | 3 | mandatory calculation snapshot + evidence-backed notification stamp; removes unsafe old RPC overload |
+| `sql/065_trial_dedup_evidence.sql` | 1 | idempotent · ฟังก์ชันเดียว (`new_customer_trial_used` ไม่ขึ้นกับ delivery status) · apply หลัง 064 · **rollback กลับ 064 ลดสิทธิ์คงเหลือได้** (ดูหัวข้อ 1 ต.ค.) |
 (งาน 2 **ไม่มี migration** — เป็นการถอดเงื่อนไขในโค้ดล้วน)
 
 `058/059/060` (optout) ขึ้น Pro ไปแล้ว ไม่ต้องทำซ้ำ
@@ -31,7 +32,7 @@ branch: `release/three-tasks` · **ยังไม่ deploy Pro · ไม่ br
 1. เมื่อได้ GO Pro เท่านั้น: apply `057` → `061` → `062` → `063` แล้วตรวจ privileges/constraint ก่อนแตะโค้ด (ห้ามรัน 062 เดี่ยวหลัง 063 เพราะจะสร้าง RPC overload เก่าคืน)
 2. deploy exact SHA แล้วตรวจ runtime hash ทุกคอนเทนเนอร์
 3. **งาน 2 มีผลทันที** — ตรวจว่าลูกค้าที่ไม่เคยจ่ายเปิดคลังตัวเองได้ และยังเห็นของคนอื่นไม่ได้
-4. งาน 1: **ประกาศล่วงหน้าอย่างน้อย 3 วัน (72 ชม.)** (กบเปลี่ยนจาก 7 วัน 30 ก.ย. 2026 — ร่าง `docs/ai/drafts/2026-09-30-trial-policy-3day-notice.md`) แล้วจึงเปิดสวิตช์หลังครบกำหนดตามที่กบอนุมัติ (การเปิดครั้งแรกตั้ง `eligible_since` ถาวร) · ลำดับ: ทดสอบผ่าน → อนุมัติ deploy Pro → ส่งประกาศ → รอ ≥72 ชม. → อนุมัติเปิดนโยบาย
+4. งาน 1: **ประกาศล่วงหน้าอย่างน้อย 3 วัน (72 ชม.)** (กบเปลี่ยนจาก 7 วัน 30 ก.ย. 2026 — ร่าง `docs/ai/drafts/2026-09-30-trial-policy-3day-notice.md`) แล้วจึงเปิดสวิตช์หลังครบกำหนดตามที่กบอนุมัติ (การเปิดครั้งแรกตั้ง `eligible_since` ถาวร) · ลำดับ: ทดสอบผ่าน → อนุมัติ deploy Pro (migration 057→061→062→063→064→065 ก่อนโค้ด) → ส่งประกาศ → รอ ≥72 ชม. → อนุมัติเปิดนโยบาย
 5. งาน 3: ให้กบส่งรายการ Telegram user id → ตั้ง config → `setWebhook` พร้อม secret →
    ทดสอบด้วยรายการสังเคราะห์ก่อน → **ขออนุญาตกบก่อนส่งสลิปลูกค้าจริงใบแรก**
 
@@ -156,26 +157,24 @@ staging มี app_users 5 บัญชี ทั้งหมด `created_at` �
 
 **ยังไม่ใช่ live:** LINE platform จริง (ลายเซ็น/การส่ง/retry จริง), AI จริง, worker สแกน (จำลองการส่งมอบด้วย `updateScanJob`), หน้า LIFF จริงของบัญชีใหม่, การกรอกวันเกิดผ่านแชท
 
-### ข้อเสนอ patch (ยังไม่แก้ — รออนุมัติ): trial รูปซ้ำต้องไม่เสียสิทธิ์แม้ส่งข้อความไม่สำเร็จ
-ปัจจุบัน `new_customer_trial_used` (057/064) ไม่นับงานที่มี outbound `scan_result` + `skipQuotaDecrement=true` **และ `status='sent'`** → ถ้า delivery ล้มถาวร (`failed`) ช่องทดลองไม่คืน (ต่างจากโบนัสที่ trigger คืนทันทีเมื่อเขียนหลักฐาน)
-- **patch `sql/065_trial_dedup_evidence.sql`** (ฟังก์ชันเดียว, idempotent): ตัดเงื่อนไข `o.status = 'sent'` ออก — ยึด "หลักฐานรูปซ้ำที่ worker บันทึกสำเร็จ" (แถว outbound เขียนโดยเซิร์ฟเวอร์เท่านั้น ไม่ใช่คำกล่าวอ้างของ client) ไม่ว่าจะ `queued`/`sent`/`failed`
-  ```sql
-  CREATE OR REPLACE FUNCTION public.new_customer_trial_used(p_user uuid)
-  RETURNS integer LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
-    SELECT count(*)::integer FROM public.scan_jobs j
-    WHERE j.app_user_id = p_user AND j.access_source = 'free'
-      AND COALESCE(j.free_access_kind, 'daily') NOT LIKE 'bonus%'
-      AND j.status <> 'failed'
-      AND NOT EXISTS (SELECT 1 FROM public.outbound_messages o
-                      WHERE o.related_job_id = j.id AND o.kind = 'scan_result'
-                        AND o.payload_json->>'skipQuotaDecrement' = 'true');
-  $$;
-  ```
-- **กันคืนซ้ำ:** เป็นการนับ (NOT EXISTS) ไม่ใช่การบวกยอด → idempotent โดยธรรมชาติ · งานสำเร็จปกติ (`skipQuotaDecrement=false`) ยังนับ · concurrent ยัง serialize ด้วย `FOR UPDATE` ของ trigger เดิม
-- **ผลกระทบข้อมูลจริง (read-only 1 ต.ค.):** staging — งาน free ที่มีหลักฐานรูปซ้ำทั้งหมด 4 งานเป็น `sent` อยู่แล้ว (เปลี่ยน 0 แถว) · Pro — หลักฐานรูปซ้ำ 30 วัน 7 แถว ทั้งหมด `sent` (และ Pro ยังไม่มี 057) → ไม่มีลูกค้าได้/เสียสิทธิ์จาก patch นี้
-- **rollback:** re-apply นิยามฟังก์ชันจาก 064 (มีเงื่อนไข `sent`) — ไม่มี schema/ข้อมูลเปลี่ยน · ลำดับ Pro: 057→061→062→063→064→**065** ก่อน deploy โค้ด · เพิ่ม md5 อ้างอิงใน `verify-migration-versions.sh`
-- **เทสต์ที่จะเพิ่มเมื่ออนุมัติ (harness เดิม T14+):** หลักฐาน `queued`→คืนทันที · delivery retry (`failed`→`queued`→`sent`) คืนครั้งเดียว · delivery `failed` ถาวร คืน · crash หลังเขียนหลักฐาน (ไม่มีใครเรียกอะไรต่อ) คืน · concurrent ช่องสุดท้ายหลังคืน = งานเดียว · ไม่แก้ยอดย้อนหลัง ไม่ใช้โบนัสแทน trial
+### `sql/065_trial_dedup_evidence.sql` — trial รูปซ้ำไม่เสียสิทธิ์แม้ส่งข้อความไม่สำเร็จ (Codex อนุมัติแนวทาง 1 ต.ค. · **ยังไม่ apply staging/Pro**)
+เดิม `new_customer_trial_used` (057/064) ไม่นับงานที่มีหลักฐานรูปซ้ำเฉพาะเมื่อ outbound `status='sent'` → delivery ล้มถาวร/ค้าง queued = เสียช่องทดลอง · 065 ตัดเงื่อนไข `sent` ออก: ยึดหลักฐาน outbound `scan_result` + `skipQuotaDecrement=true` ที่ worker บันทึก (เซิร์ฟเวอร์เขียนเท่านั้น ไม่ใช่คำกล่าวอ้าง client) ไม่ว่าจะ queued/sent/failed · เป็นการนับ NOT EXISTS → idempotent ไม่มีคืนซ้ำ · งานสำเร็จปกติ (`skipQuotaDecrement=false`) ยังนับ · หลักฐานผูก `related_job_id` ของงานนั้น · คง exclusion `bonus%`/failed, SECURITY DEFINER, `search_path=public`, REVOKE FROM PUBLIC (ไม่มี grant ให้ web_anon เหมือน 057/064) · ไม่แตะ schema/ยอดลูกค้า · idempotent
 
+**หลักฐาน (ระบบแยก, 1 ต.ค.):** harness โบนัส+trial `test-bonus-reservation-integration.mjs` 20/20 PASS บน 057→064→065 (T14: หลักฐาน queued → คืนทันที → ใช้ช่องได้ · **T14b**: crash หลังเขียนหลักฐาน / delivery failed ถาวร / retry failed→queued→sent / แถวหลักฐานซ้ำ → คืนครั้งเดียว · งานสำเร็จปกตินับ · kind อื่นไม่ใช่หลักฐาน · หลักฐานของผู้ใช้อื่นไม่คืนผิดงาน · concurrent ช่องสุดท้ายหลังคืน = งานเดียว) · harness LINE webhook 8/8 PASS (ข้อ 6: worker จริงพบรูปซ้ำ → หลักฐาน queued → สิทธิ์คืนทันที → รูปใหม่ได้งานผ่าน router) · `test-new-customer-trial-db.mjs` PASS (หลักฐาน sent/queued/failed ไม่นับ) · md5 `new_customer_trial_used` ใหม่ = `cb5a32c34c0e7d4dada2f2132cc9d5ab` ใน `migration-function-md5.reference.txt` · preflight เพิ่มแถว `065 trial_used ignores delivery status`
+
+**ผลกระทบข้อมูลจริง (read-only 1 ต.ค. — ขอบเขตจำกัด ไม่ใช่ lifetime):** staging — งาน free ที่มีหลักฐานรูปซ้ำ (ทุกช่วงเวลา) 4 งาน ทั้งหมด `sent` → apply 065 ไม่เปลี่ยนยอดใคร · Pro — ตรวจเฉพาะหลักฐานรูปซ้ำ **30 วันล่าสุด** 7 แถว ทั้งหมด `sent` (Pro ยังไม่มี 057 จึงไม่มีผลต่อสิทธิ์ตอนนี้; ก่อน apply จริงให้รัน query ผลต่างด้านล่างทั้งช่วง)
+
+**Rollback 065 → 064: มีผลต่อสิทธิ์** — งานรูปซ้ำที่หลักฐานยังไม่ `sent` (queued/failed) จะกลับมานับเป็นการใช้สิทธิ์ (ลดสิทธิ์คงเหลือของบัญชีนั้น) แม้ไม่ UPDATE ยอดใด ๆ · ก่อนย้อนต้องแสดงผลต่างและให้กบตัดสิน:
+```sql
+-- บัญชี/งานที่สิทธิ์จะเปลี่ยนถ้าย้อนกลับ 064 (read-only)
+SELECT j.app_user_id, j.id AS job_id, o.status AS evidence_status
+FROM scan_jobs j JOIN outbound_messages o ON o.related_job_id=j.id AND o.kind='scan_result' AND o.payload_json->>'skipQuotaDecrement'='true'
+WHERE j.access_source='free' AND COALESCE(j.free_access_kind,'daily') NOT LIKE 'bonus%' AND j.status<>'failed'
+  AND NOT EXISTS (SELECT 1 FROM outbound_messages s WHERE s.related_job_id=j.id AND s.kind='scan_result' AND s.status='sent' AND s.payload_json->>'skipQuotaDecrement'='true');
+```
+ย้อน = re-apply นิยาม `new_customer_trial_used` จาก `sql/064` (ไม่มี schema/ข้อมูลเปลี่ยน) แล้วอัปเดต md5 อ้างอิงกลับ `73e32701eab031e4c7c1163caca6342e`
+
+**แผน apply staging (รออนุมัติ):** 1) `psql -d ener_scan_staging -f scripts/ops/preflight-three-tasks-migrations.sql` (คาด `065 … = false` ก่อน apply) → 2) รัน query ผลต่างข้างบน (คาด 0 แถว) → 3) `psql -d ener_scan_staging -v ON_ERROR_STOP=1 -f sql/065_trial_dedup_evidence.sql` → 4) preflight ซ้ำ (= true) + `verify-migration-versions.sh ener_scan_staging` (md5 ตรง 14/14) → 5) ไม่ต้อง deploy โค้ด (โค้ดไม่เปลี่ยน) · Pro: ลำดับ 057→061→062→063→064→065 ตามหัวข้อ migration
 
 ## สิ่งที่ยังไม่ได้ทำ (ต้องมีอนุมัติแยก)
 - ประกาศล่วงหน้า 3 วันของงาน 1 (ร่างแล้ว ยังไม่ส่ง — เดิม 7 วัน เปลี่ยน 30 ก.ย.)

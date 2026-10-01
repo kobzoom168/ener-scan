@@ -1,4 +1,4 @@
--- Preflight (READ-ONLY) ก่อน apply ชุด three-tasks: 057 → 061 → 062 → 063 → 064
+-- Preflight (READ-ONLY) ก่อน apply ชุด three-tasks: 057 → 061 → 062 → 063 → 064 → 065
 -- ใช้: sudo -u postgres psql -d <db> -X -f scripts/ops/preflight-three-tasks-migrations.sql
 -- ไม่มีคำสั่งเขียนใด ๆ · ทุกแถว prereq ต้องเป็น ok=t ก่อนเริ่ม apply
 \pset footer off
@@ -33,6 +33,7 @@ SELECT 'applied', y.name, y.ok FROM (VALUES
   ('064 release_bonus_reservation',  to_regproc('public.release_bonus_reservation') IS NOT NULL),
   ('064 dup-evidence trigger',       EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='trg_release_bonus_on_dup_evidence')),
   ('064 trial_used excludes bonus%', COALESCE(pg_get_functiondef(to_regproc('public.new_customer_trial_used')) LIKE '%NOT LIKE ''bonus%''%', false)),
+  ('065 trial_used ignores delivery status (dup evidence counts when recorded)', COALESCE(pg_get_functiondef(to_regproc('public.new_customer_trial_used')) NOT LIKE '%o.status = ''sent''%', false)),
   -- Codex 30 ก.ย.: md5(prosrc) พิสูจน์แค่ body — ตรวจ definition ที่เหลือด้วย: SECURITY DEFINER, search_path, grants, trigger เปิด
   ('fn: all SECURITY DEFINER',       (SELECT count(*) FROM pg_proc p WHERE p.proname = ANY(ARRAY['new_customer_trial_status','new_customer_trial_used','set_new_customer_trial_policy','guard_new_customer_trial_job','issue_telegram_approval_token','consume_telegram_approval_token','record_payment_approval_audit','purge_expired_telegram_approval_tokens','approve_payment_and_grant','list_payment_grants_pending_notify','mark_payment_grant_notified','release_bonus_reservation','release_bonus_on_dup_evidence','sweep_bonus_releases']) AND NOT p.prosecdef) = 0
                                      AND (SELECT count(*) FROM pg_proc p WHERE p.proname = ANY(ARRAY['new_customer_trial_status','new_customer_trial_used','set_new_customer_trial_policy','guard_new_customer_trial_job','issue_telegram_approval_token','consume_telegram_approval_token','record_payment_approval_audit','purge_expired_telegram_approval_tokens','approve_payment_and_grant','list_payment_grants_pending_notify','mark_payment_grant_notified','release_bonus_reservation','release_bonus_on_dup_evidence','sweep_bonus_releases'])) = 14),
