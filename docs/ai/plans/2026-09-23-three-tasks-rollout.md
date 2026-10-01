@@ -180,6 +180,6 @@ WHERE j.access_source='free' AND COALESCE(j.free_access_kind,'daily') NOT LIKE '
 
 ## สิ่งที่ยังไม่ได้ทำ (ต้องมีอนุมัติแยก)
 - ประกาศล่วงหน้า 3 วันของงาน 1 (ร่างแล้ว ยังไม่ส่ง — เดิม 7 วัน เปลี่ยน 30 ก.ย.)
-- งาน 3 Telegram approval: แผน `docs/ai/plans/2026-10-01-telegram-approval-staging-plan.md` (bot แยก · config 5 ตัว `ENABLED=false` · recreate `ener-scan`+`worker-maintenance` ด้วย `--no-build` image เดิม · เทสต์สังเคราะห์ · กันข้อความหลุด) — ยังไม่ทำ
+- งาน 3 Telegram approval: แผน `docs/ai/plans/2026-10-01-telegram-approval-staging-plan.md` (bot แยก · secret hex · config 5 ตัว `ENABLED=false` · recreate เฉพาะ `ener-scan` ผูก image ID + `--no-build --pull never --no-deps` · กักข้อความลูกค้าด้วย ban gate เดิม · "ปฏิเสธสลิปใน Telegram" ยังไม่มี) — **พบบั๊ก 1 ต.ค.: app.js ไม่มี JSON parser ก่อน router Telegram → ทุกปุ่มถูก ignored** แก้ใน router แล้ว (commit แยก) · harness `scripts/ops/test-telegram-approval-integration.mjs` 12/12 PASS · staging runtime `1094347` ยังไม่มี fix → ต้อง deploy staging (อนุมัติแยก) ก่อนเทสต์สด
 - **nginx private-token masking** (snippet `ops/nginx/private-token-access-log.conf` + test script) — ยังไม่ apply · nginx แชร์กับ Pro ต้องอนุมัติแยก · อยู่ใน checklist ก่อน GO
 - live smoke ที่ต้องใช้บัญชีกบ (รายการอยู่ท้ายรายงาน)
