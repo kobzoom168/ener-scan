@@ -180,5 +180,6 @@ WHERE j.access_source='free' AND COALESCE(j.free_access_kind,'daily') NOT LIKE '
 
 ## สิ่งที่ยังไม่ได้ทำ (ต้องมีอนุมัติแยก)
 - ประกาศล่วงหน้า 3 วันของงาน 1 (ร่างแล้ว ยังไม่ส่ง — เดิม 7 วัน เปลี่ยน 30 ก.ย.)
-- รายชื่อ Telegram user id ผู้อนุมัติ + `setWebhook` + ส่งสลิปจริงใบแรก
+- งาน 3 Telegram approval: แผน `docs/ai/plans/2026-10-01-telegram-approval-staging-plan.md` (bot แยก · config 5 ตัว `ENABLED=false` · recreate `ener-scan`+`worker-maintenance` ด้วย `--no-build` image เดิม · เทสต์สังเคราะห์ · กันข้อความหลุด) — ยังไม่ทำ
+- **nginx private-token masking** (snippet `ops/nginx/private-token-access-log.conf` + test script) — ยังไม่ apply · nginx แชร์กับ Pro ต้องอนุมัติแยก · อยู่ใน checklist ก่อน GO
 - live smoke ที่ต้องใช้บัญชีกบ (รายการอยู่ท้ายรายงาน)
