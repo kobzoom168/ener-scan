@@ -6,6 +6,10 @@
 import net from "node:net";
 export const blockedAttempts = [];
 const LOOPBACK = /^(localhost|127(\.\d{1,3}){3}|::1|::ffff:127(\.\d{1,3}){3}|0\.0\.0\.0)$/i;
+// host นอกเครื่องที่อนุญาตเป็นรายชื่อ (เฉพาะโหมด live ที่ต้องคุย Telegram จริง) — ตั้งผ่าน ENER_IT_ALLOW_HOSTS="api.telegram.org"
+// ตรงตัวทั้งชื่อเท่านั้น ไม่ใช่ suffix · LINE/AI ไม่เคยอยู่ในรายชื่อ
+export const allowedExternalHosts = new Set(String(process.env.ENER_IT_ALLOW_HOSTS || "").split(",").map((h) => h.trim().toLowerCase()).filter(Boolean));
+const hostAllowed = (h) => LOOPBACK.test(h) || allowedExternalHosts.has(String(h).toLowerCase());
 /** @returns {{ allow: boolean, host: string }} */
 export function classifyConnectArgs(args) {
   let a0 = args[0];
@@ -14,7 +18,7 @@ export function classifyConnectArgs(args) {
   if (typeof a0 === "number") {
     const h = args[1];
     if (h === undefined || typeof h === "function") return { allow: true, host: "localhost" }; // net semantics: (port[, cb]) = localhost
-    return typeof h === "string" && LOOPBACK.test(h) ? { allow: true, host: h } : { allow: false, host: String(h) };
+    return typeof h === "string" && hostAllowed(h) ? { allow: true, host: h } : { allow: false, host: String(h) };
   }
   if (a0 && typeof a0 === "object") {
     if (typeof a0.path === "string" && a0.path) return { allow: true, host: "unix:" + a0.path };
@@ -23,7 +27,7 @@ export function classifyConnectArgs(args) {
       // net semantics: options ไม่มี host = localhost — ยอมรับเฉพาะเมื่อมี port ที่ใช้ได้จริง มิฉะนั้นตีความไม่ได้
       return Number.isInteger(Number(a0.port)) && Number(a0.port) > 0 ? { allow: true, host: "localhost" } : { allow: false, host: "<unparseable:no-host>" };
     }
-    return typeof h === "string" && LOOPBACK.test(h) ? { allow: true, host: h } : { allow: false, host: String(h) };
+    return typeof h === "string" && hostAllowed(h) ? { allow: true, host: h } : { allow: false, host: String(h) };
   }
   return { allow: false, host: `<unparseable:${typeof a0}>` };
 }

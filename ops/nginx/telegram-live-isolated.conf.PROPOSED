@@ -1,0 +1,14 @@
+# PROPOSED — ใส่ชั่วคราวใน server block ของ test.my-ener.uk เท่านั้น (ไม่ใช่ scan.my-ener.uk) เพื่อทดสอบ Telegram จริง → ระบบทดสอบแยก (วิธี A, 1 ต.ค. 2026)
+# ถอดออกทันทีหลังจบรอบทดสอบ · nginx แชร์กับ Pro → ต้องอนุมัติก่อน include/nginx -t/reload
+location = /telegram/webhook-it {
+    # รับเฉพาะ POST จาก Telegram (ลายเซ็นตรวจที่แอปด้วย X-Telegram-Bot-Api-Secret-Token) — ระบบทดสอบแยกฟังที่ 127.0.0.1:3390
+    limit_except POST { deny all; }
+    proxy_pass http://127.0.0.1:3390/telegram/webhook;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Telegram-Bot-Api-Secret-Token $http_x_telegram_bot_api_secret_token;
+    proxy_set_header Content-Type $content_type;
+    proxy_read_timeout 15s;
+    client_max_body_size 256k;
+    access_log off;   # ไม่ให้ body/secret header หลุดลง access log (header ไม่ถูก log อยู่แล้ว แต่ตัดทั้ง location)
+}

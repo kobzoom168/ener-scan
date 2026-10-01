@@ -7,10 +7,21 @@
  * ของปลอม: api.telegram.org (ตัดจบในเครื่อง บันทึก method/body) · ไม่มี LINE/AI (network guard บล็อกก่อนส่ง)
  * ข้อมูล: บัญชี/รายการสังเคราะห์ใน DB ใช้แล้วทิ้ง · config Telegram ค่าทดสอบ (ไม่ใช่ secret จริง)
  *
- * รัน:  node scripts/ops/test-telegram-approval-integration.mjs
+ * รัน (automated):  node scripts/ops/test-telegram-approval-integration.mjs
+ *
+ * โหมดทดสอบด้วยมือ (Codex วิธี A, 1 ต.ค. 2026): "Telegram จริง → ระบบทดสอบแยก" — ไม่ใช่ staging ทั้งชุด
+ *   node scripts/ops/test-telegram-approval-integration.mjs --live [--dry-run]
+ *   env ที่ต้องมี: ENER_TG_LIVE_SHA=<exact SHA ตายตัว> · ENER_TG_LIVE_ENV_FILE=<ไฟล์ 600 มี TELEGRAM_* 5 ตัว แยกจาก staging/.env>
+ *   ทางเลือก: ENER_TG_LIVE_PORT (ค่าเริ่มต้น 3390 bind 127.0.0.1) · ENER_TG_LIVE_OUT (โฟลเดอร์หลักฐาน ค่าเริ่มต้น /tmp/ener-tg-live-out)
+ *   - โค้ด router/handler/RPC มาจาก git worktree ของ SHA นั้น (ตรวจ rev-parse) ไม่ใช่ checkout ปัจจุบัน
+ *   - DB/PostgREST ใช้แล้วทิ้ง · ไม่มี delivery worker · ไม่แตะ DB/คิว staging/Pro
+ *   - Telegram ส่งจริง (guard อนุญาตเฉพาะ host api.telegram.org) · LINE/AI ยังถูกบล็อกก่อนส่ง · --dry-run = Telegram ปลอม (ทดสอบกลไกเอง)
+ *   - เซิร์ฟเวอร์รอรับ callback จนกว่าจะมีไฟล์ <OUT>/STOP หรือ SIGINT/SIGTERM → เขียนหลักฐาน <OUT>/evidence-<ts>.json แล้วเก็บกวาด
+ *   - ไม่พิมพ์ token/secret ลง log · nginx ชี้ /telegram/webhook-it → 127.0.0.1:<port>/telegram/webhook (ดู ops/nginx/telegram-live-isolated.conf.PROPOSED)
  */
 import { execFileSync, spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import * as fsSync from "node:fs";
 import crypto from "node:crypto";
 import assert from "node:assert/strict";
 
@@ -31,8 +42,48 @@ function teardown() {
   spawnSync("docker", ["network", "rm", NET], { stdio: "ignore" });
 }
 
+const LIVE = process.argv.includes("--live");
+const DRY = process.argv.includes("--dry-run");
+let liveWorktree = null;
+function teardownAll() { teardown(); if (liveWorktree) spawnSync("git", ["-C", new URL(".", root).pathname, "worktree", "remove", "--force", liveWorktree], { stdio: "ignore" }); }
+/** อ่านไฟล์ secret แยก: รับเฉพาะ TELEGRAM_* 5 ตัว ตรวจรูปแบบ ไม่คืนค่าออกไปที่ log */
+function readLiveEnvFile(file) {
+  const { statSync } = fsSync;
+  const st = statSync(file);
+  if (st.mode & 0o077) throw new Error(`ไฟล์ secret ต้อง chmod 600: ${file}`);
+  const want = { TELEGRAM_APPROVAL_BOT_TOKEN: /^\d{5,}:[A-Za-z0-9_-]{30,}$/, TELEGRAM_APPROVAL_CHAT_ID: /^-?\d{3,}$/, TELEGRAM_APPROVER_USER_IDS: /^\d+(\s*,\s*\d+)*$/, TELEGRAM_WEBHOOK_SECRET: /^[A-Za-z0-9_-]{32,256}$/, TELEGRAM_SLIP_APPROVAL_ENABLED: /^true$/ };
+  const outEnv = {};
+  for (const line of readFileSync(file, "utf8").split("\n")) {
+    const m = line.match(/^([A-Z_]+)=(.*)$/); if (!m) continue;
+    if (!(m[1] in want)) continue;
+    const v = m[2].trim().replace(/^"(.*)"$/, "$1");
+    if (!want[m[1]].test(v)) throw new Error(`รูปแบบไม่ถูกต้อง: ${m[1]} (ไม่พิมพ์ค่า)`);
+    outEnv[m[1]] = v;
+  }
+  const missing = Object.keys(want).filter((k) => !(k in outEnv));
+  if (missing.length) throw new Error(`ขาดตัวแปรในไฟล์ secret: ${missing.join(", ")}`);
+  return outEnv;
+}
 if (!process.env.ENER_TG_IT_CHILD) {
-  process.on("uncaughtException", (e) => { console.error(e); teardown(); process.exit(1); });
+  process.on("uncaughtException", (e) => { console.error(e); teardownAll(); process.exit(1); });
+  let codeRoot = root;
+  let liveEnv = {};
+  if (LIVE) {
+    const sha = String(process.env.ENER_TG_LIVE_SHA || "").trim();
+    if (!/^[0-9a-f]{7,40}$/.test(sha)) { console.error("ต้องตั้ง ENER_TG_LIVE_SHA เป็น SHA ตายตัว (7–40 hex)"); process.exit(2); }
+    const envFile = String(process.env.ENER_TG_LIVE_ENV_FILE || "").trim();
+    if (!envFile) { console.error("ต้องตั้ง ENER_TG_LIVE_ENV_FILE (ไฟล์ secret แยก chmod 600)"); process.exit(2); }
+    liveEnv = readLiveEnvFile(envFile);
+    liveWorktree = `/tmp/ener-tg-live-${sha}-${RUN}`;
+    sh("git", ["-C", new URL(".", root).pathname, "worktree", "add", "--detach", liveWorktree, sha]);
+    const head = sh("git", ["-C", liveWorktree, "rev-parse", "HEAD"]);
+    if (!head.startsWith(sha)) { teardownAll(); console.error("worktree ไม่ตรง SHA"); process.exit(2); }
+    const nm = new URL("node_modules", root).pathname;
+    if (fsSync.existsSync(nm)) sh("ln", ["-s", nm, `${liveWorktree}/node_modules`]);
+    else { console.log("ไม่มี node_modules ใน repo หลัก → npm ci --omit=dev ใน worktree (ต้องมีเครือข่ายไป npm registry)"); sh("npm", ["ci", "--omit=dev", "--no-audit", "--no-fund"], { cwd: liveWorktree, stdio: ["pipe", "inherit", "inherit"] }); }
+    codeRoot = new URL(`file://${liveWorktree}/`);
+    console.log(JSON.stringify({ event: "TG_LIVE_CODE", sha: head, worktree: liveWorktree, dryRun: DRY }));
+  }
   sh("docker", ["network", "create", NET]);
   sh("docker", ["run", "-d", "--name", PG, "--network", NET, "-e", "POSTGRES_PASSWORD=pg", "pgvector/pgvector:pg16"]);
   let created = false;
@@ -48,19 +99,23 @@ if (!process.env.ENER_TG_IT_CHILD) {
   for (let i = 0; i < 60 && !up; i++) { try { up = (await fetch(`http://127.0.0.1:${PORT}/`)).status < 500; } catch { /* ยังไม่ขึ้น */ } if (!up) execFileSync("sleep", ["0.5"]); }
   if (!up) { teardown(); assert.ok(up, "PostgREST ไม่ขึ้น"); }
   const { buildChildEnv } = await import("./fixtures/it-child-env.mjs");
-  const env = buildChildEnv(root, {
+  const env = buildChildEnv(codeRoot, {
     ENER_TG_IT_CHILD: "1", ENER_TG_IT_PG: PG, ENER_TG_IT_APP_LOG: process.env.ENER_TG_IT_APP_LOG || "",
+    ...(LIVE ? { ENER_TG_IT_MODE: "live", ENER_TG_DRY_RUN: DRY ? "1" : "", ENER_TG_LIVE_PORT: String(process.env.ENER_TG_LIVE_PORT || 3390),
+      ENER_TG_LIVE_OUT: String(process.env.ENER_TG_LIVE_OUT || "/tmp/ener-tg-live-out"), ENER_IT_ALLOW_HOSTS: DRY ? "" : "api.telegram.org" } : {}),
     LOCAL_POSTGREST_URL: `http://127.0.0.1:${PORT}`, LOCAL_POSTGREST_ANON_KEY: jwt("web_anon"),
     LOCAL_POSTGREST_SERVICE_KEY: jwt("service_role"), SUPABASE_URL: "http://127.0.0.1:9", SUPABASE_SERVICE_ROLE_KEY: "x",
     OPENAI_API_KEY: "sk-test", CHANNEL_ACCESS_TOKEN: "it-token", CHANNEL_SECRET: "it-secret", GEMINI_API_KEY: "g", REDIS_URL: "",
     NODE_ENV: "test", SESSION_SECRET: "it-session-secret", ADMIN_LINE_USER_ID: "U" + "a".repeat(32), APP_BASE_URL: "http://127.0.0.1:9",
-    // config Telegram ค่าทดสอบ (bot/ห้อง/ผู้อนุมัติ/secret สมมติ) — ไม่ใช่ของจริง
-    TELEGRAM_SLIP_APPROVAL_ENABLED: "true", TELEGRAM_APPROVAL_BOT_TOKEN: "123456:it-bot-token", TELEGRAM_APPROVAL_CHAT_ID: "-1001234",
-    TELEGRAM_APPROVER_USER_IDS: "111, 222", TELEGRAM_WEBHOOK_SECRET: crypto.randomBytes(32).toString("hex"),
+    // automated: config Telegram ค่าทดสอบ (bot/ห้อง/ผู้อนุมัติ/secret สมมติ) · live: จากไฟล์ secret แยก (ไม่พิมพ์)
+    ...(LIVE ? liveEnv : { TELEGRAM_SLIP_APPROVAL_ENABLED: "true", TELEGRAM_APPROVAL_BOT_TOKEN: "123456:it-bot-token", TELEGRAM_APPROVAL_CHAT_ID: "-1001234",
+      TELEGRAM_APPROVER_USER_IDS: "111, 222", TELEGRAM_WEBHOOK_SECRET: crypto.randomBytes(32).toString("hex") }),
   });
-  const r = spawnSync(process.execPath, [new URL(import.meta.url).pathname], { env, stdio: "inherit" });
-  teardown();
-  process.exit(r.status ?? 1);
+  // child = สคริปต์นี้จาก codeRoot (โหมด live = worktree ของ SHA ตายตัว)
+  const childScript = new URL("scripts/ops/test-telegram-approval-integration.mjs", codeRoot).pathname;
+  const child = spawnSync(process.execPath, [childScript], { env, stdio: "inherit" });
+  teardownAll();
+  process.exit(child.status ?? 1);
 }
 
 // ───────────────────────── child ─────────────────────────
@@ -128,6 +183,54 @@ const outbound = (uid) => q(`select kind||'|'||status||'|'||left(payload_json::t
 const lastKeyboardToken = () => { const c = [...tgCalls].reverse().find((x) => x.method === "sendMessage" && x.body?.reply_markup); const d = c?.body?.reply_markup?.inline_keyboard?.[0]?.[0]?.callback_data || ""; return d.startsWith("cf:") ? d.slice(3) : null; };
 const results = [];
 async function t(name, fn) { try { await fn(); results.push(`PASS ${name}`); } catch (e) { results.push(`FAIL ${name}: ${e?.message || e}${e?.stderr ? " :: " + String(e.stderr).trim().slice(0, 300) : ""}`); process.exitCode = 1; } }
+
+// ───────────────────────── โหมด live (ด้วยมือ): รอรับ callback จาก Telegram จริงจนสั่งหยุด ─────────────────────────
+if (process.env.ENER_TG_IT_MODE === "live") {
+  const fs = await import("node:fs");
+  const OUT = process.env.ENER_TG_LIVE_OUT; fs.mkdirSync(OUT, { recursive: true });
+  const LIVE_PORT = Number(process.env.ENER_TG_LIVE_PORT) || 3390;
+  const dry = process.env.ENER_TG_DRY_RUN === "1";
+  server.close();
+  const live = app.listen(LIVE_PORT, "127.0.0.1");
+  await new Promise((r, j) => { live.once("listening", r); live.once("error", j); });
+  if (dry) fs.writeFileSync(`${OUT}/telegram-calls.jsonl`, "");
+  const tgSeen = tgCalls.length;
+  // seed: บัญชี + รายการสังเคราะห์ 2 รายการ (A = เส้นหลัก, B = กดซ้ำ/พร้อมกัน) แล้วส่งข้อความสลิป "รอตรวจ" เข้าห้องของ bot ใหม่
+  const seeds = [newPayment(), newPayment()];
+  const notified = [];
+  for (const [i, p] of seeds.entries()) {
+    const r = await notifyTelegramSlipPendingVerify({ paymentId: p.pid, paymentRef: `LIVE-IT-${i + 1}`, packageCode: "49baht_4scans_24h", packageName: "สแกน 4 ครั้ง (ทดสอบระบบแยก)", expectedAmount: 49, slipAmount: 49, reasons: ["ทดสอบระบบแยก — ไม่ใช่ลูกค้าจริง"], lineUserId: p.uid, slipUrl: null });
+    notified.push({ pid: p.pid, ok: r.ok, reason: r.reason || null });
+  }
+  const ready = { event: "TG_LIVE_READY", port: LIVE_PORT, path: "/telegram/webhook", dryRun: dry, payments: seeds.map((p) => ({ pid: p.pid, uid: p.uid })), notified, startedAt: new Date().toISOString(), stopFile: `${OUT}/STOP` };
+  fs.writeFileSync(`${OUT}/READY.json`, JSON.stringify(ready, null, 2));
+  out(JSON.stringify(ready));
+  // สตรีมเหตุการณ์สำคัญ (ไม่มี token/secret ใน log ของ service อยู่แล้ว) + บันทึก Telegram call ใน dry-run
+  let logCursor = appLogs.length, tgCursor = tgSeen;
+  const tick = () => {
+    for (; logCursor < appLogs.length; logCursor++) { const l = appLogs[logCursor]; if (/TELEGRAM_|PAYMENT_APPROVED|OUTBOUND_ADMIN_ENQUEUED|OUTBOUND_ENQUEUE_DEDUPE|approval/.test(l)) out(l.slice(0, 220)); }
+    if (dry) for (; tgCursor < tgCalls.length; tgCursor++) fs.appendFileSync(`${OUT}/telegram-calls.jsonl`, JSON.stringify(tgCalls[tgCursor]) + "\n");
+  };
+  let stopping = false;
+  const stop = async (why) => {
+    if (stopping) return; stopping = true; tick();
+    const evidence = {
+      event: "TG_LIVE_EVIDENCE", why, sha: process.env.ENER_TG_LIVE_SHA || null, dryRun: dry, stoppedAt: new Date().toISOString(),
+      payments: seeds.map((p) => ({ pid: p.pid, uid: p.uid, status: pay(p.pid), grants: grants(p.pid), paidRemaining: q(`select coalesce(paid_remaining_scans,0) from app_users where id='${p.appUserId}'`), audit: auditDump(p.pid), tokens: q(`select count(*)||' total · used='||count(used_at) from telegram_approval_tokens where payment_id='${p.pid}'`), outbound: outbound(p.uid) })),
+      deniedAudit: q(`select coalesce(detail->>'reason','-')||'='||count(*) from payment_approval_audit where channel='telegram' and action='callback' and result='denied' group by 1`).split("\n").filter(Boolean),
+      lineOrAiAttemptsBlocked: blockedAttempts.length, blockedHosts: [...new Set(blockedAttempts)], telegramCallsDryRun: dry ? tgCalls.length : null,
+      deliveryWorker: "none (ระบบแยก)", dbScope: "throwaway only",
+    };
+    const file = `${OUT}/evidence-${Date.now()}.json`;
+    fs.writeFileSync(file, JSON.stringify(evidence, null, 2));
+    out(JSON.stringify({ event: "TG_LIVE_STOPPED", why, evidenceFile: file, blocked: blockedAttempts.length }));
+    live.close();
+    console.log = ORIG.log; console.error = ORIG.error; console.warn = ORIG.warn;
+    process.exit(0);
+  };
+  process.on("SIGINT", () => stop("SIGINT")); process.on("SIGTERM", () => stop("SIGTERM"));
+  for (;;) { await new Promise((r) => setTimeout(r, 2000)); tick(); if (fs.existsSync(`${OUT}/STOP`)) { await stop("STOP file"); } }
+}
 
 await t("0 flag ปิด (ENABLED=false) → 404 เหมือนไม่มี endpoint แม้ secret ถูก · เปิด → ไม่ 404", async () => {
   process.env.TELEGRAM_SLIP_APPROVAL_ENABLED = "false";
