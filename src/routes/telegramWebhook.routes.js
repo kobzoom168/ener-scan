@@ -9,7 +9,7 @@
  *  - ไม่ log token/secret/ข้อมูลส่วนตัว
  *  - ปิดอยู่โดยค่าเริ่มต้น: ไม่มี config ครบ = ตอบ 404 เหมือนไม่มี endpoint
  */
-import { Router } from "express";
+import express, { Router } from "express";
 import crypto from "node:crypto";
 
 function timingSafeEqual(a, b) {
@@ -25,7 +25,9 @@ function timingSafeEqual(a, b) {
 export default function createTelegramWebhookRouter(deps = {}) {
   const router = Router();
 
-  router.post("/telegram/webhook", async (req, res) => {
+  // Telegram ส่ง update เป็น JSON — app.js มีแต่ urlencoded ระดับ app จึงต้อง parse ที่ path นี้เอง
+  // (1 ต.ค. 2026: integration test พิสูจน์ว่าไม่มี parser → req.body ว่าง → ทุก callback ถูกมองเป็น ignored)
+  router.post("/telegram/webhook", express.json({ limit: "256kb" }), async (req, res) => {
     const svc = deps.service ?? (await import("../services/payments/telegramSlipApproval.service.js"));
     const cfg = deps.config ?? svc.readTelegramApprovalConfig();
     // ปิดอยู่ = ทำเหมือนไม่มี endpoint นี้
