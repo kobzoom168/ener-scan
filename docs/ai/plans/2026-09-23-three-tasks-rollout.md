@@ -9,7 +9,7 @@ branch: `release/three-tasks` · **ยังไม่ deploy Pro · ไม่ br
 | 2 ปลดล็อกคลัง/รายงานย้อนหลัง | `845c4ec` | **ไม่มีสวิตช์ — กติกาถาวร** | ผลทันทีเมื่อ deploy |
 | 3 อนุมัติสลิปผ่าน Telegram | `e414938` | `TELEGRAM_SLIP_APPROVAL_ENABLED` + 4 ตัวประกอบ | **ปิด** (ยังไม่มีรายชื่อผู้อนุมัติ) |
 
-## Migration ที่ต้อง apply (ตามลำดับ ก่อน deploy โค้ดเสมอ): 057 → 061 → 062 → 063 → 064 → 065
+## Migration ที่ต้อง apply (ตามลำดับ ก่อน deploy โค้ดเสมอ): 057 → 061 → 062 → 063 → 064 → 065 → 066
 | ไฟล์ | งาน | หมายเหตุ |
 |---|---|---|
 | `sql/057_new_customer_trial.sql` | 1 | idempotent · ไม่ backfill · policy เริ่มต้น OFF |
@@ -18,6 +18,7 @@ branch: `release/three-tasks` · **ยังไม่ deploy Pro · ไม่ br
 | `sql/063_payment_approval_snapshot.sql` | 3 | mandatory calculation snapshot + evidence-backed notification stamp; removes unsafe old RPC overload |
 | `sql/064_bonus_reservation.sql` | 1 (+โบนัสทุกโหมด) | idempotent · ไม่เพิ่ม schema (ค่าใหม่ใน `free_access_kind`) · จอง/คืนโบนัสใน DB + trigger หลักฐานรูปซ้ำ · **ต้อง apply ก่อนเปิด trial เสมอ** (057 เดี่ยวนับ `bonus_reserved` เป็น trial) |
 | `sql/065_trial_dedup_evidence.sql` | 1 | idempotent · ฟังก์ชันเดียว (`new_customer_trial_used` ไม่ขึ้นกับ delivery status) · apply หลัง 064 · **rollback กลับ 064 ลดสิทธิ์คงเหลือได้** (ดูหัวข้อ 1 ต.ค.) |
+| `sql/066_telegram_approval_settings.sql` | 3 | idempotent · ตาราง settings (ciphertext) + role `telegram_config_admin` + RPC 4 ตัว REVOKE จาก web_anon/service_role · enabled=false เริ่มต้น · **rollback ห้าม DROP** (set_enabled false + ย้อนโค้ด) · ต้องมี env `TELEGRAM_CONFIG_KEY`/`TELEGRAM_CONFIG_DB_KEY` (ops) |
 (งาน 2 **ไม่มี migration** — เป็นการถอดเงื่อนไขในโค้ดล้วน)
 
 `058/059/060` (optout) ขึ้น Pro ไปแล้ว ไม่ต้องทำซ้ำ
@@ -30,7 +31,7 @@ branch: `release/three-tasks` · **ยังไม่ deploy Pro · ไม่ br
 - `TELEGRAM_APPROVAL_BOT_TOKEN` / `TELEGRAM_APPROVAL_CHAT_ID` — bot แยกสำหรับ approval ไม่มี fallback ไป bot แจ้งเตือนกลาง; staging ต้องคนละ bot กับ Pro
 
 ## ลำดับ rollout (เมื่อได้อนุมัติ)
-1. เมื่อได้ GO Pro เท่านั้น: apply `057` → `061` → `062` → `063` → `064` → `065` (ครบทั้งหกก่อน deploy โค้ด · preflight ก่อน/หลัง + verify md5) แล้วตรวจ privileges/constraint ก่อนแตะโค้ด (ห้ามรัน 062 เดี่ยวหลัง 063 เพราะจะสร้าง RPC overload เก่าคืน)
+1. เมื่อได้ GO Pro เท่านั้น: apply `057` → `061` → `062` → `063` → `064` → `065` (ครบทั้งเจ็ดก่อน deploy โค้ด · preflight ก่อน/หลัง + verify md5 18/18) แล้วตรวจ privileges/constraint ก่อนแตะโค้ด (ห้ามรัน 062 เดี่ยวหลัง 063 เพราะจะสร้าง RPC overload เก่าคืน)
 2. deploy exact SHA แล้วตรวจ runtime hash ทุกคอนเทนเนอร์
 3. **งาน 2 มีผลทันที** — ตรวจว่าลูกค้าที่ไม่เคยจ่ายเปิดคลังตัวเองได้ และยังเห็นของคนอื่นไม่ได้
 4. งาน 1: **ประกาศล่วงหน้าอย่างน้อย 3 วัน (72 ชม.)** (กบเปลี่ยนจาก 7 วัน 30 ก.ย. 2026 — ร่าง `docs/ai/drafts/2026-09-30-trial-policy-3day-notice.md`) แล้วจึงเปิดสวิตช์หลังครบกำหนดตามที่กบอนุมัติ (การเปิดครั้งแรกตั้ง `eligible_since` ถาวร) · ลำดับ: ทดสอบผ่าน → อนุมัติ deploy Pro (migration 057→061→062→063→064→065 ก่อนโค้ด) → ส่งประกาศ → รอ ≥72 ชม. → อนุมัติเปิดนโยบาย
@@ -85,7 +86,7 @@ branch: `release/three-tasks` · **ยังไม่ deploy Pro · ไม่ br
 
 **ลำดับ migration ชุดรวมสำหรับ Pro (Pro ยังไม่มี 057 — ห้าม apply 064/065 เดี่ยว):**
 1. preflight read-only `scripts/ops/preflight-three-tasks-migrations.sql` → แถว `prereq` ต้อง `t` ครบ (ตรวจ 26 ก.ย.: Pro prereq ครบ 18/18, `applied` 057–064 = f ทั้งหมด)
-2. `057` → `061` → `062` (ตรวจ approve_notify ไม่ซ้ำก่อน — อยู่ใน preflight) → `063` → `064` → `065` · แต่ละไฟล์ `psql -v ON_ERROR_STOP=1` แยกกัน หยุดทันทีที่ล้ม · ครบทั้งหกก่อน deploy โค้ดทีเมื่อ error
+2. `057` → `061` → `062` (ตรวจ approve_notify ไม่ซ้ำก่อน — อยู่ใน preflight) → `063` → `064` → `065` → `066` · แต่ละไฟล์ `psql -v ON_ERROR_STOP=1` แยกกัน หยุดทันทีที่ล้ม · ครบทั้งเจ็ดก่อน deploy โค้ดทีเมื่อ error
 3. `NOTIFY pgrst, 'reload schema'` → preflight ซ้ำ แถว `applied` ต้อง `t` ครบ
 4. deploy โค้ด → ตรวจ runtime hash ทุกคอนเทนเนอร์
 5. ถ้า 064 apply ไม่ผ่านแต่ 057 ผ่าน: **ห้ามเปิด trial** (057 เดี่ยวนับ `bonus_reserved` เป็น trial usage — T9) และห้าม deploy โค้ดใหม่จนกว่า 064 ผ่าน

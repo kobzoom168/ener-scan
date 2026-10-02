@@ -52,6 +52,29 @@ export function isTelegramSlipApprovalEnabled() {
   return readTelegramApprovalConfig() != null;
 }
 
+/** env เป็นผู้คุม (authority) เมื่อมีการตั้ง TELEGRAM_SLIP_APPROVAL_ENABLED หรือ TELEGRAM_APPROVAL_BOT_TOKEN (ค่าว่าง = ไม่ตั้ง) */
+export function telegramConfigAuthority(envSrc = process.env) {
+  const set = (k) => String(envSrc[k] ?? "").trim() !== "";
+  return set("TELEGRAM_SLIP_APPROVAL_ENABLED") || set("TELEGRAM_APPROVAL_BOT_TOKEN") ? "env" : "db";
+}
+
+/**
+ * config ที่มีผลจริง (Codex 2 ต.ค. 2026):
+ *   authority = env  → ใช้ env อย่างเดียว (ระบบทดสอบแยก/ops pin) · ENABLED=false หรือไม่ครบ = ปิด **ไม่ fallback ไป DB**
+ *   authority = db   → อ่าน DB สดทุกครั้ง (ไม่มี cache: ถอนผู้อนุมัติ/ปิดมีผลทันที) · อ่านไม่ได้ = โยน error → ผู้เรียกต้องปฏิเสธ
+ * @returns {Promise<{token:string, chatId:string, approvers:Set<string>, webhookSecret:string, source:"env"|"db"}|null>}
+ */
+export async function resolveTelegramApprovalConfig(deps = {}) {
+  const envSrc = deps.env ?? process.env;
+  if (telegramConfigAuthority(envSrc) === "env") {
+    const cfg = readTelegramApprovalConfig();
+    return cfg ? { ...cfg, source: "env" } : null;
+  }
+  const store = deps.store ?? (await import("./telegramConfig.store.js"));
+  if (!store.configStoreReadiness(envSrc).ready) return null; // ops ยังไม่ตั้ง key → ปิด
+  return store.loadRuntimeConfigFromDb({ env: envSrc }); // อาจ throw → ผู้เรียกปฏิเสธ
+}
+
 /* ─────────────────────────── audit ─────────────────────────── */
 
 /** บันทึกทุกความพยายาม รวมที่ถูกปฏิเสธ — ห้ามใส่ token/ข้อมูลส่วนตัวลง detail */
@@ -196,7 +219,8 @@ export async function defaultLoadSlipBytes(p) {
  * ห้าม throw — ช่องทาง LINE เดิมต้องไม่ถูกกระทบ
  */
 export async function notifyTelegramSlipPendingVerify(p, deps = {}) {
-  const cfg = deps.config ?? readTelegramApprovalConfig();
+  let cfg = deps.config;
+  if (cfg === undefined) { try { cfg = await resolveTelegramApprovalConfig(deps); } catch (e) { console.error(JSON.stringify({ event: "TELEGRAM_CONFIG_READ_FAILED", path: "notify", reason: String(e?.message || e).slice(0, 120) })); return { ok: false, reason: "config_unavailable" }; } }
   if (!cfg) return { ok: false, reason: "disabled" };
   const paymentId = String(p.paymentId || "").trim();
   if (!paymentId) return { ok: false, reason: "no_payment_id" };
@@ -236,9 +260,18 @@ export function authorizeCallback(cfg, cb) {
  * @returns {Promise<{action:string, result:string, text:string, replyMarkup?:object}>}
  */
 export async function handleApprovalCallback(cb, deps = {}) {
-  const cfg = deps.config ?? readTelegramApprovalConfig();
-  if (!cfg) return { action: "none", result: "denied", text: "ระบบอนุมัติทาง Telegram ปิดอยู่" };
   const db = deps.db ?? supabase;
+  // อ่าน config สดทุก callback (ไม่ใช้ cache) — ถอนผู้อนุมัติ/ปิดใช้งานมีผลกับปุ่มเดิมทันที · อ่านไม่ได้ = ปฏิเสธ ไม่ใช้สิทธิ์เก่า
+  let cfg = deps.config;
+  if (cfg === undefined) {
+    try { cfg = await resolveTelegramApprovalConfig(deps); }
+    catch (e) {
+      console.error(JSON.stringify({ event: "TELEGRAM_CONFIG_READ_FAILED", path: "callback", reason: String(e?.message || e).slice(0, 120) }));
+      await recordApprovalAudit({ channel: "telegram", actor: String(cb?.from?.id ?? "") || null, action: "callback", result: "error", detail: { reason: "config_unavailable" } }, db).catch(() => {});
+      return { action: "auth", result: "error", text: "ตรวจสอบสิทธิ์ไม่ได้ในขณะนี้ ยังไม่ได้เปลี่ยนสถานะรายการ ลองใหม่อีกครั้ง" };
+    }
+  }
+  if (!cfg) return { action: "none", result: "denied", text: "ระบบอนุมัติทาง Telegram ปิดอยู่" };
   const data = String(cb?.data || "");
   const auth = authorizeCallback(cfg, cb);
   if (!auth.ok) {

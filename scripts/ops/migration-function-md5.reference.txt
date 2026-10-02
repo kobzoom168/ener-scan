@@ -1,6 +1,6 @@
-# md5(prosrc) อ้างอิงของฟังก์ชัน migration ชุด three-tasks (057/061/062/063/064/065)
+# md5(prosrc) อ้างอิงของฟังก์ชัน migration ชุด three-tasks (057/061/062/063/064/065/066)
 # ที่มา: staging DB ener_scan_staging 30 ก.ย. 2026 หลัง apply ไฟล์ใน repo ตามลำดับ + integration tests ผ่าน
-# new_customer_trial_used = นิยาม 065 (1 ต.ค. 2026, จากการ apply 057→064→065 ลง DB ใช้แล้วทิ้ง) · 057/064: ตรงกับผลจากการ apply ไฟล์ commit ลง DB ใช้แล้วทิ้ง (ตรวจ 26 ก.ย.) · ใช้กับ scripts/ops/verify-migration-versions.sh
+# telegram_settings_* = นิยาม 066 (2 ต.ค. 2026, apply 057→064→065→066 ลง DB ใช้แล้วทิ้ง) · new_customer_trial_used = นิยาม 065 (1 ต.ค. 2026, จากการ apply 057→064→065 ลง DB ใช้แล้วทิ้ง) · 057/064: ตรงกับผลจากการ apply ไฟล์ commit ลง DB ใช้แล้วทิ้ง (ตรวจ 26 ก.ย.) · ใช้กับ scripts/ops/verify-migration-versions.sh
 approve_payment_and_grant 07362f4b541c1a7da38e508a557f9757
 consume_telegram_approval_token aa101094ff223e55a55707ffe57f798e
 guard_new_customer_trial_job ddfa713c1888a67016e8e875cb1611ee
@@ -15,3 +15,7 @@ release_bonus_on_dup_evidence 5960d1cc145aa6479c40ac9fc298ad4c
 release_bonus_reservation 80eff2d140918a1cc0bf10c28ea6814d
 set_new_customer_trial_policy 6c882ecd13b0a87b44aa54e9890d4765
 sweep_bonus_releases 80afae7bab8c991c1e52b4e4c4f60c12
+telegram_settings_get_public a1e8c95e94dc8bb38a552c30e8c8f4eb
+telegram_settings_get_secrets 70a4ae121823cf72c313e2c8953edc69
+telegram_settings_save 65a607a57554c191e5cb9c23f8c74e04
+telegram_settings_set_enabled 9fa67ee531e0dcb35083e1ed5a6bb4cd

@@ -97,7 +97,8 @@ if (!process.env.ENER_TG_IT_CHILD) {
   if (!created) { teardown(); assert.ok(created, "Postgres ไม่พร้อม"); }
   // schema/migrations จาก codeRoot เดียวกับโค้ด (โหมด live = SHA ตายตัว)
   psql(readFileSync(new URL("scripts/ops/fixtures/staging-schema-2026-10-01.sql", codeRoot), "utf8"), "tg_it");
-  for (const f of ["057_new_customer_trial", "064_bonus_reservation", "065_trial_dedup_evidence"]) psql(readFileSync(new URL(`sql/${f}.sql`, codeRoot), "utf8"), "tg_it");
+  for (const f of ["057_new_customer_trial", "064_bonus_reservation", "065_trial_dedup_evidence", "066_telegram_approval_settings"]) psql(readFileSync(new URL(`sql/${f}.sql`, codeRoot), "utf8"), "tg_it");
+  psql(readFileSync(new URL("sql/066_telegram_approval_settings.sql", codeRoot), "utf8"), "tg_it"); // idempotent
   sh("docker", ["run", "-d", "--name", PGRST, "--network", NET, "-p", `127.0.0.1:${PORT}:3000`,
     "-e", `PGRST_DB_URI=postgres://authenticator:authenticator@${PG}:5432/tg_it`,
     "-e", "PGRST_DB_SCHEMA=public", "-e", "PGRST_DB_ANON_ROLE=web_anon", "-e", `PGRST_JWT_SECRET=${JWT_SECRET}`,
@@ -107,7 +108,9 @@ if (!process.env.ENER_TG_IT_CHILD) {
   if (!up) { teardown(); assert.ok(up, "PostgREST ไม่ขึ้น"); }
   const { buildChildEnv } = await import("./fixtures/it-child-env.mjs");
   const env = buildChildEnv(codeRoot, {
-    ENER_TG_IT_CHILD: "1", ENER_TG_IT_PG: PG, ENER_TG_IT_APP_LOG: process.env.ENER_TG_IT_APP_LOG || "",
+    ENER_TG_IT_CHILD: "1", ENER_TG_IT_PG: PG, ENER_TG_IT_PGRST: PGRST, ENER_TG_IT_APP_LOG: process.env.ENER_TG_IT_APP_LOG || "",
+    // config ผ่าน DB (sql/066): key เข้ารหัส + JWT ของ role จำกัด telegram_config_admin · JWT anon ไว้พิสูจน์ว่า web_anon เรียก RPC ไม่ได้
+    TELEGRAM_CONFIG_KEY: crypto.randomBytes(32).toString("hex"), TELEGRAM_CONFIG_DB_KEY: jwt("telegram_config_admin"), ENER_TG_IT_ANON_JWT: jwt("web_anon"),
     ...(LIVE ? { ENER_TG_IT_MODE: "live", ENER_TG_DRY_RUN: DRY ? "1" : "", ENER_TG_LIVE_SHA: String(process.env.ENER_TG_LIVE_SHA || ""), ENER_TG_LIVE_PORT: String(process.env.ENER_TG_LIVE_PORT || 3390),
       ENER_TG_LIVE_OUT: String(process.env.ENER_TG_LIVE_OUT || "/tmp/ener-tg-live-out"), // ENER_TG_LIVE_BLOCK_TELEGRAM=1 = regression: เลือก transport จริงแต่ guard ไม่อนุญาต host → ต้องล้มที่ seed โดยไม่ส่งอะไรออก
       ENER_IT_ALLOW_HOSTS: (DRY || process.env.ENER_TG_LIVE_BLOCK_TELEGRAM === "1") ? "" : "api.telegram.org" } : {}),
@@ -373,10 +376,101 @@ await t("10 ตลอดชุด: Telegram ถูกตัดจบในเค
   assert.ok(!appLogs.some((l) => l.includes("it-bot-token") || l.includes(SECRET)), "token/secret ต้องไม่อยู่ใน log");
 });
 
+// ───────────── config จาก DB (sql/066) — authority เปลี่ยนจาก env เป็น DB โดยล้าง env 5 ตัวให้ว่าง ─────────────
+const ENV5 = ["TELEGRAM_SLIP_APPROVAL_ENABLED", "TELEGRAM_APPROVAL_BOT_TOKEN", "TELEGRAM_APPROVAL_CHAT_ID", "TELEGRAM_WEBHOOK_SECRET", "TELEGRAM_APPROVER_USER_IDS"];
+const ENV_SAVED = Object.fromEntries(ENV5.map((k) => [k, process.env[k]]));
+const cfgStore = await import(new URL("src/services/payments/telegramConfig.store.js", root));
+const DB_TOKEN = "987654321:DBTOKENabcdefghijklmnopqrstuvwxyz0123";
+const DB_CHAT = "-1009876";
+const postWith = async (body, secret) => { const r = await fetch(`http://127.0.0.1:${port}/telegram/webhook`, { method: "POST", headers: { "content-type": "application/json", ...(secret != null ? { "x-telegram-bot-api-secret-token": secret } : {}) }, body: JSON.stringify(body) }); return { status: r.status, json: await r.json().catch(() => null) }; };
+let dbSecret = null;
+
+await t("11 DB config: env ว่าง + ยังไม่มีแถว → 404 · web_anon เรียก RPC config ตรง → ถูกปฏิเสธ (401/403) ไม่ได้ข้อมูล", async () => {
+  for (const k of ENV5) process.env[k] = "";
+  assert.equal((await postWith(callback("ap:x"), "anything")).status, 404);
+  for (const fn of ["telegram_settings_get_public", "telegram_settings_get_secrets", "telegram_settings_set_enabled"]) {
+    const r = await fetch(`${process.env.LOCAL_POSTGREST_URL}/rpc/${fn}`, { method: "POST", headers: { "content-type": "application/json", apikey: process.env.ENER_TG_IT_ANON_JWT, Authorization: `Bearer ${process.env.ENER_TG_IT_ANON_JWT}` }, body: fn === "telegram_settings_set_enabled" ? JSON.stringify({ p_enabled: true, p_actor: "anon" }) : "{}" });
+    assert.ok([401, 403].includes(r.status), `${fn}: web_anon ต้องถูกปฏิเสธ ได้ ${r.status}`);
+    const txt = await r.text(); assert.ok(!/bot_token_enc|configured/.test(txt), `${fn}: ต้องไม่คืนข้อมูล`);
+  }
+  // service_role (ที่ 061 ใช้) ก็เรียกไม่ได้ — เฉพาะ telegram_config_admin
+  const rs = await fetch(`${process.env.LOCAL_POSTGREST_URL}/rpc/telegram_settings_get_public`, { method: "POST", headers: { "content-type": "application/json", apikey: process.env.LOCAL_POSTGREST_SERVICE_KEY, Authorization: `Bearer ${process.env.LOCAL_POSTGREST_SERVICE_KEY}` }, body: "{}" });
+  assert.ok([401, 403].includes(rs.status), `service_role ต้องถูกปฏิเสธ ได้ ${rs.status}`);
+});
+
+await t("12 บันทึกจาก backend (store จริง → RPC role จำกัด): DB มี ciphertext เท่านั้น · enabled=false → ยัง 404 แม้ secret ถูก · audit ไม่มีค่า", async () => {
+  const pub = await cfgStore.saveSettings({ chatId: DB_CHAT, approvers: [{ label: "กบ", tgUserId: "111" }, { label: "คนที่สอง", tgUserId: "222" }], token: DB_TOKEN, actor: "it-admin" });
+  assert.equal(pub.configured, true); assert.equal(pub.enabled, false); assert.equal(pub.token_set, true); assert.ok(!JSON.stringify(pub).includes("enc"));
+  const row = q(`select bot_token_enc||'|'||webhook_secret_enc from telegram_approval_settings where id=1`);
+  assert.ok(row.startsWith("v1:") && !row.includes(DB_TOKEN), "DB ต้องเก็บ ciphertext");
+  assert.equal(q(`select count(*) from payment_approval_audit where channel='admin_config' and action='telegram_settings_saved' and detail::text not like '%${DB_TOKEN}%'`), "1");
+  // ยังไม่เปิด → ปิดเหมือนไม่มี endpoint (อ่าน secret จริงเพื่อใช้ทดสอบขั้นถัดไป — ในระบบจริง secret อยู่ใน DB เข้ารหัส ไม่แสดงใคร)
+  q(`update telegram_approval_settings set enabled=true where id=1`); const cfg = await cfgStore.loadRuntimeConfigFromDb(); q(`update telegram_approval_settings set enabled=false where id=1`);
+  dbSecret = cfg.webhookSecret; assert.match(dbSecret, /^[0-9a-f]{64}$/); assert.equal(cfg.token, DB_TOKEN); assert.equal(cfg.chatId, DB_CHAT);
+  assert.equal((await postWith(callback(`ap:x`, { chat: Number(DB_CHAT) }), dbSecret)).status, 404, "enabled=false = 404");
+});
+
+await t("13 เปิดใช้งาน (RPC แยก) → ขั้น 1/2 ด้วย config จาก DB: ผู้อนุมัติ 2 คน (111 ขอ, 222 ยืนยัน) → paid · grant 1 · กดพร้อมกันเติมครั้งเดียว", async () => {
+  await cfgStore.setEnabled(true, "it-admin");
+  assert.equal((await postWith(callback("ap:x", { chat: Number(DB_CHAT) }), "wrong")).status, 401, "secret ผิด (จาก DB) → 401");
+  const P = newPayment();
+  assert.equal((await postWith(callback(`ap:${P.pid}`, { from: 111, chat: Number(DB_CHAT) }), dbSecret)).status, 200);
+  const tok = lastKeyboardToken(); assert.ok(tok, "ต้องได้ปุ่ม cf");
+  const rs = await Promise.all([222, 111, 222].map((from) => postWith(callback(`cf:${tok}`, { from, chat: Number(DB_CHAT) }), dbSecret)));
+  assert.ok(rs.every((r) => r.status === 200));
+  assert.equal(pay(P.pid).split("|")[0], "paid"); assert.equal(grants(P.pid), 1); assert.deepEqual(confirmedOk(P.pid), { rpc: 1, handler: 1 });
+  assert.equal(String(tgCalls.at(-1).body?.chat_id ?? ""), DB_CHAT, "ตอบไปห้องจาก DB");
+});
+
+await t("14 ถอนผู้อนุมัติ 222 (บันทึกใหม่ token ว่าง=คงเดิม) → ปุ่มเดิมของ 222 ใช้ไม่ได้ทันที (ไม่มี cache) · 111 ยังได้ · token เดิมคง", async () => {
+  await cfgStore.saveSettings({ chatId: DB_CHAT, approvers: [{ label: "กบ", tgUserId: "111" }], token: null, actor: "it-admin" });
+  const P = newPayment();
+  await postWith(callback(`ap:${P.pid}`, { from: 111, chat: Number(DB_CHAT) }), dbSecret);
+  const tok = lastKeyboardToken();
+  const d = auditDenied("actor_not_allowed");
+  await postWith(callback(`cf:${tok}`, { from: 222, chat: Number(DB_CHAT) }), dbSecret);
+  assert.equal(grants(P.pid), 0, "222 ถูกถอนแล้วต้องเติมไม่ได้"); assert.equal(auditDenied("actor_not_allowed"), d + 1);
+  await postWith(callback(`cf:${tok}`, { from: 111, chat: Number(DB_CHAT) }), dbSecret);
+  assert.equal(grants(P.pid), 1);
+  assert.equal((await cfgStore.loadRuntimeConfigFromDb()).token, DB_TOKEN, "token ว่าง = คงเดิม");
+});
+
+await t("15 อ่าน config ล้ม (credential ของ store ใช้ไม่ได้ → RPC ปฏิเสธ) → webhook 503 ไม่อนุมัติ ไม่ใช้ค่าเก่า · กลับมาแล้วทำงานต่อด้วย token เดิม", async () => {
+  const P = newPayment();
+  await postWith(callback(`ap:${P.pid}`, { from: 111, chat: Number(DB_CHAT) }), dbSecret);
+  const tok = lastKeyboardToken();
+  const goodKey = process.env.TELEGRAM_CONFIG_DB_KEY;
+  process.env.TELEGRAM_CONFIG_DB_KEY = process.env.ENER_TG_IT_ANON_JWT; // JWT ที่เรียก RPC config ไม่ได้ → อ่าน config ล้ม
+  try {
+    const r = await postWith(callback(`cf:${tok}`, { from: 111, chat: Number(DB_CHAT) }), dbSecret);
+    assert.equal(r.status, 503, JSON.stringify(r));
+    assert.ok(appLogs.some((l) => l.includes("TELEGRAM_CONFIG_READ_FAILED")), "ต้องมี log อ่าน config ล้ม");
+  } finally { process.env.TELEGRAM_CONFIG_DB_KEY = goodKey; }
+  assert.equal(grants(P.pid), 0, "ระหว่างอ่าน config ไม่ได้ ต้องไม่เติม");
+  await postWith(callback(`cf:${tok}`, { from: 111, chat: Number(DB_CHAT) }), dbSecret);
+  assert.equal(grants(P.pid), 1, "กลับมาแล้ว token เดิมยังใช้ได้ (ยังไม่ถูก consume)");
+});
+
+await t("16 env เป็นผู้คุม: ENABLED=false ชัดเจน + DB เปิดอยู่ → 404 ไม่ fallback · ปิดจาก DB (set_enabled false) → 404", async () => {
+  process.env.TELEGRAM_SLIP_APPROVAL_ENABLED = "false";
+  assert.equal((await postWith(callback("ap:x", { chat: Number(DB_CHAT) }), dbSecret)).status, 404);
+  process.env.TELEGRAM_SLIP_APPROVAL_ENABLED = "";
+  assert.equal((await postWith(callback("ap:x", { chat: Number(DB_CHAT) }), dbSecret)).status, 200, "env ว่าง → DB เปิด → ทำงาน");
+  await cfgStore.setEnabled(false, "it-admin");
+  assert.equal((await postWith(callback("ap:x", { chat: Number(DB_CHAT) }), dbSecret)).status, 404);
+  assert.equal(q(`select count(*) from payment_approval_audit where channel='admin_config' and action in ('telegram_enabled','telegram_disabled')`), "2");
+});
+
+await t("17 ไม่มี token/secret จาก DB รั่วใน log/ตอบกลับ · 066 apply ซ้ำได้", async () => {
+  assert.ok(!appLogs.some((l) => l.includes(DB_TOKEN) || l.includes(dbSecret)), "token/secret ของ DB ต้องไม่อยู่ใน log");
+  assert.ok(!JSON.stringify(tgCalls).includes(DB_TOKEN));
+  for (const k of ENV5) process.env[k] = ENV_SAVED[k];
+});
+
 server.close();
 console.log = ORIG.log; console.error = ORIG.error; console.warn = ORIG.warn;
 if (process.env.ENER_TG_IT_APP_LOG) (await import("node:fs")).writeFileSync(process.env.ENER_TG_IT_APP_LOG, appLogs.join("\n"));
 out(results.join("\n"));
 out(`telegram calls (short-circuit): ${tgCalls.length} · blocked external attempts: ${blockedAttempts.length}`);
-out(process.exitCode ? "RESULT: FAIL" : "RESULT: PASS (Telegram approval router → handler → RPC)");
+out(process.exitCode ? "RESULT: FAIL" : "RESULT: PASS (Telegram approval router → handler → RPC · env + DB config)");
 process.exit(process.exitCode || 0);

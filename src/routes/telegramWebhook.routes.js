@@ -29,7 +29,12 @@ export default function createTelegramWebhookRouter(deps = {}) {
   // (1 ต.ค. 2026: integration test พิสูจน์ว่าไม่มี parser → req.body ว่าง → ทุก callback ถูกมองเป็น ignored)
   router.post("/telegram/webhook", express.json({ limit: "256kb" }), async (req, res) => {
     const svc = deps.service ?? (await import("../services/payments/telegramSlipApproval.service.js"));
-    const cfg = deps.config ?? svc.readTelegramApprovalConfig();
+    // config ที่มีผลจริง (env authority หรือ DB สด) — อ่านไม่ได้ = ปฏิเสธ (503) ไม่ใช้ค่าเก่า
+    let cfg = deps.config;
+    if (cfg === undefined) {
+      try { cfg = await (svc.resolveTelegramApprovalConfig ? svc.resolveTelegramApprovalConfig() : svc.readTelegramApprovalConfig()); }
+      catch (e) { console.error(JSON.stringify({ event: "TELEGRAM_CONFIG_READ_FAILED", path: "webhook", reason: String(e?.message || e).slice(0, 120) })); return res.status(503).json({ ok: false }); }
+    }
     // ปิดอยู่ = ทำเหมือนไม่มี endpoint นี้
     if (!cfg) return res.status(404).json({ ok: false });
 
