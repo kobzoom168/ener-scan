@@ -13,7 +13,21 @@
 
 ## 1. สิ่งที่กบเตรียม (ไม่ส่ง token/secret ในแชท)
 - bot ใหม่จาก BotFather (คนละตัวกับ bot แจ้งเตือนกลางและ Pro) · เพิ่ม bot เข้า **ห้องทดสอบ** (กลุ่ม/ซูเปอร์กรุ๊ปใหม่) · ได้ `chat id` ตัวเลข (ติดลบสำหรับกลุ่ม) · Telegram user id ตัวเลขของผู้อนุมัติ (กบ และถ้ามีคนที่ 2 ไว้ทดสอบ "ไม่มีสิทธิ์")
-- สร้างไฟล์ secret บนเซิร์ฟเวอร์ `/root/ener-tg-live/.env.tg-live` (chmod 600) 5 บรรทัด: `TELEGRAM_APPROVAL_BOT_TOKEN=…` · `TELEGRAM_APPROVAL_CHAT_ID=…` · `TELEGRAM_APPROVER_USER_IDS=111,222` · `TELEGRAM_WEBHOOK_SECRET=$(openssl rand -hex 32)` · `TELEGRAM_SLIP_APPROVAL_ENABLED=true` — harness ตรวจรูปแบบทุกค่าโดยไม่พิมพ์ (token `^\d+:[A-Za-z0-9_-]{30,}$`, secret `[A-Za-z0-9_-]{32,256}`) · ไฟล์นี้ **แยกจาก** `/root/ener-scan-staging/.env` (ไม่แตะ staging)
+- สร้างไฟล์ secret บนเซิร์ฟเวอร์ `/root/ener-tg-live/.env.tg-live` (chmod 600) 5 บรรทัด **ค่าจริงเท่านั้น ไม่ใช่คำสั่ง** (ตัวอ่าน config ไม่รัน `$(…)` และ launcher จะปฏิเสธรูปแบบ):
+  ```bash
+  mkdir -p /root/ener-tg-live && umask 077
+  SECRET=$(openssl rand -hex 32)          # รันคำสั่งก่อน แล้วค่อยใส่ "ค่าที่ได้" ลงไฟล์
+  cat > /root/ener-tg-live/.env.tg-live <<EOF2
+  TELEGRAM_APPROVAL_BOT_TOKEN=<token ของ bot ใหม่จาก BotFather>
+  TELEGRAM_APPROVAL_CHAT_ID=<chat id ตัวเลขของห้องทดสอบ เช่น -1001234567890>
+  TELEGRAM_APPROVER_USER_IDS=<user id ตัวเลข คั่นด้วย , เช่น 111111111,222222222>
+  TELEGRAM_WEBHOOK_SECRET=$SECRET
+  TELEGRAM_SLIP_APPROVAL_ENABLED=true
+  EOF2
+  chmod 600 /root/ener-tg-live/.env.tg-live
+  grep -cE '^TELEGRAM_WEBHOOK_SECRET=[A-Za-z0-9_-]{32,256}$' /root/ener-tg-live/.env.tg-live   # ต้องได้ 1 (ไม่พิมพ์ค่า)
+  ```
+  harness ตรวจรูปแบบทุกค่าโดยไม่พิมพ์ (token `^\d+:[A-Za-z0-9_-]{30,}$`, secret `[A-Za-z0-9_-]{32,256}`) · `ENABLED=true` อยู่ **ในไฟล์ระบบทดสอบแยกนี้เท่านั้น** ไม่ใช่ `.env` ของ staging/Pro · ไม่ส่ง token/secret ในแชท
 - ยืนยัน bot ใหม่ยังไม่มี webhook: `getWebhookInfo` → `url` ว่าง (ทำโดยกบ หรือผมโดย source ไฟล์ secret แล้ว curl โดยไม่ echo)
 
 ## 2. nginx diff (แชร์กับ Pro → ต้องอนุมัติก่อน include / `nginx -t` / reload)
