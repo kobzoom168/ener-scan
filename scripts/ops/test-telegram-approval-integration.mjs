@@ -159,7 +159,11 @@ app.use((req, res, next) => {
   res.on("finish", dec); res.on("close", dec); next();
 });
 app.use(express.urlencoded({ extended: false }));
-app.use(createTelegramWebhookRouter());
+const tgRouter = createTelegramWebhookRouter();
+// ติดตาม Promise ของ handler จริง (res.close ไม่ใช่ handler completion) — fixtures/tg-live-shutdown.mjs
+const { trackRouteHandlers, finalizeEvidence } = await import("./fixtures/tg-live-shutdown.mjs");
+const handlerTracker = trackRouteHandlers(tgRouter, "/telegram/webhook");
+app.use(tgRouter);
 const server = app.listen(0, "127.0.0.1");
 await new Promise((r) => server.once("listening", r));
 const port = server.address().port;
@@ -235,10 +239,12 @@ if (process.env.ENER_TG_IT_MODE === "live") {
   let stopping = false;
   const stop = async (why) => {
     if (stopping) return; stopping = true;
-    // 1) ปิดรับ callback ใหม่ (503) และปิด listener · 2) รอ in-flight จบ (สูงสุด 30 วิ)
+    // 1) ปิดรับ callback ใหม่ (503) และปิด listener · 2) รอ in-flight (connection) และ handler Promise จบจริง (สูงสุด 30 วิ)
     gate.accepting = false; try { live.close(); } catch { /* ignore */ }
     const t0 = Date.now(); while (gate.inflight > 0 && Date.now() - t0 < 30000) await new Promise((r) => setTimeout(r, 200));
-    const inflightLeft = gate.inflight; tick();
+    const inflightLeft = gate.inflight;
+    const handlersLeft = await handlerTracker.wait(Math.max(0, 30000 - (Date.now() - t0)));
+    tick();
     const safe = (fn) => { try { return fn(); } catch (e) { return `<query-error: ${String(e?.stderr || e?.message || e).trim().slice(0, 160)}>`; } };
     const evidence = {
       event: "TG_LIVE_EVIDENCE", why, sha: process.env.ENER_TG_LIVE_SHA || null, dryRun: dry, transport: TG_TRANSPORT, stoppedAt: new Date().toISOString(), inflightLeft,
@@ -248,19 +254,13 @@ if (process.env.ENER_TG_IT_MODE === "live") {
       lineOrAiAttemptsBlocked: blockedAttempts.length, blockedHosts: [...new Set(blockedAttempts)],
       deliveryWorker: "none (ระบบแยก)", dbScope: "throwaway only",
     };
-    // 3) ตรวจความครบของหลักฐานก่อนตัดสินใจลบทรัพยากร
-    const problems = [];
-    if (inflightLeft > 0) problems.push(`in-flight ยังไม่จบ ${inflightLeft}`);
-    if (evidence.payments.length !== seeds.length) problems.push("payments ไม่ครบ");
-    for (const p of evidence.payments) { for (const k of ["status", "grants", "paidRemaining", "audit", "tokens", "outbound"]) if (typeof p[k] === "string" && p[k].startsWith("<query-error")) problems.push(`${p.pid.slice(0, 8)}.${k}: ${p[k]}`); if (typeof p.grants !== "number") problems.push(`${p.pid.slice(0, 8)}.grants ไม่ใช่ตัวเลข`); }
-    if (typeof evidence.deniedAudit === "string") problems.push(`deniedAudit: ${evidence.deniedAudit}`);
-    const complete = problems.length === 0;
-    const file = `${OUT}/evidence${complete ? "" : "-PARTIAL"}-${Date.now()}.json`;
-    try { fs.writeFileSync(file, JSON.stringify({ ...evidence, complete, problems }, null, 2)); } catch (e) { problems.push(`เขียนไฟล์หลักฐานไม่ได้: ${e?.message}`); }
-    if (!complete) fs.writeFileSync(`${OUT}/KEEP`, problems.join("\n") + "\n");
-    out(JSON.stringify({ event: complete ? "TG_LIVE_STOPPED" : "TG_LIVE_STOPPED_PARTIAL", why, evidenceFile: file, complete, problems, blocked: blockedAttempts.length, resourcesKept: !complete }));
+    // 3) ตัดสิน complete หลังเขียนและตรวจอ่านกลับสำเร็จเท่านั้น · ไม่ครบ/เขียนล้ม = exit 3 (parent เก็บทรัพยากรจาก exit code แม้เขียน KEEP ไม่ได้)
+    const fin = finalizeEvidence({ evidence: { ...evidence, handlersLeft }, seedsCount: seeds.length, inflightLeft, handlersLeft, outDir: OUT,
+      writer: (f, t) => fs.writeFileSync(f, t), reader: (f) => fs.readFileSync(f, "utf8") });
+    const { complete, problems, file } = fin;
+    out(JSON.stringify({ event: complete ? "TG_LIVE_STOPPED" : "TG_LIVE_STOPPED_PARTIAL", why, evidenceFile: file, complete, written: fin.written, keepWritten: fin.keepWritten, problems, blocked: blockedAttempts.length, resourcesKept: fin.keep }));
     console.log = ORIG.log; console.error = ORIG.error; console.warn = ORIG.warn;
-    process.exit(complete ? 0 : 3);
+    process.exit(fin.exitCode);
   };
   process.on("SIGINT", () => stop("SIGINT")); process.on("SIGTERM", () => stop("SIGTERM"));
   for (;;) { await new Promise((r) => setTimeout(r, 2000)); tick(); if (fs.existsSync(`${OUT}/STOP`)) { await stop("STOP file"); } }
