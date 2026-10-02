@@ -5,10 +5,11 @@
 ผลที่จะรายงานหลังผ่าน: **live Telegram บนระบบแยก PASS** · deploy/config บน staging จริง = ขั้นถัดไป
 
 ## 0. โค้ด/หลักฐานภายใน (ทำแล้ว 2 ต.ค.)
-- **exact SHA ที่ใช้รัน: `db993b3`** (parser fix `90a400c` + โหมด `--live` ฉบับแก้ 4 จุด) — launcher `scripts/ops/tg-live-start.sh` ต้องถูกเรียกจาก **worktree ที่ HEAD = SHA นี้** (ตรวจ `rev-parse` ไม่ตรง = หยุด) · schema/migrations/child script อ่านจาก codeRoot เดียวกัน ไม่พึ่งไฟล์ใน checkout staging (`1094347` ไม่มีสคริปต์นี้)
+- **exact SHA ที่ใช้รัน: `e35f18e`** (parser fix `90a400c` + โหมด `--live` ฉบับแก้ 4 จุด) — launcher `scripts/ops/tg-live-start.sh` ต้องถูกเรียกจาก **worktree ที่ HEAD = SHA นี้** (ตรวจ `rev-parse` ไม่ตรง = หยุด) · schema/migrations/child script อ่านจาก codeRoot เดียวกัน ไม่พึ่งไฟล์ใน checkout staging (`1094347` ไม่มีสคริปต์นี้)
 - **transport:** mock **เฉพาะ** automated และ `--dry-run` · โหมด live ใช้ `fetch` จริงไป `api.telegram.org` (host เดียวที่ guard อนุญาต; LINE/AI บล็อกก่อนส่ง) — regression `tests/tgTransportSelect.test.js` (spy แทน fetch ไม่ส่งจริง) 3/3 + regression ระบบจริง: รัน `--live` โดยให้ guard ไม่อนุญาต Telegram (`ENER_TG_LIVE_BLOCK_TELEGRAM=1`) → เลือก transport `real`, ถูกบล็อก `ENETBLOCKED` ที่ seed → **ไม่ READY**, `FAILED.json` + `KEEP`, exit 3, ทรัพยากรถูกเก็บไว้ (ยืนยันแล้ว 2 ต.ค.)
-- **READY** เกิดหลังส่งรายการทดสอบทั้ง 2 สำเร็จ (Telegram ตอบ ok) เท่านั้น · **STOP**: ปิดรับ callback (503) → ปิด listener → รอ in-flight จบ (≤30 วิ) → เก็บหลักฐาน → **ตรวจความครบ** (ทุก query ไม่ล้ม, จำนวนรายการครบ, in-flight = 0) → ครบ = `evidence-<ts>.json` + parent ลบ container/network/worktree · ไม่ครบ = `evidence-PARTIAL-<ts>.json` + `KEEP` + exit 3 + **ไม่ลบอะไร** พร้อมพิมพ์คำสั่ง cleanup ให้ทำเองหลังตรวจ
-- dry-run ผ่าน launcher ที่ `db993b3`: preflight สด (disk/RAM/port) → READY (transport=mock) → 401/denied/ขั้น 1/ขั้น 2/กดซ้ำ/3 พร้อมกัน → stop → `complete:true problems:[]`, grants 1+1, blocked=0, ไม่มี token/secret ในไฟล์, containers=0 port ปิด · automated 12/12 · gate ✅
+- **READY** เกิดหลังส่งรายการทดสอบทั้ง 2 สำเร็จ (Telegram ตอบ ok) เท่านั้น · **STOP** (`fixtures/tg-live-shutdown.mjs`, regression `tests/tgLiveShutdown.test.js` 5/5): ปิดรับ callback (503) → ปิด listener → รอ connection in-flight **และ Promise ของ handler จริง** จบ (≤30 วิ; `res.close` จาก client ตัดสายไม่นับว่า handler จบ) → เก็บหลักฐาน → เขียนไฟล์ → **อ่านกลับตรวจตรง + parse ได้** → **ตัดสิน complete หลังขั้นนี้เท่านั้น** · ครบ = `evidence-<ts>.json` exit 0 → parent ลบ container/network/worktree · ไม่ครบ/เขียนล้ม/handler ค้างเกินเวลา = `evidence-PARTIAL-<ts>.json` (ถ้าเขียนได้) + `KEEP` (best-effort) + **exit 3** → parent **ไม่ลบอะไร** จาก exit code (ไม่พึ่งไฟล์ KEEP) พร้อมพิมพ์ `cleanupWhenDone` ให้ทำเองหลังตรวจ
+- regression ระบบจริง 2 ต.ค. (ผ่านทั้ง 3, SHA `e35f18e`): **(W)** ทำ OUT เป็น immutable หลัง READY → STOP ด้วย SIGTERM → `written:false keepWritten:false` → `TG_LIVE_STOPPED_PARTIAL` exit 3 → parent `TG_LIVE_RESOURCES_KEPT` (containers 2 ถูกเก็บ แม้ไม่มีไฟล์ KEEP/evidence) · **(D)** pause Postgres แล้ว client ตัดสาย (timeout 2 วิ) ขณะ handler รอ RPC → STOP ไม่สรุป complete รอจน 30 วิ → PARTIAL `handler ยังไม่จบ 1` + query-error ของ DB ที่ถูก pause → exit 3 + เก็บทรัพยากร (ใช้เวลา 32 วิ) · **(H)** happy path → `complete:true problems:[] handlersLeft:0` → cleanup containers 0 port ปิด
+- dry-run ผ่าน launcher ที่ `e35f18e`: preflight สด (disk/RAM/port) → READY (transport=mock) → 401/denied/ขั้น 1/ขั้น 2/กดซ้ำ/3 พร้อมกัน → stop → `complete:true problems:[]`, grants 1+1, blocked=0, ไม่มี token/secret ในไฟล์, containers=0 port ปิด · automated 12/12 · gate ✅
 
 ## 1. สิ่งที่กบเตรียม (ไม่ส่ง token/secret ในแชท)
 - bot ใหม่จาก BotFather (คนละตัวกับ bot แจ้งเตือนกลางและ Pro) · เพิ่ม bot เข้า **ห้องทดสอบ** (กลุ่ม/ซูเปอร์กรุ๊ปใหม่) · ได้ `chat id` ตัวเลข (ติดลบสำหรับกลุ่ม) · Telegram user id ตัวเลขของผู้อนุมัติ (กบ และถ้ามีคนที่ 2 ไว้ทดสอบ "ไม่มีสิทธิ์")
@@ -33,18 +34,18 @@
 ```
 (ต้นฉบับ `ops/nginx/telegram-live-isolated.conf.PROPOSED`) · ขั้นตอน: `cp -p` backup config → แทรก → `nginx -t` → reload (อนุมัติ) → **smoke ที่คาด:** ก่อนเซิร์ฟเวอร์ทดสอบรัน `curl -s -o /dev/null -w '%{http_code}' -X POST https://test.my-ener.uk/telegram/webhook-it -d '{}'` = **502** (proxy ไปพอร์ตที่ยังไม่เปิด) · `GET` = **405** (limit_except) · หลัง READY แต่ไม่ส่ง secret header = **401** (แอปตรวจ secret; flag ในระบบทดสอบเป็น true จึงไม่ใช่ 404) · ไม่กระทบ route เดิม (`/`, `/health`, `/r/...`, `/webhook/line` ตอบเหมือนเดิม) · ย้อน = ลบ block + `nginx -t` + reload
 
-## 3. รันเซิร์ฟเวอร์ทดสอบแยกบนเซิร์ฟเวอร์ (หลังข้อ 1–2) — ทุกอย่างจาก worktree ของ `db993b3`
+## 3. รันเซิร์ฟเวอร์ทดสอบแยกบนเซิร์ฟเวอร์ (หลังข้อ 1–2) — ทุกอย่างจาก worktree ของ `e35f18e`
 ```bash
 # 3.1 bootstrap worktree ของ exact SHA (ไม่ checkout/ไม่แตะ container staging — ใช้แค่ object store ของ repo)
 cd /root/ener-scan-staging && git fetch -q mirror release/three-tasks
-git worktree add --detach /root/ener-tg-live/src-db993b3 db993b3 && git -C /root/ener-tg-live/src-db993b3 rev-parse --short HEAD   # ต้องได้ db993b3
+git worktree add --detach /root/ener-tg-live/src-e35f18e e35f18e && git -C /root/ener-tg-live/src-e35f18e rev-parse --short HEAD   # ต้องได้ e35f18e
 # 3.2 เริ่ม (launcher ตรวจสด: HEAD=SHA · node/docker · disk ≥3G · RAM ≥1G · port 3390 ว่าง · ไฟล์ secret 600 ครบ 5 ตัว · npm ci ถ้าไม่มี node_modules · pull image ถ้าไม่มี)
 mkdir -p /root/ener-tg-live/out
-bash /root/ener-tg-live/src-db993b3/scripts/ops/tg-live-start.sh db993b3 /root/ener-tg-live/.env.tg-live /root/ener-tg-live/out 3390
+bash /root/ener-tg-live/src-e35f18e/scripts/ops/tg-live-start.sh e35f18e /root/ener-tg-live/.env.tg-live /root/ener-tg-live/out 3390
 #   → พิมพ์ preflight · started pid · แล้วรอจน READY (ห้องทดสอบได้รับ 2 ข้อความ) หรือ FAILED (exit 3, ทรัพยากรถูกเก็บไว้ให้ตรวจ run.log/FAILED.json)
 ```
 - โฮสต์มี node v20, ไม่มี `node_modules` → launcher รัน `npm ci --omit=dev` ใน worktree (ต้องถึง npm registry ~2–3 นาที) · pull `pgvector/pgvector:pg16` + `postgrest/postgrest:v12.2.3` ถ้ายังไม่มี
-- READY = ในห้องทดสอบมีข้อความสลิป `LIVE-IT-1`, `LIVE-IT-2` (แพ็ก "สแกน 4 ครั้ง (ทดสอบระบบแยก)" 49 บาท, เหตุผล "ทดสอบระบบแยก — ไม่ใช่ลูกค้าจริง") พร้อมปุ่ม "อนุมัติรายการนี้" · `READY.json` ระบุ `transport: "real"`, `sha: "db993b3"`
+- READY = ในห้องทดสอบมีข้อความสลิป `LIVE-IT-1`, `LIVE-IT-2` (แพ็ก "สแกน 4 ครั้ง (ทดสอบระบบแยก)" 49 บาท, เหตุผล "ทดสอบระบบแยก — ไม่ใช่ลูกค้าจริง") พร้อมปุ่ม "อนุมัติรายการนี้" · `READY.json` ระบุ `transport: "real"`, `sha: "e35f18e"`
 - ระบบแยกทั้งหมด: Postgres/PostgREST ใช้แล้วทิ้ง (schema staging ไม่มีข้อมูล) · ไม่มี delivery worker · ไม่เชื่อม DB/คิว staging/Pro · บัญชี/รายการสังเคราะห์ `Utg…` · log ไม่มี token/secret
 
 ## 4. setWebhook (เฉพาะ bot ใหม่ · หลังเซิร์ฟเวอร์ READY)
@@ -61,7 +62,7 @@ curl -s "https://api.telegram.org/bot$TELEGRAM_APPROVAL_BOT_TOKEN/getWebhookInfo
 2. รายการ `LIVE-IT-2`: กด "อนุมัติรายการนี้" → กด "ยืนยันอนุมัติ" รัว ๆ 2–3 ครั้ง → สำเร็จครั้งเดียว ที่เหลือ "ใช้ไม่ได้แล้ว"
 3. (ถ้ามีบัญชีที่ 2 ที่ไม่อยู่ในรายชื่อ) ให้กดปุ่มใด ๆ → "บัญชีนี้ไม่มีสิทธิ์อนุมัติ"
 4. ไม่ต้อง login เว็บใด ๆ · ทุกครั้งระบบตรวจ secret header + numeric user id + chat id
-5. แจ้งผม → `bash /root/ener-tg-live/src-db993b3/scripts/ops/tg-live-stop.sh /root/ener-tg-live/out` → ปิดรับ callback, รอ in-flight, เขียน+ตรวจหลักฐาน → ครบ: `evidence-<ts>.json` (payments paid/approved_by, grants=1, paid_remaining=4, audit, tokens used, outbound `approve_notify|queued`, telegramCalls status 200, blocked=0) และ container/network ถูกลบ · ไม่ครบ: `evidence-PARTIAL-*.json` + `KEEP` → **ไม่ลบ** รายงานก่อน (ไม่ถือว่าผ่าน)
+5. แจ้งผม → `bash /root/ener-tg-live/src-e35f18e/scripts/ops/tg-live-stop.sh /root/ener-tg-live/out` → ปิดรับ callback, รอ in-flight, เขียน+ตรวจหลักฐาน → ครบ: `evidence-<ts>.json` (payments paid/approved_by, grants=1, paid_remaining=4, audit, tokens used, outbound `approve_notify|queued`, telegramCalls status 200, blocked=0) และ container/network ถูกลบ · ไม่ครบ: `evidence-PARTIAL-*.json` + `KEEP` → **ไม่ลบ** รายงานก่อน (ไม่ถือว่าผ่าน)
 
 ## 6. เกณฑ์ผ่าน (ตาม Codex)
 - กบเห็นรายการและกดอนุมัติสองขั้นใน Telegram โดยไม่ login เว็บ ✔ (ข้อ 5.1)
@@ -74,7 +75,7 @@ curl -s "https://api.telegram.org/bot$TELEGRAM_APPROVAL_BOT_TOKEN/getWebhookInfo
 2. `deleteWebhook` ของ bot ใหม่ (`-d drop_pending_updates=true`) → `getWebhookInfo` url ว่าง
 3. ถอด location `/telegram/webhook-it` ออกจาก nginx → `nginx -t` → reload (อนุมัติรอบเดียวกับข้อ 2) → `POST …/telegram/webhook-it` ต้อง 404 จาก nginx (route หาย)
 4. container/network ถูกลบโดย harness ตอน STOP เมื่อหลักฐานครบ (ตรวจ `docker ps -a | grep -c ener-tg-it` = 0, port 3390 ปิด) · ถ้ามี `KEEP` ให้ตรวจ/รายงานก่อน แล้วรันคำสั่งใน log `TG_LIVE_RESOURCES_KEPT.cleanupWhenDone`
-5. ลบ worktree bootstrap: `git -C /root/ener-scan-staging worktree remove --force /root/ener-tg-live/src-db993b3` (ไม่แตะ checkout/branch ของ staging)
+5. ลบ worktree bootstrap: `git -C /root/ener-scan-staging worktree remove --force /root/ener-tg-live/src-e35f18e` (ไม่แตะ checkout/branch ของ staging)
 6. ไฟล์ secret: กบเลือก เก็บไว้ (600) สำหรับรอบ staging จริง หรือ `shred -u`
 7. ไม่มีอะไรต้องล้างใน DB staging/Pro (ไม่เคยแตะ)
 
