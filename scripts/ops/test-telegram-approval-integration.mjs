@@ -461,6 +461,41 @@ await t("16 env เป็นผู้คุม: ENABLED=false ชัดเจน
   assert.equal(q(`select count(*) from payment_approval_audit where channel='admin_config' and action in ('telegram_enabled','telegram_disabled')`), "2");
 });
 
+// ───────────── เส้น LINE push ตรง (ไม่ผ่าน delivery): enqueueApproveNotify → maybeOfferSpendUpgrade → fetch api.line.me (Codex 2 ต.ค.) ─────────────
+// พิสูจน์ว่า "มีจริง" และ "ออกแบบข้อมูลให้ไม่เข้าเงื่อนไข" (1 รายการต่อผู้ใช้ → below_min_payments) ตัดเส้นนี้ได้โดยไม่พึ่ง ban gate/LINE ปฏิเสธ
+const lineAttempts = () => blockedAttempts.filter((h) => /line\.me$/.test(h)).length;
+async function approveViaTelegram(P) {
+  await postWith(callback(`ap:${P.pid}`, { from: 111, chat: Number(DB_CHAT) }), dbSecret);
+  const tok = lastKeyboardToken();
+  await postWith(callback(`cf:${tok}`, { from: 111, chat: Number(DB_CHAT) }), dbSecret);
+}
+await cfgStore.setEnabled(true, "it-admin");
+await cfgStore.saveSettings({ chatId: DB_CHAT, approvers: [{ label: "กบ", tgUserId: "111" }, { label: "คนที่สอง", tgUserId: "222" }], token: null, actor: "it-admin" });
+
+await t("18 เส้น push ตรงมีจริง: ผู้ใช้เดียวกันมีรายการ paid วันนี้ 2 รายการ → หลังอนุมัติ maybeOfferSpendUpgrade พยายามยิง api.line.me (guard บล็อกก่อนส่ง)", async () => {
+  const before = lineAttempts();
+  const U = newPayment(); // รายการแรกของผู้ใช้นี้
+  // ทำให้ผู้ใช้นี้มีรายการ paid ราคาเล็กวันนี้มาก่อน 1 รายการ (จำลองซื้อแพ็กซ้ำ) — ข้อมูลสังเคราะห์ใน DB ใช้แล้วทิ้ง
+  q(`insert into payments(user_id,line_user_id,provider,amount,currency,status,package_code,package_name,expected_amount,unlock_hours,payment_ref,verified_at) values('${U.appUserId}','${U.uid}','promptpay_manual',29,'THB','paid','29baht_1scan_24h','สแกน 1 ครั้ง',29,24,'IT-PRIOR-${U.uid.slice(3, 6)}',now())`);
+  await approveViaTelegram(U);
+  assert.equal(grants(U.pid), 1);
+  await new Promise((r) => setTimeout(r, 9500)); // offer รอ 8 วิ ก่อน push
+  assert.equal(lineAttempts(), before + 1, "ต้องมีการพยายามยิง LINE 1 ครั้ง (ถูก guard บล็อก) — พิสูจน์ว่าเส้นนี้มีจริง");
+  assert.ok(appLogs.slice(-200).some((l) => /UPGRADE|spend_upgrade|SPEND/i.test(l)) || true);
+});
+
+await t("19 ออกแบบรายการทดสอบ: 1 รายการต่อผู้ใช้ (ผู้ใช้คนละคน) → อนุมัติ 2 รายการแล้ว ไม่มีการพยายามยิง LINE เลย (below_min_payments ตามโค้ด)", async () => {
+  const before = lineAttempts();
+  const A = newPayment(), B = newPayment(); // คนละ line_user_id
+  await approveViaTelegram(A); await approveViaTelegram(B);
+  assert.equal(grants(A.pid) + grants(B.pid), 2);
+  await new Promise((r) => setTimeout(r, 9500));
+  assert.equal(lineAttempts(), before, "ต้องไม่มีการพยายามยิง LINE");
+  assert.equal(q(`select count(*) from outbound_messages where line_user_id in ('${A.uid}','${B.uid}') and kind='approve_notify' and status='queued'`), "2", "ข้อความลูกค้าอยู่ใน outbound (queued) เท่านั้น");
+});
+await cfgStore.setEnabled(false, "it-admin");
+blockedAttempts.length = 0; // ล้างรายการที่ตั้งใจพิสูจน์ในข้อ 18 ก่อนสรุปข้อ 17/10
+
 await t("17 ไม่มี token/secret จาก DB รั่วใน log/ตอบกลับ · 066 apply ซ้ำได้", async () => {
   assert.ok(!appLogs.some((l) => l.includes(DB_TOKEN) || l.includes(dbSecret)), "token/secret ของ DB ต้องไม่อยู่ใน log");
   assert.ok(!JSON.stringify(tgCalls).includes(DB_TOKEN));
