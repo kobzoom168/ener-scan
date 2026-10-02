@@ -73,5 +73,27 @@ export function requireAdminSession(req, res, next) {
   res.redirect(302, `/admin/login?next=${encodeURIComponent(safeNext)}`);
 }
 
+/**
+ * Session login **เท่านั้น** — ไม่รับ legacy ADMIN_TOKEN (header/query/body)
+ * ใช้กับหน้าที่ถือ secret ของระบบ (เช่น /admin/telegram-approval) — Codex 2 ต.ค. 2026
+ * หน้าอื่นยังใช้ requireAdminSession (รองรับ legacy) ตามเดิม
+ */
+export function requireAdminSessionOnly(req, res, next) {
+  if (hasValidAdminSession(req)) {
+    next();
+    return;
+  }
+  const accept = String(req.get("Accept") || "");
+  const prefersJson =
+    accept.includes("application/json") && !accept.includes("text/html");
+  if (prefersJson) {
+    res.status(401).json({ ok: false, message: "unauthorized" });
+    return;
+  }
+  const nextPath = req.originalUrl || "/admin/payments";
+  const safeNext = nextPath.startsWith("/admin") ? nextPath : "/admin/payments";
+  res.redirect(302, `/admin/login?next=${encodeURIComponent(safeNext)}`);
+}
+
 /** @deprecated Use requireAdminSession */
 export const requireAdmin = requireAdminSession;

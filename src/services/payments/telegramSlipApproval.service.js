@@ -27,20 +27,23 @@ const TG_API = "https://api.telegram.org";
 
 /* ─────────────────────────── config ─────────────────────────── */
 
-function boolEnv(name) {
-  const v = String(process.env[name] ?? "").trim().toLowerCase();
+function boolEnv(name, envSrc = process.env) {
+  const v = String(envSrc[name] ?? "").trim().toLowerCase();
   return v === "true" || v === "1" || v === "yes";
 }
 
-/** @returns {{token:string, chatId:string, approvers:Set<string>, webhookSecret:string}|null} */
-export function readTelegramApprovalConfig() {
-  if (!boolEnv("TELEGRAM_SLIP_APPROVAL_ENABLED")) return null;
+/**
+ * config จาก env — อ่านจาก `envSrc` แหล่งเดียว (ค่าเริ่มต้น process.env) · ผู้เรียกที่ฉีด env ต้องส่งแหล่งเดียวกัน (Codex 2 ต.ค.: ห้ามอ่านคนละแหล่ง)
+ * @returns {{token:string, chatId:string, approvers:Set<string>, webhookSecret:string}|null}
+ */
+export function readTelegramApprovalConfig(envSrc = process.env) {
+  if (!boolEnv("TELEGRAM_SLIP_APPROVAL_ENABLED", envSrc)) return null;
   // No fallback to the shared alert bot.
-  const token = String(process.env.TELEGRAM_APPROVAL_BOT_TOKEN || "").trim();
-  const chatId = String(process.env.TELEGRAM_APPROVAL_CHAT_ID || "").trim();
-  const webhookSecret = String(process.env.TELEGRAM_WEBHOOK_SECRET || "").trim();
+  const token = String(envSrc.TELEGRAM_APPROVAL_BOT_TOKEN || "").trim();
+  const chatId = String(envSrc.TELEGRAM_APPROVAL_CHAT_ID || "").trim();
+  const webhookSecret = String(envSrc.TELEGRAM_WEBHOOK_SECRET || "").trim();
   const approvers = new Set(
-    String(process.env.TELEGRAM_APPROVER_USER_IDS || "")
+    String(envSrc.TELEGRAM_APPROVER_USER_IDS || "")
       .split(",").map((s) => s.trim()).filter((s) => /^\d{3,20}$/.test(s)),
   );
   // ขาดอย่างใดอย่างหนึ่ง = ปิดไว้ ดีกว่าเปิดครึ่ง ๆ
@@ -67,7 +70,7 @@ export function telegramConfigAuthority(envSrc = process.env) {
 export async function resolveTelegramApprovalConfig(deps = {}) {
   const envSrc = deps.env ?? process.env;
   if (telegramConfigAuthority(envSrc) === "env") {
-    const cfg = readTelegramApprovalConfig();
+    const cfg = readTelegramApprovalConfig(envSrc); // แหล่งเดียวกับที่ใช้เลือก authority
     return cfg ? { ...cfg, source: "env" } : null;
   }
   const store = deps.store ?? (await import("./telegramConfig.store.js"));

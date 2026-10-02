@@ -15,6 +15,8 @@ const DBKEY = "h.p.s";
 const store = await import("../src/services/payments/telegramConfig.store.js");
 const svc = await import("../src/services/payments/telegramSlipApproval.service.js");
 const createRouter = (await import("../src/routes/adminTelegramApproval.routes.js")).default;
+const { requireAdminSessionOnly, requireAdminSession } = await import("../src/middleware/requireAdmin.js");
+const { env: appEnv } = await import("../src/config/env.js");
 const TOKEN = "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij";
 const ENV5 = ["TELEGRAM_SLIP_APPROVAL_ENABLED", "TELEGRAM_APPROVAL_BOT_TOKEN", "TELEGRAM_APPROVAL_CHAT_ID", "TELEGRAM_WEBHOOK_SECRET", "TELEGRAM_APPROVER_USER_IDS"];
 const envDb = { TELEGRAM_CONFIG_KEY: KEY, TELEGRAM_CONFIG_DB_KEY: DBKEY, LOCAL_POSTGREST_URL: "http://127.0.0.1:9" };
@@ -48,6 +50,22 @@ test("authority: env ตั้ง (แม้ ENABLED=false) → ใช้ env �
   await assert.rejects(svc.resolveTelegramApprovalConfig({ env: envEmpty, store: fakeStoreWith(new Error("pgrst_down")) }), /pgrst_down/);
 });
 
+test("env แหล่งเดียว: deps.env ENABLED=false แต่ process.env เปิดครบ → ปิด · deps.env เปิดครบแต่ process.env ปิด → ใช้ deps.env · readTelegramApprovalConfig(envSrc)", async () => {
+  const saved = Object.fromEntries(ENV5.map((k) => [k, process.env[k]]));
+  try {
+    Object.assign(process.env, { TELEGRAM_SLIP_APPROVAL_ENABLED: "true", TELEGRAM_APPROVAL_BOT_TOKEN: TOKEN, TELEGRAM_APPROVAL_CHAT_ID: "-9", TELEGRAM_WEBHOOK_SECRET: "x".repeat(40), TELEGRAM_APPROVER_USER_IDS: "999" });
+    assert.ok(svc.readTelegramApprovalConfig(), "process.env เปิดครบ (ค่าเริ่มต้น)");
+    assert.equal(await svc.resolveTelegramApprovalConfig({ env: { TELEGRAM_SLIP_APPROVAL_ENABLED: "false", ...envDb }, store: fakeStoreWith(dbCfg) }), null, "env ที่ส่งมาปิด ต้องปิด แม้ process.env เปิด");
+    assert.equal(svc.readTelegramApprovalConfig({ TELEGRAM_SLIP_APPROVAL_ENABLED: "false" }), null);
+    for (const k of ENV5) process.env[k] = "";
+    process.env.TELEGRAM_SLIP_APPROVAL_ENABLED = "false";
+    const injected = { TELEGRAM_SLIP_APPROVAL_ENABLED: "true", TELEGRAM_APPROVAL_BOT_TOKEN: TOKEN, TELEGRAM_APPROVAL_CHAT_ID: "-7", TELEGRAM_WEBHOOK_SECRET: "y".repeat(40), TELEGRAM_APPROVER_USER_IDS: "111" };
+    const r = await svc.resolveTelegramApprovalConfig({ env: injected, store: fakeStoreWith(dbCfg) });
+    assert.equal(r?.source, "env"); assert.equal(r.chatId, "-7", "ต้องมาจาก env ที่ส่งมา ไม่ใช่ process.env");
+    assert.equal(svc.readTelegramApprovalConfig(), null, "process.env ปิด");
+  } finally { for (const k of ENV5) { if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k]; } }
+});
+
 test("handler: อ่าน config ล้ม → ปฏิเสธ ไม่อนุมัติ ไม่ใช้ค่าเก่า · ถอนผู้อนุมัติแล้วกดปุ่มเดิม → denied", async () => {
   const audits = [];
   const db = { rpc: async (name, args) => { if (name === "record_payment_approval_audit") { audits.push(args); return { data: true, error: null }; } return { data: null, error: null }; }, from: () => ({ insert: async () => ({ data: null, error: null }) }) };
@@ -65,12 +83,12 @@ test("handler: อ่าน config ล้ม → ปฏิเสธ ไม่อ
 });
 
 // ───────────── หน้า Admin (HTTP จริง, store ปลอม, authorize ปลอม) ─────────────
-function boot({ storeFake, env, authorized = true }) {
+function boot({ storeFake, env, authorized = true, realAuth = false, session = null }) {
   const app = express();
-  const session = {};
+  session = session ?? (authorized ? { admin: { authenticated: true } } : {});
   app.use((req, _res, next) => { req.session = session; next(); });
-  const authorize = (req, res, next) => (authorized ? next() : res.redirect(302, "/admin/login"));
-  app.use(createRouter({ authorize, store: storeFake, svc, envSrc: env }));
+  const authorize = realAuth ? undefined : (req, res, next) => (authorized ? next() : res.redirect(302, "/admin/login"));
+  app.use(createRouter({ ...(authorize ? { authorize } : {}), store: storeFake, svc, envSrc: env }));
   return new Promise((resolve) => { const server = app.listen(0, "127.0.0.1", () => resolve({ server, port: server.address().port, session })); });
 }
 const shut = (server) => { server.closeAllConnections?.(); server.close(); };
@@ -146,6 +164,43 @@ test("หน้า Admin: env เป็นผู้คุม → แสดง '�
   const g2 = await req(b.port, "GET", "/admin/telegram-approval"); assert.match(g2.text, /ops ต้องตั้ง TELEGRAM_CONFIG_KEY/);
   const p2 = await req(b.port, "POST", "/admin/telegram-approval", { body: form({ csrf: b.session.telegramCfgCsrf, bot_token: TOKEN, chat_id: "-1001", approver1_id: "111" }) });
   assert.equal(p2.status, 503); assert.equal(st.calls.length, 0); shut(b.server);
+});
+
+test("auth จริง (middleware จริง ไม่ mock): session ว่าง + legacy x-admin-token/?token → 302 (GET) / 302 (POST) ไม่บันทึก · session login จริง → 200 · หน้าอื่นยังรับ legacy", async () => {
+  const savedTok = appEnv.ADMIN_TOKEN; appEnv.ADMIN_TOKEN = "legacy-admin-token-for-test";
+  try {
+    const st = adminStore({ configured: false, token_set: false, enabled: false, approvers: [] });
+    const anon = await boot({ storeFake: st, env: envEmpty, realAuth: true, session: {} });
+    const hdr = { "x-admin-token": appEnv.ADMIN_TOKEN };
+    assert.equal((await req(anon.port, "GET", "/admin/telegram-approval", { headers: hdr })).status, 302, "legacy header ต้องไม่ผ่าน");
+    assert.equal((await req(anon.port, "GET", "/admin/telegram-approval?token=" + appEnv.ADMIN_TOKEN)).status, 302, "legacy ?token ต้องไม่ผ่าน");
+    const p = await req(anon.port, "POST", "/admin/telegram-approval", { headers: hdr, body: form({ token: appEnv.ADMIN_TOKEN, csrf: "x", bot_token: TOKEN, chat_id: "-1001", approver1_id: "111" }) });
+    assert.equal(p.status, 302); assert.equal(st.calls.length, 0, "POST ด้วย legacy token ต้องไม่บันทึก");
+    const j = await req(anon.port, "GET", "/admin/telegram-approval", { headers: { ...hdr, accept: "application/json" } }); assert.equal(j.status, 401);
+    shut(anon.server);
+    const logged = await boot({ storeFake: st, env: envEmpty, realAuth: true, session: { admin: { authenticated: true } } });
+    assert.equal((await req(logged.port, "GET", "/admin/telegram-approval")).status, 200);
+    const csrf = logged.session.telegramCfgCsrf;
+    assert.equal((await req(logged.port, "POST", "/admin/telegram-approval", { body: form({ csrf: "wrong", bot_token: TOKEN, chat_id: "-1001", approver1_id: "111" }) })).status, 403);
+    assert.equal((await req(logged.port, "POST", "/admin/telegram-approval", { body: form({ csrf, bot_token: TOKEN, chat_id: "-1001", approver1_id: "111" }) })).status, 303);
+    assert.equal(st.calls.length, 1); shut(logged.server);
+    // middleware เดิมของหน้าอื่นยังรับ legacy (ไม่เปลี่ยน)
+    const legacyApp = express(); legacyApp.use((req, _r, n) => { req.session = {}; n(); }); legacyApp.get("/admin/other", requireAdminSession, (_q, r) => r.send("ok"));
+    const ls = legacyApp.listen(0, "127.0.0.1"); await new Promise((r) => ls.once("listening", r));
+    assert.equal((await req(ls.address().port, "GET", "/admin/other", { headers: hdr })).status, 200); shut(ls);
+    assert.equal(typeof requireAdminSessionOnly, "function");
+  } finally { appEnv.ADMIN_TOKEN = savedTok; }
+});
+
+test("ข้อความหลังบันทึกยึดสถานะจริง: OFF → 'ยังไม่เปิดใช้งาน' · ON → 'เปิดใช้งานอยู่ … มีผลกับระบบที่เปิดอยู่ทันที' และไม่พูดว่ายังไม่เปิด", async () => {
+  const base = { configured: true, token_set: true, chat_id: "-1001", approvers: [{ label: "กบ", tg_user_id: "111" }], token_set_at: "2026-10-02T00:00:00Z", updated_at: "2026-10-02T00:00:00Z" };
+  const off = await boot({ storeFake: adminStore({ ...base, enabled: false }), env: envEmpty });
+  const g0 = await req(off.port, "GET", "/admin/telegram-approval?saved=1");
+  assert.match(g0.text, /สถานะ:<\/strong> ตั้งค่าแล้ว — ยังไม่เปิดใช้งาน/); assert.match(g0.text, /บันทึกการตั้งค่าแล้ว — <strong>ยังไม่เปิดใช้งาน/); assert.match(g0.text, /ไม่ได้เปลี่ยนสวิตช์/); shut(off.server);
+  const on = await boot({ storeFake: adminStore({ ...base, enabled: true }), env: envEmpty });
+  const g1 = await req(on.port, "GET", "/admin/telegram-approval?saved=1");
+  assert.match(g1.text, /สถานะ:<\/strong> ตั้งค่าแล้ว — เปิดใช้งานแล้ว/); assert.match(g1.text, /ระบบ<strong>เปิดใช้งานอยู่/); assert.match(g1.text, /มีผลกับระบบที่เปิดอยู่ทันที/); assert.match(g1.text, /ไม่ได้เปลี่ยนสวิตช์/);
+  assert.ok(!/บันทึกการตั้งค่าแล้ว — <strong>ยังไม่เปิดใช้งาน/.test(g1.text), "ON ต้องไม่บอกว่ายังไม่เปิด"); shut(on.server);
 });
 
 test("store.saveSettings ตรวจรูปแบบก่อนเข้ารหัส/เรียก RPC: chat id/approver/token ผิด · ซ้ำ · ครั้งแรกไม่มี token", async () => {

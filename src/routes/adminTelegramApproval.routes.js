@@ -1,6 +1,6 @@
 /**
  * หน้า Admin: ตั้งค่า Telegram อนุมัติสลิป (Codex/กบ 2 ต.ค. 2026) — บันทึกค่า ≠ เปิดใช้งาน
- *  - login Admin เดิม (requireAdminSession) + CSRF ใน session (timing-safe) · ไม่มี HTML สาธารณะ
+ *  - session login Admin **เท่านั้น** (requireAdminSessionOnly — ไม่รับ legacy x-admin-token/?token) + CSRF ใน session (timing-safe) · ไม่มี HTML สาธารณะ
  *  - Token ช่องรหัสผ่าน ทางเดียว: ว่าง = คงเดิม · เปลี่ยน (เมื่อมีอยู่แล้ว) ต้องติ๊กยืนยัน + พิมพ์ "เปลี่ยน TOKEN"
  *  - ไม่ส่ง token/secret กลับใน HTML/API/URL/log · webhook secret สร้างฝั่งเซิร์ฟเวอร์ ไม่ให้กรอก
  *  - ถ้า env เป็นผู้คุม (authority=env) แสดง "ควบคุมโดย config เซิร์ฟเวอร์" และ **ปฏิเสธการบันทึก** (ไม่ให้ดูเหมือนเปลี่ยนสำเร็จ)
@@ -8,14 +8,14 @@
  */
 import express from "express";
 import { randomBytes, timingSafeEqual } from "node:crypto";
-import { requireAdminSession } from "../middleware/requireAdmin.js";
+import { requireAdminSessionOnly } from "../middleware/requireAdmin.js";
 
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
 const CONFIRM_TEXT = "เปลี่ยน TOKEN";
 const thai = (iso) => (iso ? new Date(iso).toLocaleString("th-TH", { timeZone: "Asia/Bangkok", dateStyle: "medium", timeStyle: "short" }) : "-");
 
 export default function createAdminTelegramApprovalRouter({
-  authorize = requireAdminSession,
+  authorize = requireAdminSessionOnly,
   store = null,                 // ฉีดได้เพื่อทดสอบ (ไม่แตะ DB)
   svc = null,                   // telegramSlipApproval.service (telegramConfigAuthority)
   envSrc = process.env,
@@ -65,7 +65,9 @@ label{display:block;margin:10px 0 4px;font-weight:600}input[type=text],input[typ
 <div class="status"><strong>สถานะ:</strong> ${esc(label.text)}
 ${status?.token_set ? `<div class="muted">ตั้งค่า Token แล้ว (${esc(thai(status.token_set_at))}) · webhook secret สร้างฝั่งเซิร์ฟเวอร์แล้ว · ตั้ง webhook กับ Telegram: ${status.webhook_set_at ? esc(thai(status.webhook_set_at)) : "ยังไม่ได้ตั้ง"}</div>` : ""}
 ${status?.updated_at ? `<div class="muted">แก้ล่าสุด ${esc(thai(status.updated_at))} โดย ${esc(status.updated_by || "-")}</div>` : ""}</div>
-${saved ? `<p class="ok">บันทึกการตั้งค่าแล้ว — <strong>ยังไม่เปิดใช้งาน</strong> ไม่ได้ตั้ง webhook และไม่ได้ส่งข้อความใด ๆ</p>` : ""}
+${saved ? (status?.enabled
+  ? `<p class="ok">บันทึกการตั้งค่าแล้ว — ระบบ<strong>เปิดใช้งานอยู่</strong> การบันทึกไม่ได้เปลี่ยนสวิตช์ แต่ Chat ID/รายชื่อผู้อนุมัติที่แก้<strong>มีผลกับระบบที่เปิดอยู่ทันที</strong> (ไม่ได้ตั้ง webhook ใหม่ ไม่ได้ส่งข้อความ)</p>`
+  : `<p class="ok">บันทึกการตั้งค่าแล้ว — <strong>ยังไม่เปิดใช้งาน</strong> การบันทึกไม่ได้เปลี่ยนสวิตช์ ไม่ได้ตั้ง webhook และไม่ได้ส่งข้อความใด ๆ</p>`) : ""}
 ${error ? `<p class="err">${esc(error)}</p>` : ""}
 ${authority === "env" ? `<p class="warn">ระบบนี้อ่าน config จากตัวแปรเซิร์ฟเวอร์ (env) การบันทึกในหน้านี้ถูกปิดไว้ เพื่อไม่ให้ดูเหมือนเปลี่ยนสำเร็จทั้งที่ระบบยังใช้ค่า env เดิม</p>` : ""}
 <form method="post" action="/admin/telegram-approval" autocomplete="off" class="card">
