@@ -1,6 +1,6 @@
 # md5(prosrc) อ้างอิงของฟังก์ชัน migration ชุด three-tasks (057/061/062/063/064/065/066/067)
 # ที่มา: staging DB ener_scan_staging 30 ก.ย. 2026 หลัง apply ไฟล์ใน repo ตามลำดับ + integration tests ผ่าน
-# free_policy_* + new_customer_trial_status + guard_new_customer_trial_job + set_new_customer_trial_policy + free_policy_lock + guard_free_policy_settings = นิยาม 067 รอบ 2 (14 ต.ค. 2026 Codex 3 ช่องโหว่; apply 057→064→065→066→067 ลง DB ใช้แล้วทิ้ง; ฟังก์ชันอื่น md5 ไม่เปลี่ยน) · telegram_settings_* = นิยาม 066 (2 ต.ค. 2026, apply 057→064→065→066 ลง DB ใช้แล้วทิ้ง) · new_customer_trial_used = นิยาม 065 (1 ต.ค. 2026, จากการ apply 057→064→065 ลง DB ใช้แล้วทิ้ง) · 057/064: ตรงกับผลจากการ apply ไฟล์ commit ลง DB ใช้แล้วทิ้ง (ตรวจ 26 ก.ย.) · ใช้กับ scripts/ops/verify-migration-versions.sh
+# free_policy_* + new_customer_trial_status + guard_new_customer_trial_job + set_new_customer_trial_policy + free_policy_lock + guard_free_policy_settings = นิยาม 067 รอบ 3 (14 ต.ค. 2026 Codex: guard owner-check SECURITY INVOKER + เวลาหลังล็อก clock_timestamp; apply 057→064→065→066→067 ลง DB ใช้แล้วทิ้ง; ฟังก์ชันอื่น md5 ไม่เปลี่ยน) · telegram_settings_* = นิยาม 066 (2 ต.ค. 2026, apply 057→064→065→066 ลง DB ใช้แล้วทิ้ง) · new_customer_trial_used = นิยาม 065 (1 ต.ค. 2026, จากการ apply 057→064→065 ลง DB ใช้แล้วทิ้ง) · 057/064: ตรงกับผลจากการ apply ไฟล์ commit ลง DB ใช้แล้วทิ้ง (ตรวจ 26 ก.ย.) · ใช้กับ scripts/ops/verify-migration-versions.sh
 approve_payment_and_grant 07362f4b541c1a7da38e508a557f9757
 consume_telegram_approval_token aa101094ff223e55a55707ffe57f798e
 guard_new_customer_trial_job c96b84585d470e721c94c5717ca98f76
@@ -23,12 +23,12 @@ free_policy_apply_internal 90ceb299e356456011c88e292439fd4d
 free_policy_audit_recent 3ea071d4b83c4cb19f957ae2ffcd0635
 free_policy_mode_now 392b918636d641b61791d6448a6aa729
 free_policy_notice_check 29289f7b72043298691c1622b02340df
-free_policy_reconcile_due bf0f90d4d874c7f8eb527481afeb1502
+free_policy_reconcile_due 85cc4e83b1c63ee56c6b56c5e88c2bc9
 free_policy_schedule_apply_due 2454b76f5528ad6a54a0846252647d5d
-free_policy_schedule_cancel 09f58d6482d63b8f955f16fd1a8fb031
-free_policy_schedule_set dfa1ab4ddc01e8fd024fd219555012bc
+free_policy_schedule_cancel 82360e3724fb57d98fe2bb91bc8ea5d4
+free_policy_schedule_set cf9bd269c7fbbc515e962e2e7c416c83
 free_policy_status f9231acc7157a727b2e3334d7b03668b
 free_policy_stored_mode 468056730e1bc7483129b0268f2647d5
-set_free_policy_mode 0ae6cc634054415ccdf6a0cbf1eeba5c
+set_free_policy_mode 61df47a5a58f86f0734e09aef88d133b
 free_policy_lock eb13d21f1101b13f56103141f2b8284f
-guard_free_policy_settings 10f5a69ea5d1cfa6488e4956d19dbb77
+guard_free_policy_settings 04def842bcd2819e512d19f233b9864a
