@@ -178,7 +178,22 @@ async function logQueueHealthAndDlq() {
           : null,
     }),
   );
-  await maybeSendDlqAlert({ outDead, outFailed });
+  // รายการ dead/failed (id + updated_at) ให้ alert จับ "รายการเสียใหม่" ได้แม้จำนวนเท่าเดิม (ไม่อาศัย count อย่างเดียว)
+  let dlqItems = [];
+  if ((outDead ?? 0) > 0 || (outFailed ?? 0) > 0) {
+    try {
+      const { data } = await supabase
+        .from("outbound_messages")
+        .select("id,updated_at")
+        .in("status", ["dead", "failed"])
+        .order("updated_at", { ascending: false })
+        .limit(200);
+      dlqItems = Array.isArray(data) ? data : [];
+    } catch (e) {
+      console.error("[MAINTENANCE] dlq items fetch failed:", String(e?.message || e).slice(0, 120));
+    }
+  }
+  await maybeSendDlqAlert({ outDead, outFailed, items: dlqItems });
 }
 
 async function runOnce() {
