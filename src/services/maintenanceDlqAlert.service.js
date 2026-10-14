@@ -28,10 +28,11 @@ export function dlqSignature(counts) {
   return crypto.createHash("sha256").update(`${counts.outDead ?? 0}:${counts.outFailed ?? 0}:${ids.join(",")}:${maxUpdated}`).digest("hex").slice(0, 16);
 }
 
-export function buildDlqAlertText({ envLabel, dead, failed, items = [] }) {
+export function buildDlqAlertText({ envLabel, dead, failed, items = [], itemsError = null }) {
   const latest = items[0];
   return [
     `[DLQ Alert][${envLabel}] outbound_messages.dead = ${dead}, failed = ${failed}`,
+    itemsError ? "⚠ อ่านรายการ DLQ ไม่สำเร็จ (แจ้งตามจำนวนที่อ่านได้) — จะแจ้งซ้ำรอบถัดไปจนอ่านได้" : null,
     "ตรวจสอบที่ฐานข้อมูลของระบบ (PostgREST/Postgres บน VPS): outbound_messages.status = 'dead' หรือ 'failed'",
     "Hint: sql/outbound_dead_letter_inspect.template.sql",
     latest ? `ล่าสุด: ${String(latest.id).slice(0, 8)}… (${latest.updated_at || "-"})` : null,
@@ -50,7 +51,7 @@ async function defaultRedis() {
 }
 
 /**
- * @param {{ outDead?: number|null, outFailed?: number|null, items?: Array<{id:string, updated_at?:string|null}> }} counts
+ * @param {{ outDead?: number|null, outFailed?: number|null, items?: Array<{id:string, updated_at?:string|null}>, itemsError?: string|null }} counts
  * @param {{ env?: object, lineClient?: { pushMessage: Function }, redis?: { isAvailable: Function, getValue: Function, setValueWithTtl: Function, tryDedupeOnce: Function } }} [deps]
  * @returns {Promise<{ sent: boolean, skipped?: string, signature?: string, error?: string }>}
  */
@@ -64,21 +65,27 @@ export async function maybeSendDlqAlert(counts, deps = {}) {
   if (dead < threshold) return { sent: false, skipped: "below_threshold" };
 
   const envLabel = dlqEnvLabel(e);
-  const signature = dlqSignature(counts);
-  const scope = `${envLabel}:${adminId.slice(0, 8)}`;
+  // รายการ DLQ อ่านไม่สำเร็จ (itemsError) = signature ไม่ครบ → แจ้งตาม count ที่อ่านได้ แต่ **ไม่ใช้/ไม่ตั้ง marker ระยะยาว** (กันสถานะใหม่ถูกมองเป็นสถานะเดิม)
+  const itemsError = counts.itemsError ? String(counts.itemsError).slice(0, 120) : null;
+  const signature = itemsError ? null : dlqSignature(counts);
+  // key ปลายทางแอดมิน = hash ของ ID เต็ม (คนละคนที่ prefix เหมือนกันต้องไม่ชน) · log ย่อ 8 ตัวตามเดิม
+  const adminHash = crypto.createHash("sha256").update(adminId).digest("hex").slice(0, 16);
+  const scope = `${envLabel}:${adminHash}`;
   const sentKey = `dlq_alert:sent:${scope}`;
-  const lockKey = `dlq_alert:lock:${scope}:${signature}`;
+  const lockKey = `dlq_alert:lock:${scope}:${signature ?? "partial"}`;
   const redis = deps.redis ?? (await defaultRedis());
 
   let redisOk = false;
   try { redisOk = await redis.isAvailable(); } catch { redisOk = false; }
-  if (redisOk) {
+  if (redisOk && signature) {
     let lastSent = null;
     try { lastSent = await redis.getValue(sentKey); } catch { lastSent = null; }
     if (lastSent === signature) {
       console.log(JSON.stringify({ event: "DLQ_ALERT_SKIPPED", reason: "same_state_already_alerted", env: envLabel, signature }));
       return { sent: false, skipped: "same_state_already_alerted", signature };
     }
+  }
+  if (redisOk) {
     let locked = true;
     try { locked = await redis.tryDedupeOnce(lockKey, DLQ_ALERT_LOCK_SEC); } catch { locked = true; }
     if (!locked) {
@@ -86,8 +93,9 @@ export async function maybeSendDlqAlert(counts, deps = {}) {
       return { sent: false, skipped: "send_in_progress", signature };
     }
   }
+  if (itemsError) console.error(JSON.stringify({ event: "DLQ_ALERT_ITEMS_UNAVAILABLE", env: envLabel, reason: itemsError, note: "แจ้งตาม count ที่อ่านได้ ไม่ตั้ง marker ระยะยาว" }));
 
-  const text = buildDlqAlertText({ envLabel, dead, failed, items: Array.isArray(counts.items) ? counts.items : [] });
+  const text = buildDlqAlertText({ envLabel, dead, failed, items: Array.isArray(counts.items) ? counts.items : [], itemsError });
   const client = deps.lineClient ?? new line.Client({ channelAccessToken: e.CHANNEL_ACCESS_TOKEN, channelSecret: e.CHANNEL_SECRET });
   try {
     await client.pushMessage(adminId, { type: "text", text });
@@ -96,7 +104,7 @@ export async function maybeSendDlqAlert(counts, deps = {}) {
     console.error("[DLQ_ALERT] push failed:", err?.message);
     return { sent: false, error: String(err?.message || err).slice(0, 120), signature };
   }
-  if (redisOk) { try { await redis.setValueWithTtl(sentKey, signature, DLQ_ALERT_RESEND_SEC); } catch { /* marker ตั้งไม่ได้ = รอบหน้าแจ้งซ้ำ (ปลอดภัยด้านไม่เงียบ) */ } }
-  console.log(JSON.stringify({ event: "DLQ_ALERT_SENT", env: envLabel, adminIdPrefix: adminId.slice(0, 8), outDead: dead, outFailed: failed, signature, dedupe: redisOk ? "redis" : "fail-open" }));
-  return { sent: true, signature };
+  if (redisOk && signature) { try { await redis.setValueWithTtl(sentKey, signature, DLQ_ALERT_RESEND_SEC); } catch { /* marker ตั้งไม่ได้ = รอบหน้าแจ้งซ้ำ (ปลอดภัยด้านไม่เงียบ) */ } }
+  console.log(JSON.stringify({ event: "DLQ_ALERT_SENT", env: envLabel, adminIdPrefix: adminId.slice(0, 8), outDead: dead, outFailed: failed, signature, itemsComplete: !itemsError, dedupe: !redisOk ? "fail-open" : signature ? "redis" : "none(items_unavailable)" }));
+  return { sent: true, signature, itemsComplete: !itemsError };
 }

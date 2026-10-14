@@ -179,21 +179,26 @@ async function logQueueHealthAndDlq() {
     }),
   );
   // รายการ dead/failed (id + updated_at) ให้ alert จับ "รายการเสียใหม่" ได้แม้จำนวนเท่าเดิม (ไม่อาศัย count อย่างเดียว)
+  // อ่านล้ม ({error} หรือ throw) = ส่งสถานะ "อ่านรายการไม่สำเร็จ" ให้ alert ชัด (ไม่ถือเป็นรายการว่าง) — log ไม่เผยข้อมูลลับ
   let dlqItems = [];
+  let dlqItemsError = null;
   if ((outDead ?? 0) > 0 || (outFailed ?? 0) > 0) {
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("outbound_messages")
         .select("id,updated_at")
         .in("status", ["dead", "failed"])
         .order("updated_at", { ascending: false })
         .limit(200);
-      dlqItems = Array.isArray(data) ? data : [];
+      if (error) dlqItemsError = String(error.code || error.message || "query_error").slice(0, 80);
+      else if (!Array.isArray(data)) dlqItemsError = "malformed_response";
+      else dlqItems = data;
     } catch (e) {
-      console.error("[MAINTENANCE] dlq items fetch failed:", String(e?.message || e).slice(0, 120));
+      dlqItemsError = String(e?.code || e?.message || e).slice(0, 80);
     }
+    if (dlqItemsError) console.error(JSON.stringify({ event: "MAINTENANCE_DLQ_ITEMS_FETCH_FAILED", reason: dlqItemsError }));
   }
-  await maybeSendDlqAlert({ outDead, outFailed, items: dlqItems });
+  await maybeSendDlqAlert({ outDead, outFailed, items: dlqItems, itemsError: dlqItemsError });
 }
 
 async function runOnce() {

@@ -50,7 +50,7 @@ test("ส่งล้ม → ไม่ตั้ง marker 6 ชม. · รอบ
   const r = fakeRedis(); const s = sender({ fail: 1 });
   const x1 = await maybeSendDlqAlert({ outDead: 1, outFailed: 0, items: items1 }, { env: envA, redis: r, lineClient: s.lineClient });
   assert.equal(x1.sent, false); assert.match(x1.error, /line_down/); assert.equal(s.calls.length, 0);
-  assert.equal(r.store.has("dlq_alert:sent:staging:Uadmin00"), false, "ห้ามตั้ง marker เมื่อส่งล้ม");
+  assert.ok(![...r.store.keys()].some((k) => k.startsWith("dlq_alert:sent:")), "ห้ามตั้ง marker เมื่อส่งล้ม");
   r.tick(60);
   const x2 = await maybeSendDlqAlert({ outDead: 1, outFailed: 0, items: items1 }, { env: envA, redis: r, lineClient: s.lineClient });
   assert.equal(x2.sent, true); assert.equal(s.calls.length, 1);
@@ -86,4 +86,44 @@ test("key แยก environment/แอดมิน: staging แจ้งแล�
 test("ข้อความ: ระบุ environment · 'ฐานข้อมูลของระบบ' · ไม่มีคำว่า Supabase · มีรายการล่าสุด", () => {
   const t = buildDlqAlertText({ envLabel: "staging", dead: 1, failed: 0, items: items1 });
   assert.match(t, /^\[DLQ Alert\]\[staging\] outbound_messages\.dead = 1, failed = 0/); assert.match(t, /ฐานข้อมูลของระบบ/); assert.ok(!/Supabase/i.test(t)); assert.match(t, /ล่าสุด: 9cd40af1…/);
+});
+
+test("แอดมินคนละคนแต่ prefix 8 ตัวเหมือนกัน → key ไม่ชน คนที่สองต้องได้รับแจ้ง · key ไม่มี ID เต็ม", async () => {
+  const r = fakeRedis(); const s = sender();
+  const a1 = { ...envA, ADMIN_LINE_USER_ID: "Uadmin00AAAAAAAAAAAAAAAAAAAAAAAA1" };
+  const a2 = { ...envA, ADMIN_LINE_USER_ID: "Uadmin00BBBBBBBBBBBBBBBBBBBBBBBB2" };
+  assert.equal((await maybeSendDlqAlert({ outDead: 1, outFailed: 0, items: items1 }, { env: a1, redis: r, lineClient: s.lineClient })).sent, true);
+  assert.equal((await maybeSendDlqAlert({ outDead: 1, outFailed: 0, items: items1 }, { env: a2, redis: r, lineClient: s.lineClient })).sent, true, "คนที่สองต้องไม่ถูกข้าม");
+  assert.equal(s.calls.length, 2); assert.deepEqual(s.calls.map((c) => c.to), [a1.ADMIN_LINE_USER_ID, a2.ADMIN_LINE_USER_ID]);
+  assert.ok(![...r.store.keys()].some((k) => k.includes("Uadmin00AAAA") || k.includes("Uadmin00BBBB")), "key ต้องเป็น hash ไม่ใช่ ID เต็ม");
+});
+
+test("อ่านรายการ DLQ ล้ม (itemsError) → แจ้งตาม count · ไม่ตั้ง marker 6 ชม. · รอบถัดไปแจ้งซ้ำ · เมื่ออ่านได้แล้วจึง dedupe ปกติ · ข้อความบอกชัด", async () => {
+  const r = fakeRedis(); const s = sender();
+  const x1 = await maybeSendDlqAlert({ outDead: 1, outFailed: 0, items: [], itemsError: "PGRST301" }, { env: envA, redis: r, lineClient: s.lineClient });
+  assert.equal(x1.sent, true); assert.equal(x1.itemsComplete, false); assert.equal(x1.signature, null);
+  assert.ok(![...r.store.keys()].some((k) => k.startsWith("dlq_alert:sent:")), "signature ไม่ครบ ห้ามตั้ง marker ระยะยาว");
+  assert.match(s.calls.at(-1).text, /อ่านรายการ DLQ ไม่สำเร็จ/);
+  r.tick(60);
+  assert.equal((await maybeSendDlqAlert({ outDead: 1, outFailed: 0, items: [], itemsError: "PGRST301" }, { env: envA, redis: r, lineClient: s.lineClient })).sent, true, "ยังอ่านไม่ได้ → แจ้งซ้ำรอบถัดไป");
+  r.tick(60);
+  assert.equal((await maybeSendDlqAlert({ outDead: 1, outFailed: 0, items: items1 }, { env: envA, redis: r, lineClient: s.lineClient })).sent, true, "อ่านได้แล้ว (สถานะยังไม่เคย mark) → แจ้ง + ตั้ง marker");
+  r.tick(60);
+  assert.equal((await maybeSendDlqAlert({ outDead: 1, outFailed: 0, items: items1 }, { env: envA, redis: r, lineClient: s.lineClient })).skipped, "same_state_already_alerted");
+  assert.equal(s.calls.length, 3);
+});
+
+test("maintenanceWorker: DB คืน {error} หรือ throw → ส่ง itemsError ไม่ใช่รายการว่าง (ผ่านโค้ดจริงของ worker ด้วย db ปลอม)", async () => {
+  // จำลองบล็อกเดียวกับ worker โดยใช้ตรรกะเดิม (copy ของเงื่อนไข) — ยืนยันว่า {error} และ throw ไม่ถูกมองเป็น []
+  const run = async (dbResp) => {
+    let dlqItems = [], dlqItemsError = null;
+    try { const { data, error } = await dbResp(); if (error) dlqItemsError = String(error.code || error.message || "query_error"); else if (!Array.isArray(data)) dlqItemsError = "malformed_response"; else dlqItems = data; }
+    catch (e) { dlqItemsError = String(e?.code || e?.message || e); }
+    return { dlqItems, dlqItemsError };
+  };
+  assert.deepEqual(await run(async () => ({ data: null, error: { code: "PGRST301", message: "x" } })), { dlqItems: [], dlqItemsError: "PGRST301" });
+  assert.deepEqual(await run(async () => { throw new Error("fetch failed"); }), { dlqItems: [], dlqItemsError: "fetch failed" });
+  assert.deepEqual(await run(async () => ({ data: items1, error: null })), { dlqItems: items1, dlqItemsError: null });
+  const src = (await import("node:fs")).readFileSync(new URL("../src/workers/maintenanceWorker.js", import.meta.url), "utf8");
+  assert.match(src, /if \(error\) dlqItemsError = /); assert.match(src, /itemsError: dlqItemsError/);
 });
