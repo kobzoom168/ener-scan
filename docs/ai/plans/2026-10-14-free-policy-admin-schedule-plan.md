@@ -114,3 +114,12 @@ preflight +4 แถว (trigger มี, lock/guard ไม่ grant ใคร, se
 ### Rollback
 - โค้ด: `deploy-ener.sh staging` ที่ `b1f1ea7` (โค้ดเก่าอ่าน `enabled=true` → new_customer เท่าเดิม; ไม่มีใครอยู่โหมด none จึงย้อนได้ปลอดภัย)
 - DB: **067 คงไว้ ห้าม DROP** — ไม่มีอะไรต้องย้อนเพราะ effective mode ไม่เปลี่ยน · ถ้าจำเป็นจริง: ย้อน `.env`/โค้ดก่อน แล้วค่อยพิจารณาปิด trigger (เป็น owner postgres) ภายใต้การอนุมัติแยก
+
+### ผลการทำ §10 — staging 14 ต.ค. 2026 (กบอนุมัติ 04:45Z) ✅
+- backup: `/root/backup-ops-20261002/free-policy-067-20261014-044602/` (schema-before.sql, app_settings-before.jsonl 10 แถว, สิทธิ์ 7 บัญชี, trial-status ก่อน/หลัง, preflight ก่อน/หลัง, apply log, md5-after, deploy log, docker ps, worker log)
+- preflight ก่อน: 067 f 16 / t 2 ตามคาด แถวเดิมทั้งหมด t → **apply sql/067 จาก `7a5906e`** (sha256 `85f47da7…c09eed`) exit 0 ทรานแซกชันเดียว 04:46:37Z → preflight หลัง: **067 t 18/18**, แถวเดิมเหมือนเดิมทุกแถว → **md5 31/31 OK** (reference จาก 7a5906e)
+- โหมด/cutoff/สิทธิ์ **ไม่เปลี่ยน**: mode_now = new_customer (stored = new_customer, daily_enabled=false, due=null) · eligible_since 2026-09-26 09:07:59.727219+00 · status(null)/status(กบ) ค่าเดิม (+ field mode/daily_enabled) · สิทธิ์ 7 บัญชี diff ว่าง · schedule 0 · audit 0 · guard prosecdef=false · ทดสอบ web_anon + GUC UPDATE free_policy ใน ROLLBACK → `free_policy_protected` ค่าไม่เปลี่ยน
+- deploy: `deploy-ener.sh staging` exit 0 blue-green ครบ → HEAD `41e40b8` (docs-only บน `7a5906e`; `git diff 7a5906e HEAD -- ':!docs'` ว่าง) · md5 ไฟล์ runtime ในคอนเทนเนอร์ 5 ไฟล์ = 7a5906e · health 200 · 6 containers Up
+- หลัง deploy 2.5 นาที: worker-maintenance ไม่มี FREE_POLICY_* event (ไม่มี schedule; key พร้อมจึงไม่มี SKIPPED/ERROR) · error 0 ทั้ง app/worker · `/admin/free-policy`, `/admin/free-trial` ไม่ login → 302 login · POST ไม่ session → 302
+- **ค้างกบ:** เปิด https://test.my-ener.uk/admin/free-policy ดูอย่างเดียว (ยังไม่กดบันทึก/ตั้งเวลา) · ไม่เปลี่ยนโหมด ไม่ broadcast ไม่เปิด Telegram ไม่แตะ Pro
+- rollback โค้ด: `deploy-ener.sh staging` ที่ `b1f1ea7` ปลอดภัย (โหมดมีผลไม่เปลี่ยน) · 067 คงไว้
