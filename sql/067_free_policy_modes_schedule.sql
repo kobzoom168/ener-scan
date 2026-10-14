@@ -12,6 +12,11 @@
 --  * สิทธิ์: RPC อ่านได้ทุก role เดิม · RPC เปลี่ยน/ตั้งเวลา/ยกเลิก/apply เรียกได้เฉพาะ role free_policy_admin
 --      (GRANT ให้ telegram_config_admin ด้วย — JWT เดิม TELEGRAM_CONFIG_DB_KEY ใช้ได้; web_anon/service_role เรียกไม่ได้)
 --  * ช่องทางเก่า set_new_customer_trial_policy(bool) → wrapper ที่ผ่านกติกาใหม่ (ไม่มี announced_at = ถอน daily ไม่ได้) + REVOKE จาก web_anon
+--  * Codex 14 ต.ค. รอบ 2 (3 ช่องโหว่): (a) trigger กัน INSERT/UPDATE/DELETE/rename key นโยบายใน app_settings โดยตรง (041 ให้ web_anon/service_role เขียนตารางได้)
+--      (กัน UPDATE/DELETE/rename; INSERT ปล่อยเพราะเปลี่ยนค่าที่มีอยู่ไม่ได้และ DELETE ถูกกัน → re-apply 057/067 ยังได้)
+--      เขียนได้เฉพาะในทรานแซกชันของ RPC (set_config 'ener.free_policy_rpc' local) · settings key อื่นไม่กระทบ · ops ซ่อมมือ: SET ener.free_policy_rpc='on'
+--    (b) ล็อกร่วม free_policy_lock() = แถว settings ทั้งสองเรียงตาม key **ก่อนอ่าน/ตรวจ** ทุก RPC เขียน (set/schedule_set/cancel/apply) ลำดับล็อก settings → schedule เสมอ
+--    (c) กำหนดการที่ถึงเวลาแล้ว (effective_at <= now) ยกเลิกไม่ได้แม้ยัง pending (worker ช้า) → reconcile ให้เป็น applied แล้ว RAISE schedule_already_effective
 --  * idempotent · ไม่ backfill · ไม่แก้ยอด/ไม่รีเซ็ต eligible_since · rollback: ห้าม DROP — ตั้งโหมดที่ต้องการแล้วย้อนโค้ด (ห้ามย้อนขณะโหมด none)
 BEGIN;
 
@@ -22,7 +27,8 @@ DO $$ BEGIN
 END $$;
 GRANT USAGE ON SCHEMA public TO free_policy_admin;
 
--- ค่าเริ่มต้นสอดคล้องกับ trial เดิม (ไม่เปลี่ยน effective mode)
+-- ค่าเริ่มต้นสอดคล้องกับ trial เดิม (ไม่เปลี่ยน effective mode) · เปิดทาง trigger guard ภายในทรานแซกชัน migration (re-apply)
+SELECT set_config('ener.free_policy_rpc', 'on', true);
 INSERT INTO public.app_settings(key, value)
 SELECT 'free_policy', jsonb_build_object(
   'daily_enabled', NOT COALESCE((SELECT (value->>'enabled')::boolean FROM public.app_settings WHERE key = 'new_customer_trial'), false),
@@ -56,6 +62,43 @@ CREATE TABLE IF NOT EXISTS public.free_policy_audit (
   detail       jsonb NOT NULL DEFAULT '{}'::jsonb
 );
 REVOKE ALL ON TABLE public.free_policy_schedule, public.free_policy_audit FROM PUBLIC, web_anon, service_role, free_policy_admin;
+
+SELECT set_config('ener.free_policy_rpc', 'off', true);
+
+-- ───────── ล็อกร่วม (b) ─────────
+-- ล็อกแถวนโยบายทั้งสองก่อนอ่าน/ตรวจ/เขียน — ผู้เรียกคนที่สองรอจนคนแรก commit แล้วจึงอ่านโหมดจริง (กันสองทรานแซกชันข้าม 72h)
+CREATE OR REPLACE FUNCTION public.free_policy_lock()
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  PERFORM 1 FROM public.app_settings WHERE key IN ('new_customer_trial','free_policy') ORDER BY key FOR UPDATE;
+  IF (SELECT count(*) FROM public.app_settings WHERE key IN ('new_customer_trial','free_policy')) <> 2 THEN
+    RAISE EXCEPTION 'trial_policy_unavailable';
+  END IF;
+END;
+$$;
+
+-- ───────── กันแก้ตรง (a) ─────────
+CREATE OR REPLACE FUNCTION public.guard_free_policy_settings()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE protected text[] := ARRAY['new_customer_trial','free_policy'];
+BEGIN
+  IF current_setting('ener.free_policy_rpc', true) = 'on' THEN
+    RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+  END IF;
+  -- INSERT ปล่อย: แถวที่มีอยู่เปลี่ยนไม่ได้ผ่าน INSERT (ON CONFLICT DO UPDATE → trigger UPDATE กัน · DO NOTHING ไม่เปลี่ยนอะไร)
+  -- และ DELETE ถูกกัน จึงลบแล้วใส่ใหม่ไม่ได้ · seed-if-absent ของ 057/067 re-apply จึงยังรันได้
+  IF TG_OP = 'INSERT' THEN RETURN NEW; END IF;
+  IF (TG_OP = 'UPDATE' AND NEW.key = ANY(protected)) OR (TG_OP IN ('UPDATE','DELETE') AND OLD.key = ANY(protected)) THEN
+    RAISE EXCEPTION 'free_policy_protected' USING ERRCODE = 'P0001',
+      HINT = 'ใช้ RPC set_free_policy_mode / free_policy_schedule_* เท่านั้น (role free_policy_admin)';
+  END IF;
+  RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+END;
+$$;
+DROP TRIGGER IF EXISTS trg_guard_free_policy_settings ON public.app_settings;
+CREATE TRIGGER trg_guard_free_policy_settings
+  BEFORE INSERT OR UPDATE OR DELETE ON public.app_settings
+  FOR EACH ROW EXECUTE FUNCTION public.guard_free_policy_settings();
 
 -- ───────── อ่าน ─────────
 CREATE OR REPLACE FUNCTION public.free_policy_stored_mode()
@@ -183,7 +226,8 @@ RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE from_mode text; cfg jsonb; fp jsonb;
 BEGIN
   IF p_mode NOT IN ('daily','new_customer','none') THEN RAISE EXCEPTION 'invalid_mode'; END IF;
-  PERFORM 1 FROM public.app_settings WHERE key IN ('new_customer_trial','free_policy') FOR UPDATE;
+  PERFORM public.free_policy_lock();
+  PERFORM set_config('ener.free_policy_rpc', 'on', true); -- เปิดทางเขียนเฉพาะในทรานแซกชันนี้ (trigger guard)
   from_mode := public.free_policy_stored_mode();
   SELECT value INTO cfg FROM public.app_settings WHERE key = 'new_customer_trial';
   IF cfg IS NULL THEN RAISE EXCEPTION 'trial_policy_unavailable'; END IF;
@@ -195,6 +239,7 @@ BEGIN
   INSERT INTO public.free_policy_audit(actor, action, from_mode, to_mode, schedule_id, announced_at, detail)
   VALUES (p_actor, 'mode_set', from_mode, p_mode, p_schedule_id, p_announced_at,
           jsonb_build_object('eligible_since', cfg->>'eligible_since', 'via', CASE WHEN p_schedule_id IS NULL THEN 'manual' ELSE 'schedule' END));
+  PERFORM set_config('ener.free_policy_rpc', 'off', true);
   RETURN public.free_policy_mode_now();
 END;
 $$;
@@ -206,6 +251,7 @@ DECLARE m jsonb; from_mode text; pend record;
 BEGIN
   IF p_mode NOT IN ('daily','new_customer','none') THEN RAISE EXCEPTION 'invalid_mode'; END IF;
   IF p_announced_at IS NOT NULL AND p_announced_at > now() THEN RAISE EXCEPTION 'announced_at_in_future' USING ERRCODE = 'P0001'; END IF;
+  PERFORM public.free_policy_lock(); -- (b) ล็อกก่อนอ่าน/ตรวจทุกอย่าง
   PERFORM public.free_policy_reconcile_due(); -- schedule ที่ถึงเวลาแล้วแต่ worker ยังไม่บันทึก → บันทึกก่อน (ฐานการตัดสินคือโหมดที่มีผลจริง)
   SELECT * INTO pend FROM public.free_policy_schedule WHERE status = 'pending' FOR UPDATE;
   IF FOUND THEN
@@ -231,6 +277,7 @@ BEGIN
   IF p_target_mode NOT IN ('daily','new_customer','none') THEN RAISE EXCEPTION 'invalid_mode'; END IF;
   IF p_effective_at IS NULL OR p_effective_at <= now() THEN RAISE EXCEPTION 'effective_at_must_be_future' USING ERRCODE = 'P0001'; END IF;
   IF p_announced_at IS NOT NULL AND p_announced_at > now() THEN RAISE EXCEPTION 'announced_at_in_future' USING ERRCODE = 'P0001'; END IF;
+  PERFORM public.free_policy_lock(); -- (b)
   PERFORM public.free_policy_reconcile_due();
   SELECT * INTO old FROM public.free_policy_schedule WHERE status = 'pending' FOR UPDATE;
   from_mode := public.free_policy_stored_mode(); -- หลัง reconcile + แทนที่ pending (อนาคต) เดิม โหมดฐานคือ stored mode
@@ -249,8 +296,14 @@ CREATE OR REPLACE FUNCTION public.free_policy_schedule_cancel(p_id bigint, p_act
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE s record;
 BEGIN
+  PERFORM public.free_policy_lock(); -- (b) ลำดับเดียวกับ RPC อื่น: settings → schedule
   SELECT * INTO s FROM public.free_policy_schedule WHERE id = p_id AND status = 'pending' FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'schedule_not_pending' USING ERRCODE = 'P0001'; END IF;
+  IF s.effective_at <= now() THEN
+    -- (c) ถึงเวลาแล้ว = มีผลกับลูกค้าแล้ว (free_policy_mode_now) → ย้อนไม่ได้ · บันทึกให้ตรง (applied) แล้วปฏิเสธ
+    PERFORM public.free_policy_reconcile_due();
+    RAISE EXCEPTION 'schedule_already_effective' USING ERRCODE = 'P0001';
+  END IF;
   UPDATE public.free_policy_schedule SET status = 'cancelled', cancelled_by = p_actor, cancelled_at = now() WHERE id = p_id;
   INSERT INTO public.free_policy_audit(actor, action, to_mode, schedule_id, detail) VALUES (p_actor, 'schedule_cancelled', s.target_mode, p_id, '{"reason":"cancel"}');
   RETURN (SELECT to_jsonb(x) FROM public.free_policy_schedule x WHERE x.id = p_id);
@@ -263,7 +316,8 @@ CREATE OR REPLACE FUNCTION public.free_policy_reconcile_due()
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE s record; from_mode text; m jsonb;
 BEGIN
-  SELECT * INTO s FROM public.free_policy_schedule WHERE status = 'pending' AND effective_at <= now() ORDER BY effective_at FOR UPDATE SKIP LOCKED LIMIT 1;
+  PERFORM public.free_policy_lock(); -- (b) settings → schedule
+  SELECT * INTO s FROM public.free_policy_schedule WHERE status = 'pending' AND effective_at <= now() ORDER BY effective_at FOR UPDATE LIMIT 1;
   IF NOT FOUND THEN RETURN jsonb_build_object('applied', false, 'mode', public.free_policy_mode_now()->>'mode'); END IF;
   from_mode := public.free_policy_stored_mode();
   m := public.free_policy_apply_internal(s.target_mode, 'schedule:' || s.id, s.effective_at, s.id, s.announced_at);
@@ -306,6 +360,8 @@ REVOKE ALL ON FUNCTION public.free_policy_schedule_set(text, timestamptz, timest
 REVOKE ALL ON FUNCTION public.free_policy_schedule_cancel(bigint, text) FROM PUBLIC, web_anon, service_role;
 REVOKE ALL ON FUNCTION public.free_policy_schedule_apply_due() FROM PUBLIC, web_anon, service_role;
 REVOKE ALL ON FUNCTION public.free_policy_reconcile_due() FROM PUBLIC, web_anon, service_role, free_policy_admin;
+REVOKE ALL ON FUNCTION public.free_policy_lock() FROM PUBLIC, web_anon, service_role, free_policy_admin;
+REVOKE ALL ON FUNCTION public.guard_free_policy_settings() FROM PUBLIC, web_anon, service_role, free_policy_admin;
 REVOKE ALL ON FUNCTION public.free_policy_audit_recent(integer) FROM PUBLIC, web_anon, service_role;
 REVOKE ALL ON FUNCTION public.set_new_customer_trial_policy(boolean) FROM PUBLIC, web_anon, service_role;
 GRANT EXECUTE ON FUNCTION public.free_policy_stored_mode() TO web_anon, service_role, free_policy_admin;

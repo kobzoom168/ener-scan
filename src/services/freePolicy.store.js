@@ -27,6 +27,8 @@ export const RPC_ERROR_TH = {
   effective_at_must_be_future: "เวลามีผลต้องอยู่ในอนาคต",
   schedule_pending: "มีกำหนดการรออยู่ — ยกเลิกกำหนดการก่อน หรือติ๊ก \"ยกเลิกกำหนดการที่รออยู่\"",
   schedule_not_pending: "กำหนดการนี้ไม่ได้อยู่ในสถานะรอแล้ว (ถูกใช้/ยกเลิก/แทนที่ไปแล้ว)",
+  schedule_already_effective: "กำหนดการนี้ถึงเวลาและมีผลกับลูกค้าแล้ว ยกเลิกย้อนหลังไม่ได้ — ถ้าต้องการโหมดอื่น ให้เปลี่ยนนโยบายใหม่ (กติกา 72 ชม. ตามปกติ)",
+  free_policy_protected: "ค่านโยบายถูกป้องกัน แก้ตรงในตารางไม่ได้ ต้องผ่าน RPC",
   invalid_mode: "โหมดไม่ถูกต้อง",
   trial_policy_unavailable: "ยังอ่านนโยบายจาก DB ไม่ได้ (ตรวจ migration 057/067)",
   permission_denied: "key เซิร์ฟเวอร์ไม่มีสิทธิ์เรียก RPC นี้ (ต้องเป็น role free_policy_admin) — ops ตรวจ FREE_POLICY_DB_KEY/TELEGRAM_CONFIG_DB_KEY",

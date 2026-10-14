@@ -6,6 +6,8 @@
 //  3 effective mode follows DB time (due pending wins before worker applies) at every gate incl. job INSERT (none)
 //  4 cutoff on first scheduled trial enable = effective_at, existing cutoff preserved; accounts before/at/after
 //  5 mutating RPCs only for free_policy_admin (web_anon/service_role denied); apply vs cancel/manual conflicts
+//  Codex รอบ 2: (a) direct app_settings writes on the policy keys blocked for web_anon/service_role (041 grants) · other keys untouched
+//               (b) two transactions cannot bypass 72h (lock before read) · (c) cancel after effective_at (before worker) refused, mode/cutoff kept
 import { execFileSync, execFile } from "node:child_process";
 import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
@@ -31,6 +33,9 @@ const M067 = mig("067_free_policy_modes_schedule.sql");
 const fixture = `DO $$ BEGIN IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='web_anon') THEN CREATE ROLE web_anon; END IF;
     IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='service_role') THEN CREATE ROLE service_role; END IF; END $$;
     CREATE TABLE app_settings(key text PRIMARY KEY,value jsonb,updated_at timestamptz DEFAULT now());
+    GRANT USAGE ON SCHEMA public TO web_anon, service_role;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON app_settings TO service_role; GRANT SELECT, INSERT, UPDATE, DELETE ON app_settings TO web_anon; -- สิทธิ์จริงจาก sql/041
+    INSERT INTO app_settings(key,value) VALUES ('scan_offer','{"freeQuotaPerDay":1}');
     CREATE TABLE app_users(id uuid PRIMARY KEY,line_user_id text UNIQUE,created_at timestamptz DEFAULT now(),bonus_scans integer DEFAULT 0);
     CREATE TABLE scan_jobs(id uuid PRIMARY KEY,app_user_id uuid REFERENCES app_users(id),line_user_id text,
       access_source text,status text,result_id uuid,created_at timestamptz DEFAULT now());
@@ -85,6 +90,29 @@ try {
   denied("SELECT free_policy_apply_internal('none','x',now(),NULL,NULL)", "free_policy_admin");
   assert.equal(mode().mode, "daily", "denied calls changed nothing");
   pass.push("5 web_anon/service_role denied on all mutating RPCs; reads allowed; internal RPC denied to admin role");
+
+  // ── (a) direct table writes on policy keys are blocked (041 grants real) · other keys still writable ──
+  for (const role of ["web_anon", "service_role"]) {
+    for (const stmt of [
+      "UPDATE app_settings SET value = jsonb_set(value,'{daily_enabled}','false') WHERE key='free_policy'",
+      "UPDATE app_settings SET value = jsonb_set(value,'{enabled}','true') WHERE key='new_customer_trial'",
+      "DELETE FROM app_settings WHERE key='free_policy'",
+      "INSERT INTO app_settings(key,value) VALUES ('free_policy','{\"daily_enabled\":false}') ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value",
+      "UPDATE app_settings SET key='free_policy_x' WHERE key='free_policy'",
+      "UPDATE app_settings SET key='new_customer_trial' WHERE key='scan_offer'",
+    ]) assert.throws(() => sql(`SET ROLE ${role}; ${stmt}; RESET ROLE;`), /free_policy_protected/, `${role}: ${stmt}`);
+    sql(`SET ROLE ${role}; UPDATE app_settings SET value = jsonb_set(value,'{freeQuotaPerDay}','2') WHERE key='scan_offer'; RESET ROLE;`);
+  }
+  assert.equal(sql("SELECT value->>'freeQuotaPerDay' FROM app_settings WHERE key='scan_offer'"), "2", "other settings still writable");
+  assert.throws(() => sql("UPDATE app_settings SET value = jsonb_set(value,'{daily_enabled}','false') WHERE key='free_policy'"), /free_policy_protected/, "even superuser without the RPC flag");
+  assert.equal(mode().mode, "daily"); exclusive(); assert.equal(sql("SELECT count(*) FROM app_settings WHERE key IN ('free_policy','new_customer_trial')"), "2");
+  assert.equal(sql("SELECT count(*) FROM free_policy_audit"), "0", "no audit rows from blocked writes");
+  assert.throws(() => sql("SET ROLE web_anon; INSERT INTO app_settings(key,value) VALUES ('free_policy','{\"daily_enabled\":false}'); RESET ROLE;"), /duplicate key/, "plain INSERT cannot replace an existing policy row");
+  sql("SET ROLE web_anon; INSERT INTO app_settings(key,value) VALUES ('free_policy','{\"daily_enabled\":false}') ON CONFLICT (key) DO NOTHING; RESET ROLE;"); // no-op path allowed, value must stay
+  assert.equal(JSON.parse(sql("SELECT value FROM app_settings WHERE key='free_policy'")).daily_enabled, true, "value unchanged by any insert path");
+  for (const m of M) sql(m); sql(M067); // re-apply 057/064/065 then 067 after the guard exists (seed-if-absent inserts allowed)
+  assert.equal(mode().mode, "daily"); exclusive();
+  pass.push("(a) direct app_settings writes/deletes/renames on policy keys blocked for web_anon/service_role; other keys fine; RPC path still works");
 
   // ── 2: 72h enforced for immediate withdrawal of daily ──
   assert.throws(() => asAdmin("SELECT set_free_policy_mode('none','kob',NULL,false)"), /notice_required/);
@@ -175,6 +203,53 @@ try {
   assert.equal(new Date(settings().trial.eligible_since).toISOString(), new Date(eff).toISOString());
   pass.push("4b cutoff preserved across toggles; legacy switch allowed for opening daily");
 
+  // ── (b) two transactions cannot bypass 72h: A opens daily (uncommitted) while B asks new_customer without notice ──
+  assert.equal(jAdmin("SELECT set_free_policy_mode('none','kob',now()-interval '72 hours',false)").mode, "none");
+  const ra0 = concurrent("SET ROLE free_policy_admin; BEGIN; SELECT set_free_policy_mode('daily','A',NULL,false); SELECT pg_sleep(0.7); COMMIT;");
+  await sleep(200);
+  const rb0 = await concurrent("SET ROLE free_policy_admin; SELECT set_free_policy_mode('new_customer','B',NULL,false);");
+  const ra1 = await ra0;
+  assert.ok(!ra1.error, ra1.stderr);
+  assert.ok(rb0.error && /notice_required/.test(rb0.stderr), "B must wait for A's lock and then see daily → notice_required: " + rb0.stderr);
+  assert.equal(mode().mode, "daily"); exclusive();
+  assert.equal(sql("SELECT count(*) FROM free_policy_audit WHERE action='mode_set' AND from_mode='daily' AND to_mode='new_customer' AND announced_at IS NULL"), "0", "no daily→new_customer without notice ever recorded");
+  // same race with a valid notice from B → B applies after A (serialized), audit from_mode = daily
+  const ra2 = concurrent("SET ROLE free_policy_admin; BEGIN; SELECT set_free_policy_mode('none','A',now()-interval '72 hours',false); SELECT pg_sleep(0.5); COMMIT;");
+  await sleep(200);
+  const rb2 = await concurrent("SET ROLE free_policy_admin; SELECT set_free_policy_mode('new_customer','B',now()-interval '72 hours',false);");
+  await ra2; assert.ok(!rb2.error, rb2.stderr);
+  assert.equal(sql("SELECT from_mode||'>'||to_mode FROM free_policy_audit WHERE action='mode_set' ORDER BY id DESC LIMIT 1"), "none>new_customer", "B saw A's committed state");
+  assert.equal(jAdmin("SELECT set_free_policy_mode('daily','kob',NULL,false)").mode, "daily");
+  pass.push("(b) lock before read: concurrent manual changes serialize, no 72h bypass, audit reflects committed from_mode");
+
+  // ── (c) cancel after effective_at but before worker apply → refused, mode + cutoff kept, schedule becomes applied ──
+  // use a fresh cutoff scenario: reset to a DB without eligible_since is not possible (cutoff is permanent) → verify mode + cutoff unchanged instead
+  const effC = sql("SELECT (now() + interval '1100 milliseconds')::text");
+  const sC = jAdmin(`SELECT free_policy_schedule_set('none','${effC}'::timestamptz,now()-interval '72 hours','kob')`);
+  await sleep(1300);
+  const beforeC = mode(); assert.equal(beforeC.mode, "none"); assert.equal(beforeC.stored_mode, "daily");
+  assert.throws(() => asAdmin(`SELECT free_policy_schedule_cancel(${sC.id},'kob')`), /schedule_already_effective/);
+  const afterC = mode(); assert.equal(afterC.mode, "none", "effective mode must not roll back"); assert.equal(afterC.eligible_since, beforeC.eligible_since, "cutoff must not change");
+  assert.equal(sql(`SELECT status FROM free_policy_schedule WHERE id=${sC.id}`), "pending", "failed RPC rolls back its own reconcile too; worker/next RPC applies");
+  assert.equal(jAdmin("SELECT free_policy_schedule_apply_due()").applied, true);
+  assert.equal(sql(`SELECT status FROM free_policy_schedule WHERE id=${sC.id}`), "applied");
+  assert.throws(() => asAdmin(`SELECT free_policy_schedule_cancel(${sC.id},'kob')`), /schedule_not_pending/);
+  // first-ever trial enable via schedule, then cancel after due: cutoff must stay = effective_at (separate DB, cutoff never set before)
+  const db3 = `${db}_c`; sql(`CREATE DATABASE ${db3}`, "postgres");
+  try {
+    sql(fixture, db3); for (const m of M) sql(m, db3); sql(M067, db3);
+    const eff5 = sql("SELECT (now() + interval '1100 milliseconds')::text", db3);
+    const s5c = JSON.parse(sql(`SET ROLE free_policy_admin; SELECT free_policy_schedule_set('new_customer','${eff5}'::timestamptz,now()-interval '72 hours','kob'); RESET ROLE;`, db3));
+    await sleep(1300);
+    const m1 = JSON.parse(sql("SELECT free_policy_mode_now()", db3)); assert.equal(m1.mode, "new_customer"); assert.equal(new Date(m1.eligible_since).toISOString(), new Date(eff5).toISOString());
+    assert.throws(() => sql(`SET ROLE free_policy_admin; SELECT free_policy_schedule_cancel(${s5c.id},'kob'); RESET ROLE;`, db3), /schedule_already_effective/);
+    const m2 = JSON.parse(sql("SELECT free_policy_mode_now()", db3)); assert.equal(m2.mode, "new_customer"); assert.equal(m2.eligible_since, m1.eligible_since, "first cutoff survives cancel attempt");
+    assert.equal(JSON.parse(sql("SET ROLE free_policy_admin; SELECT free_policy_schedule_apply_due(); RESET ROLE;", db3)).applied, true);
+    assert.equal(new Date(JSON.parse(sql("SELECT value FROM app_settings WHERE key='new_customer_trial'", db3)).eligible_since).toISOString(), new Date(eff5).toISOString(), "stored cutoff = effective_at after apply");
+  } finally { sql(`DROP DATABASE ${db3} WITH (FORCE);`, "postgres"); }
+  assert.equal(jAdmin("SELECT set_free_policy_mode('daily','kob',NULL,false)").mode, "daily");
+  pass.push("(c) cancel after effective_at (before worker) refused: effective mode + cutoff kept, schedule later applied; first-ever cutoff survives");
+
   // ── 5b: concurrency — two apply_due race for one due schedule; cancel vs in-flight apply; manual vs pending ──
   const eff2 = sql("SELECT (now() + interval '1200 milliseconds')::text");
   const s4 = jAdmin(`SELECT free_policy_schedule_set('new_customer','${eff2}'::timestamptz,now()-interval '72 hours','kob')`);
@@ -186,7 +261,7 @@ try {
   const [ra, rb, rc] = await Promise.all([a, b, c]);
   assert.ok(!ra.error, ra.stderr); assert.ok(!rb.error, rb.stderr);
   assert.equal([ra, rb].filter(x => /"applied": true/.test(x.stdout)).length, 1, "exactly one apply wins (SKIP LOCKED)");
-  assert.ok(rc.error && /schedule_not_pending/.test(rc.stderr), "cancel during/after apply must fail: " + rc.stderr);
+  assert.ok(rc.error && /schedule_not_pending|schedule_already_effective/.test(rc.stderr), "cancel during/after apply must fail: " + rc.stderr);
   assert.equal(sql(`SELECT status FROM free_policy_schedule WHERE id=${s4.id}`), "applied");
   assert.equal(mode().mode, "new_customer"); exclusive();
   // manual change with pending: refused without cancel, allowed with cancel when no notice needed (new_customer → daily)

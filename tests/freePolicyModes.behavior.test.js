@@ -259,6 +259,33 @@ test("Admin POST: CSRF · ยืนยัน · เปลี่ยนทัน�
   } finally { await close(c.server); }
 });
 
+test("Admin: กำหนดการที่ถึงเวลาแล้ว (worker ยังไม่บันทึก) → แสดง 'มีผลแล้ว' ไม่มีปุ่มยกเลิก ไม่มีช่อง cancel_pending · error schedule_already_effective แปลไทย", async () => {
+  const due = fakeStore({ status: st("new_customer", { stored_mode: "daily", eligible_since: "2026-10-14T02:00:00Z" }), schedule: { id: 5, target_mode: "new_customer", effective_at: "2026-10-14T02:00:00Z", created_by: "kob", created_at: "2026-10-10T01:00:00Z" } });
+  const d = await boot({ store: due });
+  try {
+    const page = await req(d.port, "GET", "/admin/free-policy");
+    assert.ok(page.text.includes("กำหนดการถึงเวลาแล้ว (มีผลกับลูกค้าแล้ว รอระบบบันทึก)"), "honest label");
+    assert.ok(page.text.includes("ยกเลิกย้อนหลังไม่ได้"), "explains irreversibility");
+    assert.ok(!page.text.includes("ยกเลิกกำหนดการนี้"), "no cancel button"); assert.ok(!page.text.includes('name="cancel_pending"'), "no cancel_pending checkbox");
+    assert.ok(page.text.includes("ค่าที่บันทึกเดิม"), "shows stored vs effective mismatch");
+    assert.ok(page.text.includes('value="new_customer" checked'), "radio reflects effective mode");
+  } finally { await close(d.server); }
+  const fut = fakeStore({ schedule: { id: 6, target_mode: "none", effective_at: "2999-01-01T00:00:00Z" } });
+  const g = await boot({ store: fut });
+  try {
+    const page = await req(g.port, "GET", "/admin/free-policy");
+    assert.ok(page.text.includes("ยกเลิกกำหนดการนี้") && page.text.includes('name="cancel_pending"'), "future schedule keeps cancel controls");
+  } finally { await close(g.server); }
+  const failing = fakeStore({ fail: "schedule_already_effective", schedule: { id: 7, target_mode: "none", effective_at: "2026-10-14T02:00:00Z" } });
+  const h = await boot({ store: failing });
+  try {
+    await req(h.port, "GET", "/admin/free-policy");
+    const r = await req(h.port, "POST", "/admin/free-policy", { body: form({ csrf: h.session.freePolicyCsrf, action: "cancel", schedule_id: "7" }) });
+    assert.equal(r.status, 400); assert.ok(r.text.includes("ยกเลิกย้อนหลังไม่ได้"), "Thai error for schedule_already_effective");
+  } finally { await close(h.server); }
+  assert.ok(S.RPC_ERROR_TH.schedule_already_effective && S.RPC_ERROR_TH.free_policy_protected);
+});
+
 test("auth จริง: session ว่าง + legacy x-admin-token → 302 ไม่เรนเดอร์/ไม่บันทึก · session login → 200", async () => {
   process.env.ADMIN_TOKEN = "legacy-secret";
   const store = fakeStore();

@@ -62,6 +62,7 @@ export default function createAdminFreePolicyRouter({
     const last = status?.last_applied || null;
     const daily = Number(offer()?.freeQuotaPerDay) || 1;
     const nowIso = now().toISOString();
+    const schedDue = Boolean(sched && Date.parse(String(sched.effective_at || "")) <= now().getTime()); // (c) ถึงเวลาแล้ว = ยกเลิกไม่ได้
     const modeColor = { daily: "#2e7d32", new_customer: "#1565c0", none: "#8a6d3b" }[mode] || "#a94442";
     const radio = (m, help) => `<label class="opt"><input type="radio" name="mode" value="${m}" ${mode === m ? "checked" : ""} ${canWrite ? "" : "disabled"} required> <strong>${esc(L[m])}</strong><span class="muted">${esc(help)}</span></label>`;
     return `<!doctype html>
@@ -84,10 +85,10 @@ ${mode && stored && stored !== mode ? `<div class="note" style="margin-top:8px">
 <div class="muted" style="margin-top:6px">Cutoff ลูกค้าใหม่ (eligible_since): ${status?.eligible_since ? `${esc(thai(status.eligible_since))} · <code>${esc(status.eligible_since)}</code>` : "ยังไม่ตั้ง — จะบันทึกถาวรเมื่อโหมดลูกค้าใหม่มีผลครั้งแรก (ตั้งเวลา = เวลาที่มีผล ไม่ใช่เวลาที่ระบบบันทึก)"}</div>
 ${last ? `<div class="muted">เปลี่ยนตามกำหนดการล่าสุด: → ${esc(L[last.target_mode] || last.target_mode)} มีผล ${esc(thai(last.effective_at))} (บันทึก ${esc(thai(last.applied_at))})</div>` : ""}
 </div>
-${sched ? `<div class="card" style="border-color:#ffe08a;background:#fffdf5"><strong>กำหนดการที่รออยู่:</strong> เปลี่ยนเป็น <strong>${esc(L[sched.target_mode] || sched.target_mode)}</strong> มีผล <strong>${esc(thai(sched.effective_at))}</strong>
+${sched ? `<div class="card" style="border-color:#ffe08a;background:#fffdf5"><strong>${schedDue ? "กำหนดการถึงเวลาแล้ว (มีผลกับลูกค้าแล้ว รอระบบบันทึก):" : "กำหนดการที่รออยู่:"}</strong> เปลี่ยนเป็น <strong>${esc(L[sched.target_mode] || sched.target_mode)}</strong> มีผล <strong>${esc(thai(sched.effective_at))}</strong>
 <div class="muted">ตั้งโดย ${esc(sched.created_by || "-")} เมื่อ ${esc(thai(sched.created_at))}${sched.announced_at ? ` · ประกาศลูกค้าแล้ว ${esc(thai(sched.announced_at))}` : ""} · เมื่อถึงเวลา ระบบใช้โหมดใหม่ทันทีกับทุกด่าน แม้ตัวบันทึกจะมาช้า</div>
-<form method="post" action="/admin/free-policy" style="margin-top:8px"><input type="hidden" name="csrf" value="${esc(req.session?.freePolicyCsrf || "")}"><input type="hidden" name="action" value="cancel"><input type="hidden" name="schedule_id" value="${esc(sched.id)}">
-<button class="btn warn" type="submit" ${canWrite ? "" : "disabled"}>ยกเลิกกำหนดการนี้</button> <span class="muted">ยกเลิก = คงโหมดปัจจุบันไว้ ไม่เปลี่ยนอะไร</span></form></div>` : ""}
+${schedDue ? `<p class="note" style="margin:8px 0 0">ถึงเวลาแล้ว — ยกเลิกย้อนหลังไม่ได้ ถ้าต้องการโหมดอื่นให้เปลี่ยนนโยบายใหม่ด้านล่าง (กติกา ${st.NOTICE_HOURS} ชม. ตามปกติ)</p>` : `<form method="post" action="/admin/free-policy" style="margin-top:8px"><input type="hidden" name="csrf" value="${esc(req.session?.freePolicyCsrf || "")}"><input type="hidden" name="action" value="cancel"><input type="hidden" name="schedule_id" value="${esc(sched.id)}">
+<button class="btn warn" type="submit" ${canWrite ? "" : "disabled"}>ยกเลิกกำหนดการนี้</button> <span class="muted">ยกเลิก = คงโหมดปัจจุบันไว้ ไม่เปลี่ยนอะไร</span></form>`}</div>` : ""}
 ${saved ? `<p class="ok">${esc(saved)}</p>` : ""}
 ${error ? `<p class="err">${esc(error)}</p>` : ""}
 ${!readiness.ready ? `<p class="note">${esc(st.RPC_ERROR_TH.db_key_missing)} (ขาด: ${esc(readiness.missing.join(", "))}) — ดูสถานะได้อย่างเดียว</p>` : ""}
@@ -104,7 +105,7 @@ ${radio("none", "ไม่มีสิทธิ์ฟรีทุกบัญช
 <h2 style="font-size:18px;margin:16px 0 8px">3) เวลาที่ประกาศลูกค้า <span class="muted">(จำเป็นเมื่อ "ถอน" ฟรีรายวัน → ลูกค้าใหม่/ปิดฟรี)</span></h2>
 <p class="muted">กติกา: ถอนฟรีรายวันต้องประกาศลูกค้าก่อนอย่างน้อย <strong>${st.NOTICE_HOURS} ชั่วโมง</strong> (นับจากเวลาที่ประกาศจริงถึงเวลามีผล) ระบบตรวจใน DB ไม่มีทางลัด · ส่งประกาศเอง หน้านี้ไม่ broadcast</p>
 <label>ประกาศลูกค้าแล้วเมื่อ (เวลาไทย): <input type="datetime-local" name="announced_at" ${canWrite ? "" : "disabled"}></label>
-${sched ? `<p><label style="font-weight:400"><input type="checkbox" name="cancel_pending" value="1" ${canWrite ? "" : "disabled"}> ยกเลิกกำหนดการที่รออยู่ด้วย (จำเป็นเมื่อ "เปลี่ยนทันที" ขณะมีกำหนดการ) — ไม่ได้ข้ามกติกา ${st.NOTICE_HOURS} ชม.</label></p>` : ""}
+${sched && !schedDue ? `<p><label style="font-weight:400"><input type="checkbox" name="cancel_pending" value="1" ${canWrite ? "" : "disabled"}> ยกเลิกกำหนดการที่รออยู่ด้วย (จำเป็นเมื่อ "เปลี่ยนทันที" ขณะมีกำหนดการ) — ไม่ได้ข้ามกติกา ${st.NOTICE_HOURS} ชม.</label></p>` : ""}
 <p><label style="font-weight:400"><input type="checkbox" name="confirmed" value="1" required ${canWrite ? "" : "disabled"}> ยืนยัน: เข้าใจว่าการเปลี่ยนมีผลกับลูกค้าจริงของระบบนี้ และไม่กระทบแพ็ก/โบนัส/คลังเดิม</label></p>
 <p><button class="btn" type="submit" name="action" value="save" ${canWrite ? "" : "disabled"}>บันทึก</button> <span class="muted">บันทึกแล้วหน้าจะแสดงโหมดที่มีผลจริง</span></p>
 </form>
