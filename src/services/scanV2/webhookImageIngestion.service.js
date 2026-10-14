@@ -67,7 +67,7 @@ const DEBOUNCE_MAX_EXTRAS = 4;
 /** exception ที่ trigger guard_new_customer_trial_job ยกตอน INSERT scan_jobs → รหัสสั้น หรือ null */
 export function quotaGuardCodeFromError(error) {
   const m = String(error?.message || error?.details || error || "")
-    .match(/bonus_quota_exhausted|trial_quota_exhausted|trial_not_eligible/);
+    .match(/bonus_quota_exhausted|trial_quota_exhausted|trial_not_eligible|free_policy_none/);
   return m ? m[0] : null;
 }
 

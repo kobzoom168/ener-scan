@@ -195,9 +195,32 @@ try {
   assert.equal(jAdmin("SELECT set_free_policy_mode('daily','kob',NULL,true)").mode, "daily");
   assert.equal(sql(`SELECT status FROM free_policy_schedule WHERE id=${s5.id}`), "cancelled");
   assert.equal(sql("SELECT count(*) FROM free_policy_audit WHERE action='schedule_cancelled' AND detail->>'reason'='manual_change'"), "1");
+  // reconcile: due-but-unapplied schedule is persisted BEFORE a manual change / new schedule decides from_mode (worker lag)
+  const eff3 = sql("SELECT (now() + interval '1100 milliseconds')::text");
+  const s6 = jAdmin(`SELECT free_policy_schedule_set('none','${eff3}'::timestamptz,now()-interval '72 hours','kob')`); // daily → none, notice ok
+  await sleep(1300);
+  assert.equal(mode().mode, "none"); assert.equal(mode().stored_mode, "daily", "worker has not applied yet");
+  assert.throws(() => sql(insert(1)), /free_policy_none/, "none effective at INSERT before worker");
+  // manual none → daily while the due none is unapplied: reconcile applies s6 first (audit from none), then daily
+  assert.equal(jAdmin("SELECT set_free_policy_mode('daily','kob',NULL,false)").mode, "daily");
+  assert.equal(sql(`SELECT status FROM free_policy_schedule WHERE id=${s6.id}`), "applied", "due schedule persisted by reconcile, not cancelled");
+  assert.equal(sql("SELECT from_mode||'>'||to_mode FROM free_policy_audit WHERE action='mode_set' ORDER BY id DESC LIMIT 1"), "none>daily");
+  assert.equal(sql("SELECT from_mode||'>'||to_mode FROM free_policy_audit WHERE action='mode_set' ORDER BY id DESC LIMIT 1 OFFSET 1"), "daily>none");
+  // new schedule while a due none is unapplied: from_mode after reconcile = none → scheduling daily needs no notice; scheduling new_customer from none needs none either
+  const eff4 = sql("SELECT (now() + interval '1100 milliseconds')::text");
+  const s8 = jAdmin(`SELECT free_policy_schedule_set('none','${eff4}'::timestamptz,now()-interval '72 hours','kob')`);
+  await sleep(1300);
+  const s7 = jAdmin("SELECT free_policy_schedule_set('new_customer',now()+interval '1 hour',NULL,'kob')"); // from none (reconciled) → no notice needed
+  assert.equal(mode().mode, "none"); assert.equal(mode().stored_mode, "none", "reconciled before new schedule");
+  asAdmin(`SELECT free_policy_schedule_cancel(${s7.id},'kob')`);
+  assert.equal(jAdmin("SELECT set_free_policy_mode('daily','kob',NULL,false)").mode, "daily");
+  // audit RPC: admin only
+  assert.ok(Array.isArray(jAdmin("SELECT free_policy_audit_recent(5)"))); assert.equal(jAdmin("SELECT free_policy_audit_recent(5)").length, 5);
+  denied("SELECT free_policy_audit_recent(5)", "web_anon"); denied("SELECT free_policy_audit_recent(5)", "service_role");
+  pass.push("5c reconcile due schedule before manual change / new schedule (worker lag) · audit_recent admin-only");
   // status RPC exposes pending/last_applied for the admin page
   const st = j("SELECT free_policy_status(NULL)");
-  assert.equal(st.mode, "daily"); assert.equal(st.schedule, null); assert.equal(st.last_applied.id, s4.id);
+  assert.equal(st.mode, "daily"); assert.equal(st.schedule, null); assert.equal(st.last_applied.id, s8.id); assert.equal(st.last_applied.status, "applied");
   pass.push("5b concurrent apply_due → one winner; cancel vs apply; manual vs pending (refused / cancel_pending)");
   console.log("PASS free-policy 067:\n - " + pass.join("\n - "));
 } finally {

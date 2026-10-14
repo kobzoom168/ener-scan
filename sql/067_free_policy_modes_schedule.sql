@@ -206,6 +206,7 @@ DECLARE m jsonb; from_mode text; pend record;
 BEGIN
   IF p_mode NOT IN ('daily','new_customer','none') THEN RAISE EXCEPTION 'invalid_mode'; END IF;
   IF p_announced_at IS NOT NULL AND p_announced_at > now() THEN RAISE EXCEPTION 'announced_at_in_future' USING ERRCODE = 'P0001'; END IF;
+  PERFORM public.free_policy_reconcile_due(); -- schedule ที่ถึงเวลาแล้วแต่ worker ยังไม่บันทึก → บันทึกก่อน (ฐานการตัดสินคือโหมดที่มีผลจริง)
   SELECT * INTO pend FROM public.free_policy_schedule WHERE status = 'pending' FOR UPDATE;
   IF FOUND THEN
     IF NOT p_cancel_pending THEN RAISE EXCEPTION 'schedule_pending' USING ERRCODE = 'P0001'; END IF;
@@ -230,8 +231,9 @@ BEGIN
   IF p_target_mode NOT IN ('daily','new_customer','none') THEN RAISE EXCEPTION 'invalid_mode'; END IF;
   IF p_effective_at IS NULL OR p_effective_at <= now() THEN RAISE EXCEPTION 'effective_at_must_be_future' USING ERRCODE = 'P0001'; END IF;
   IF p_announced_at IS NOT NULL AND p_announced_at > now() THEN RAISE EXCEPTION 'announced_at_in_future' USING ERRCODE = 'P0001'; END IF;
+  PERFORM public.free_policy_reconcile_due();
   SELECT * INTO old FROM public.free_policy_schedule WHERE status = 'pending' FOR UPDATE;
-  from_mode := public.free_policy_stored_mode(); -- หลังแทนที่ pending เดิม โหมดที่จะเป็นฐานคือ stored mode
+  from_mode := public.free_policy_stored_mode(); -- หลัง reconcile + แทนที่ pending (อนาคต) เดิม โหมดฐานคือ stored mode
   PERFORM public.free_policy_notice_check(from_mode, p_target_mode, p_effective_at, p_announced_at);
   IF FOUND THEN
     UPDATE public.free_policy_schedule SET status = 'superseded', cancelled_by = p_actor, cancelled_at = now(), note = 'superseded_by_new_schedule' WHERE id = old.id;
@@ -256,7 +258,8 @@ END;
 $$;
 
 -- apply ที่ถึงเวลา: ครั้งเดียว (FOR UPDATE SKIP LOCKED) · restart-safe · cutoff = effective_at ของ schedule (ถ้า trial เปิดครั้งแรก)
-CREATE OR REPLACE FUNCTION public.free_policy_schedule_apply_due()
+-- ภายใน (ไม่ grant): ใช้โดย apply_due RPC และเรียกก่อน set/schedule เพื่อ "reconcile" ให้ stored mode ตรงกับโหมดที่มีผลแล้ว
+CREATE OR REPLACE FUNCTION public.free_policy_reconcile_due()
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE s record; from_mode text; m jsonb;
 BEGIN
@@ -267,6 +270,17 @@ BEGIN
   UPDATE public.free_policy_schedule SET status = 'applied', applied_at = now(), applied_from_mode = from_mode WHERE id = s.id;
   RETURN jsonb_build_object('applied', true, 'schedule_id', s.id, 'from', from_mode, 'to', s.target_mode, 'effective_at', s.effective_at, 'mode', m->>'mode', 'eligible_since', m->>'eligible_since');
 END;
+$$;
+CREATE OR REPLACE FUNCTION public.free_policy_schedule_apply_due()
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN RETURN public.free_policy_reconcile_due(); END;
+$$;
+
+-- audit ล่าสุดสำหรับหน้า Admin (เฉพาะ free_policy_admin)
+CREATE OR REPLACE FUNCTION public.free_policy_audit_recent(p_limit integer DEFAULT 20)
+RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT COALESCE(jsonb_agg(to_jsonb(a) ORDER BY a.id DESC), '[]'::jsonb)
+  FROM (SELECT * FROM public.free_policy_audit ORDER BY id DESC LIMIT GREATEST(1, LEAST(COALESCE(p_limit, 20), 200))) a;
 $$;
 
 -- ช่องทางเก่า: ผ่านกติกาใหม่ (ไม่มี announced_at → ถอน daily ไม่ได้ · มี pending → ปฏิเสธ) · ไม่ให้ web_anon เรียก
@@ -291,6 +305,8 @@ REVOKE ALL ON FUNCTION public.set_free_policy_mode(text, text, timestamptz, bool
 REVOKE ALL ON FUNCTION public.free_policy_schedule_set(text, timestamptz, timestamptz, text) FROM PUBLIC, web_anon, service_role;
 REVOKE ALL ON FUNCTION public.free_policy_schedule_cancel(bigint, text) FROM PUBLIC, web_anon, service_role;
 REVOKE ALL ON FUNCTION public.free_policy_schedule_apply_due() FROM PUBLIC, web_anon, service_role;
+REVOKE ALL ON FUNCTION public.free_policy_reconcile_due() FROM PUBLIC, web_anon, service_role, free_policy_admin;
+REVOKE ALL ON FUNCTION public.free_policy_audit_recent(integer) FROM PUBLIC, web_anon, service_role;
 REVOKE ALL ON FUNCTION public.set_new_customer_trial_policy(boolean) FROM PUBLIC, web_anon, service_role;
 GRANT EXECUTE ON FUNCTION public.free_policy_stored_mode() TO web_anon, service_role, free_policy_admin;
 GRANT EXECUTE ON FUNCTION public.free_policy_mode_now(timestamptz) TO web_anon, service_role, free_policy_admin;
@@ -300,6 +316,7 @@ GRANT EXECUTE ON FUNCTION public.set_free_policy_mode(text, text, timestamptz, b
 GRANT EXECUTE ON FUNCTION public.free_policy_schedule_set(text, timestamptz, timestamptz, text) TO free_policy_admin;
 GRANT EXECUTE ON FUNCTION public.free_policy_schedule_cancel(bigint, text) TO free_policy_admin;
 GRANT EXECUTE ON FUNCTION public.free_policy_schedule_apply_due() TO free_policy_admin;
+GRANT EXECUTE ON FUNCTION public.free_policy_audit_recent(integer) TO free_policy_admin;
 GRANT EXECUTE ON FUNCTION public.set_new_customer_trial_policy(boolean) TO free_policy_admin;
 COMMIT;
 NOTIFY pgrst, 'reload schema';

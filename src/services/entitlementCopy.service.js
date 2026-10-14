@@ -6,8 +6,9 @@
  *
  * กติกา
  *   - LINE และ LIFF ต้องเลือกข้อความจาก **สถานะสิทธิ์เดียวกัน** (ผล checkScanAccess) → resolveEntitlementState()
- *   - นโยบายจริงคือ access.freePolicy ("daily" | "new_customer") — ห้ามเดาจากภาพ/วันที่
+ *   - นโยบายจริงคือ access.freePolicy ("daily" | "new_customer" | "none") — ห้ามเดาจากภาพ/วันที่
  *   - โหมด new_customer ห้ามมี: ฟรีวันละ / วันนี้ใช้ฟรีครบ / พรุ่งนี้มีฟรี / รอหลังเที่ยงคืน
+ *   - โหมด none (ปิดฟรี · sql/067) ห้ามทั้งชุดบน + ห้ามพูด "ทดลองฟรี/ลูกค้าใหม่ฟรี" — แพ็ก/โบนัสยังใช้ได้
  *   - โหมด daily (Admin ปิด trial) ยังพูดเรื่องฟรีรายวันได้ตามเดิม
  *   - ห้ามชวนซื้อเพื่อปลดล็อกคลัง/รายงานเดิมของเจ้าของ (กติกาถาวรตั้งแต่ 23 ก.ย.)
  *   - ราคา/จำนวน/อายุแพ็ก มาจาก offer config เท่านั้น
@@ -28,19 +29,23 @@ export const FORBIDDEN_IN_TRIAL_MODE = [
 ];
 /** ข้อความชวนซื้อเพื่อดูของเดิม — ห้ามทุกโหมด */
 export const FORBIDDEN_EVERYWHERE = [/ค่าครูดูแลคลัง/, /(เปิด|ซื้อ|จ่าย).{0,10}เพื่อดู(คลัง|รายงาน|ประวัติ)/];
+/** โหมดปิดฟรี: ห้ามสัญญาสิทธิ์ฟรีทุกแบบ (รวมทดลองฟรี) */
+export const FORBIDDEN_IN_NONE_MODE = [/ทดลองฟรี/, /ลูกค้าใหม่.{0,12}ฟรี/, /ฟรี\s*\d+\s*ครั้ง/, /สิทธิ์ฟรี(คงเหลือ|วันนี้)/];
+export const FREE_POLICIES = ["daily", "new_customer", "none"];
 
 export const HISTORY_COMMAND_TEXT = "ดูผลเก่า"; // exact command ที่ระบบรู้จัก (exactUtilityCommand)
 
 /**
  * นโยบายฟรีที่เปิดจริงตอนนี้ — อ่านจาก DB ผ่าน trial status (ไม่ใช่ cache ของ offer)
  * ล้ม → "unknown" = ใช้ข้อความกลาง ๆ ที่ไม่สัญญาเรื่องฟรีเลย (fail-closed ฝั่งคำพูด)
- * @returns {Promise<"daily"|"new_customer"|"unknown">}
+ * @returns {Promise<"daily"|"new_customer"|"none"|"unknown">}
  */
 export async function resolveFreePolicy(deps = {}) {
   try {
     const get = deps.getNewCustomerTrialStatus
       ?? (await import("./newCustomerTrial.service.js")).getNewCustomerTrialStatus;
     const t = await get(null);
+    if (t && FREE_POLICIES.includes(t.mode)) return t.mode;
     return t?.enabled === true ? "new_customer" : "daily";
   } catch {
     return "unknown";
@@ -53,7 +58,7 @@ export async function resolveFreePolicy(deps = {}) {
  * @param {{ now?: Date }} [opts]
  * @returns {{
  *   state: "unavailable"|"paid"|"bonus"|"trial_left"|"trial_exhausted"|"existing_no_rights"|"paid_expired"|"daily_left"|"daily_exhausted",
- *   policy: "daily"|"new_customer"|"unknown", allowed: boolean,
+ *   policy: "daily"|"new_customer"|"none"|"unknown", allowed: boolean,
  *   paidLeft: number, paidUntil: string|null, paidUnlimited: boolean, bonusLeft: number, freeLeft: number, freeLimit: number,
  *   trialLimit: number, expiredPaidUntil: string|null,
  * }}
@@ -69,7 +74,7 @@ export function resolveEntitlementState(access, opts = {}) {
   if (!access || typeof access !== "object" || typeof access.allowed !== "boolean" || access.accessUnavailable === true) {
     return base;
   }
-  const policy = access.freePolicy === "new_customer" ? "new_customer" : "daily";
+  const policy = access.freePolicy === "new_customer" || access.freePolicy === "none" ? access.freePolicy : "daily";
   const paidActive = access.reason === "paid" && access.allowed;
   const paidLeft = paidActive ? n(access.remaining) : 0;
   const paidUntilMs = Date.parse(String(access.paidUntil || ""));
@@ -85,6 +90,12 @@ export function resolveEntitlementState(access, opts = {}) {
     expiredPaidUntil: !paidActive && paidUntilPast ? String(access.paidUntil) : null,
   };
   if (paidActive) return { ...out, state: "paid" };
+  if (policy === "none") {
+    // ปิดฟรี: ไม่มี trial/daily — เหลือแค่ โบนัส / แพ็กหมดอายุ / ยังไม่มีสิทธิ์
+    if (bonusLeft > 0) return { ...out, state: "bonus", freeLeft: 0, freeLimit: 0 };
+    if (out.expiredPaidUntil) return { ...out, state: "paid_expired", freeLeft: 0, freeLimit: 0 };
+    return { ...out, state: "existing_no_rights", freeLeft: 0, freeLimit: 0 };
+  }
   if (policy === "new_customer") {
     if (access.trialEligible === true && freeLeft > 0) return { ...out, state: "trial_left" };
     if (bonusLeft > 0) return { ...out, state: "bonus" };
@@ -216,13 +227,15 @@ export function buildSoftCloseCopy(policy) {
 export function buildFirstScanInviteLine(policy, { freeQuotaPerDay = 1, trialLimit = 2 } = {}) {
   if (policy === "daily") return `ฟรีวันละ ${Number(freeQuotaPerDay) || 1} ครั้ง`;
   if (policy === "new_customer") return `ลูกค้าใหม่ทดลองฟรี ${trialLimit} ครั้ง`;
+  if (policy === "none") return "เลือกแพ็กสแกนแล้วส่งรูปได้เลย";
   return "ทดลองอ่านพลังได้เลย";
 }
 
 /** ตรวจว่าข้อความชุดหนึ่งไม่ละเมิดกติกาโหมด (ใช้ใน tests และ guard log) */
 export function findForbiddenPhrase(text, policy) {
   const t = String(text || "");
-  const rules = policy === "new_customer" ? [...FORBIDDEN_IN_TRIAL_MODE, ...FORBIDDEN_EVERYWHERE] : FORBIDDEN_EVERYWHERE;
+  const rules = policy === "none" ? [...FORBIDDEN_IN_TRIAL_MODE, ...FORBIDDEN_IN_NONE_MODE, ...FORBIDDEN_EVERYWHERE]
+    : policy === "new_customer" ? [...FORBIDDEN_IN_TRIAL_MODE, ...FORBIDDEN_EVERYWHERE] : FORBIDDEN_EVERYWHERE;
   for (const re of rules) if (re.test(t)) return re.source;
   return null;
 }

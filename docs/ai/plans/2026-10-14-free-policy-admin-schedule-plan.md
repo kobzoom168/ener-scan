@@ -45,3 +45,31 @@
 
 ## 6. ขอเคาะก่อนลงมือ
 (ก) ใช้ `app_settings.free_policy.daily_enabled` + คง 057 (ไม่ย้าย trial ไปที่ใหม่) (ข) หน้า Admin ใหม่ `/admin/free-policy` session-only (ค) 72h นับจาก `announced_at` ที่กบกรอกยืนยัน (ง) โหมด `none` เป็นโหมดจริง (ไม่ใช่ quota 0 ใน offer)
+
+---
+
+## 7. ผลการทำ (14 ต.ค. 2026) — โค้ด+เทสต์ในระบบแยก · **ยังไม่ apply/deploy · ไม่แตะ staging/Pro · ไม่ broadcast · ไม่เปิด Telegram**
+
+Codex รับแนวทางหลัก + ขอปรับ 5 ข้อ → ทำครบ:
+
+| ข้อ Codex | ทำอย่างไร | หลักฐาน |
+|---|---|---|
+| 1 migration คงโหมดเดิม / กันช่องทางเก่า | `free_policy.daily_enabled` เริ่ม = `NOT trial.enabled` (staging trial ON → daily_enabled=false → effective ยัง new_customer, cutoff คงเดิม) · `set_new_customer_trial_policy(bool)` กลายเป็น wrapper เรียก `set_free_policy_mode` (ไม่มี announced_at → ถอน daily ไม่ได้ = `notice_required`) + REVOKE จาก web_anon/service_role · หน้าเก่า `/admin/free-trial` GET→302 หน้าใหม่, POST→410 | DB test 1a/1b · unit test legacy page |
+| 2 72h บังคับฝั่ง DB ทั้งทันที/ตั้งเวลา ไม่มีทางลัด | `free_policy_notice_check(from,to,effective_at,announced_at)`: ถอน daily (→ new_customer/none) ต้องมี announced_at ≤ now และ effective_at ≥ announced_at+72h · ใช้ทั้ง `set_free_policy_mode` (effective=now) และ `free_policy_schedule_set` · `p_cancel_pending` แค่ยกเลิก pending ก่อน ตรวจ 72h เหมือนเดิม (ล้ม → rollback ทั้งก้อน pending ยังอยู่) · audit เก็บ actor + announced_at + via manual/schedule | DB test 2 |
+| 3 ถึงเวลาแล้วทุกด่านใช้โหมดเดียวแม้ worker ช้า/หยุด | `free_policy_mode_now(p_at)`: pending ที่ `effective_at <= now` **ชนะ** stored mode · `new_customer_trial_status` (ด่านสิทธิ์/LIFF/copy ผ่าน `checkScanAccess`/`resolveFreePolicy`) และ trigger `guard_new_customer_trial_job` (ด่านสร้างงาน; none → RAISE `free_policy_none`) ใช้ฟังก์ชันนี้ตัวเดียว · `set_free_policy_mode`/`schedule_set` เรียก `free_policy_reconcile_due()` ก่อนตัดสิน from_mode · worker ทุก 60 วิ + หน้า Admin ตอนเปิด เรียก `free_policy_schedule_apply_due` (บันทึก stored switches + audit; ไม่ใช่ตัวตัดสินสิทธิ์) | DB test 3a/3b/5c · unit `freePolicyModes` |
+| 4 cutoff ตั้งเวลา = เวลามีผล ไม่ใช่เวลา worker ตื่น · cutoff เดิมคงเดิม | `free_policy_mode_now` คืน `eligible_since = schedule.effective_at` เมื่อ trial เปิดครั้งแรกผ่าน schedule ที่ถึงเวลา (ยังไม่ apply) · `free_policy_apply_internal(..., p_eligible_since_if_first = s.effective_at)` ตอน apply · มี eligible_since แล้วไม่แตะเลย | DB test 3b/4 (บัญชี created_at ก่อน 1ms / ตรง / หลัง 1s · apply หลัง effective 400ms → cutoff = effective_at) · 4b |
+| 5 RPC เขียนจำกัดสิทธิ์ · เทสต์สิทธิ์ + apply ชน cancel/manual | role `free_policy_admin` (GRANT ให้ `telegram_config_admin` → JWT `TELEGRAM_CONFIG_DB_KEY` ที่ staging มีอยู่ใช้ได้; หรือตั้ง `FREE_POLICY_DB_KEY` แยก) · REVOKE จาก web_anon/service_role ทั้ง set/schedule_set/cancel/apply_due/audit_recent/set_new_customer_trial_policy · `apply_internal`/`reconcile_due` ไม่ grant ใครเลย · ตารางไม่อ่านได้จาก web_anon/service_role · apply_due ใช้ `FOR UPDATE SKIP LOCKED` | DB test 5 (denied ทุก RPC + reads ok) · 5b (apply ชน apply → 1 ผู้ชนะ; cancel ระหว่าง apply → `schedule_not_pending`; manual ขณะ pending → `schedule_pending` / cancel_pending) |
+
+### ไฟล์
+- `sql/067_free_policy_modes_schedule.sql` — idempotent (apply ×2 ผ่าน), ไม่ backfill, rollback ห้าม DROP (ตั้งโหมดที่ต้องการแล้วย้อนโค้ด; **ห้ามย้อนโค้ดขณะโหมด none** เพราะโค้ดเก่าอ่าน enabled=false เป็น daily)
+- `scripts/ops/test-free-policy-db.mjs` — DB test 9 กลุ่ม (container แยก network none)
+- `src/services/freePolicy.store.js` (RPC + แปล error) · `src/routes/adminFreePolicy.routes.js` (หน้าใหม่ session-only + CSRF; เวลาไทย; reconcile ตอนเปิด) · `src/routes/adminFreeTrial.routes.js` (302/410)
+- โหมด none ในแอป: `newCustomerTrial.service` (`freePolicyModeOf`, gate none = 0 สิทธิ์ฟรี, paid คง) · `paymentAccess.service` (ไม่นับฟรีรายวันใน none; `buildPaymentGateReply` none ใช้ entitlementCopy) · `entitlementCopy.service` (policy none → existing_no_rights/paid_expired/bonus · `FORBIDDEN_IN_NONE_MODE`) · `scanOffer.copy` (none → pool existing_no_rights_trial) · `lineWebhook` (pre_object_check กัน none ก่อนโหลดรูป; หลัง trigger กัน → อ่านสิทธิ์ใหม่ก่อนตอบ paywall) · `webhookImageIngestion` (guard code `free_policy_none`) · LIFF (zero-state none ไม่พูดทดลองฟรี) · `maintenanceWorker` (`sweepFreePolicySchedule` ทุกรอบ; ไม่มี key = ข้าม log ครั้งเดียว)
+- เทสต์: `tests/freePolicyModes.behavior.test.js` (12) · `tests/newCustomerTrial.test.js` ปรับหน้าเก่า · harness line-webhook/bonus เพิ่ม 067 (เปิด trial ด้วย `set_free_policy_mode(..., now()-73h)`) · preflight 12 แถว 067 · md5 reference 29 ฟังก์ชัน
+- env ใหม่ (optional): `FREE_POLICY_DB_KEY` — ไม่ตั้งก็ใช้ `TELEGRAM_CONFIG_DB_KEY` (staging มีแล้ว) · worker-maintenance ต้องเห็น key (compose ใช้ `.env` ร่วมอยู่แล้ว)
+
+### ข้อสังเกตที่ Codex ควรรู้
+- 72h บังคับเฉพาะ "ถอนฟรีรายวัน" (daily → new_customer/none) ตามแผน · new_customer → none / none → ใดก็ได้ / → daily ไม่ต้องประกาศ (เปิดเพิ่มสิทธิ์หรือลูกค้าใหม่ไม่เคยได้ daily) — ถ้าต้องการให้ new_customer → none ก็ต้องประกาศ บอกได้ แก้บรรทัดเดียวใน `free_policy_notice_check`
+- staging ตอนนี้ trial ON → หลัง apply 067 โหมดที่มีผล = new_customer เท่าเดิม ไม่มีอะไรเปลี่ยนกับลูกค้า
+- หน้า Admin ไม่ broadcast; กบประกาศเองแล้วกรอก "ประกาศเมื่อ" (ตรวจใน DB)
+- ป้าย Environment บนหน้าใหม่ยังอ่านจาก APP_ENV/NODE_ENV (staging โชว์ production — cosmetic เดิม ไม่ใช้ตัดสินอะไร)

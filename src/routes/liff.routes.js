@@ -2681,7 +2681,7 @@ function buildLiffHtml(liffId) {
           /* ไม่มี fallback 2 อีก — ค่าจริงจาก authority (0 ก็คือ 0 · อ่านไม่ได้ = "–") */
           if(fresh){
             $("st-first-free").textContent = j.rightsUnavailable ? "–" : (j.remainingFree != null ? j.remainingFree : 0);
-            var fk = $("st-first-kind"); if(fk) fk.textContent = j.freePolicy === "new_customer" ? "ทดลองฟรี" : "ฟรีวันนี้";
+            var fk = $("st-first-kind"); if(fk) fk.textContent = j.freePolicy === "new_customer" ? "ทดลองฟรี" : j.freePolicy === "none" ? "ฟรี" : "ฟรีวันนี้";
           }
         }
       }).catch(function(){});
@@ -3150,6 +3150,10 @@ function buildLiffHtml(liffId) {
         if(rights.freePolicy === "new_customer"){
           stT.textContent = rights.trialEligible ? "ใช้สิทธิ์ทดลองฟรีครบ 2 ครั้งแล้ว"
             : rights.paidExpired ? "แพ็กสแกนหมดอายุแล้ว" : "ยังไม่มีสิทธิ์สำหรับสแกนองค์ใหม่";
+          stS.textContent = "เติมสิทธิ์เพื่อสแกนองค์ใหม่ได้ด้านล่าง ส่วนคลังและรายงานเดิมยังเปิดดูได้โดยไม่ต้องซื้อแพ็กครับ";
+        } else if(rights.freePolicy === "none"){
+          /* ปิดฟรี (067): ไม่พูดทดลองฟรี/ฟรีรายวัน/พรุ่งนี้ — แพ็ก/โบนัสแสดงในสาขา total > 0 ด้านบนอยู่แล้ว */
+          stT.textContent = rights.paidExpired ? "แพ็กสแกนหมดอายุแล้ว" : "ยังไม่มีสิทธิ์สำหรับสแกนองค์ใหม่";
           stS.textContent = "เติมสิทธิ์เพื่อสแกนองค์ใหม่ได้ด้านล่าง ส่วนคลังและรายงานเดิมยังเปิดดูได้โดยไม่ต้องซื้อแพ็กครับ";
         } else {
           stT.textContent = "วันนี้ใช้สิทธิ์ฟรีครบแล้ว";

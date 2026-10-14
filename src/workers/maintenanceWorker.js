@@ -114,6 +114,23 @@ async function sweepBonusReleases() {
   }
 }
 
+// 067: บันทึก schedule สิทธิ์ฟรีที่ถึงเวลา (โหมดมีผลตามเวลา DB อยู่แล้วแม้ยังไม่ apply — นี่คือการ reconcile stored switches + audit)
+// ต้องมี key role จำกัด (FREE_POLICY_DB_KEY หรือ TELEGRAM_CONFIG_DB_KEY) — ไม่มี = ข้าม (log ครั้งเดียว)
+let freePolicyKeyWarned = false;
+async function sweepFreePolicySchedule() {
+  try {
+    const fp = await import("../services/freePolicy.store.js");
+    const readiness = fp.freePolicyStoreReadiness();
+    if (!readiness.ready) {
+      if (!freePolicyKeyWarned) { console.log(JSON.stringify({ event: "FREE_POLICY_APPLY_SKIPPED", missing: readiness.missing })); freePolicyKeyWarned = true; }
+      return;
+    }
+    const r = await fp.applyDueFreePolicySchedule();
+    if (r?.applied) console.log(JSON.stringify({ event: "FREE_POLICY_SCHEDULE_APPLIED", scheduleId: r.schedule_id, from: r.from, to: r.to, effectiveAt: r.effective_at, eligibleSince: r.eligible_since }));
+  } catch (e) {
+    console.error(JSON.stringify({ event: "FREE_POLICY_APPLY_ERROR", message: String(e?.message || e).slice(0, 140) }));
+  }
+}
 async function countEq(table, status) {
   const { count, error } = await supabase
     .from(table)
@@ -224,6 +241,7 @@ async function runOnce() {
   await sweepStaleOutboundSending();
   await sweepStaleScanProcessing();
   await sweepBonusReleases();
+  await sweepFreePolicySchedule();
   // P0-G: ตามหัก paid quota ที่ค้าง (ledger pending / job delivered ที่ ledger หาย) — sql/055
   try {
     const { sweepQuotaLedger } = await import("../services/scanV2/quotaLedger.util.js");

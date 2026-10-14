@@ -48,6 +48,8 @@ if (!process.env.ENER_LINE_IT_CHILD) {
   psql(readFileSync(new URL("sql/057_new_customer_trial.sql", root), "utf8"), "line_it");
   psql(readFileSync(new URL("sql/064_bonus_reservation.sql", root), "utf8"), "line_it");
   psql(readFileSync(new URL("sql/065_trial_dedup_evidence.sql", root), "utf8"), "line_it");
+  psql(readFileSync(new URL("sql/066_telegram_approval_settings.sql", root), "utf8"), "line_it");
+  psql(readFileSync(new URL("sql/067_free_policy_modes_schedule.sql", root), "utf8"), "line_it"); // 067: trigger/status ใช้โหมดที่มีผล — กติกา trial เดิมต้องไม่เปลี่ยน
   sh("docker", ["run", "-d", "--name", PGRST, "--network", NET, "-p", `127.0.0.1:${PORT}:3000`,
     "-e", `PGRST_DB_URI=postgres://authenticator:authenticator@${PG}:5432/line_it`,
     "-e", "PGRST_DB_SCHEMA=public", "-e", "PGRST_DB_ANON_ROLE=web_anon", "-e", `PGRST_JWT_SECRET=${JWT_SECRET}`,
@@ -152,7 +154,7 @@ async function sendImage(uid, mid, seed, { expectJob, gapMs = 9000 } = {}) {
   return { before, replies: callsSince(before, "reply").filter((c) => c.replyToken === "rt-" + mid), downloads: callsSince(before, "getMessageContent").filter((c) => c.messageId === mid), ai: callsSince(before, "objectCheckAI").filter((c) => c.messageId === mid) };
 }
 
-q(`select set_new_customer_trial_policy(true)`);
+q(`select set_free_policy_mode('new_customer','harness', now() - interval '73 hours', false)`);
 const since = q(`select (value->>'eligible_since') from app_settings where key='new_customer_trial'`);
 assert.ok(since, "ต้องมี eligible_since หลังเปิดสวิตช์");
 

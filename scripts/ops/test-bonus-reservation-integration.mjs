@@ -48,6 +48,8 @@ if (!process.env.ENER_BONUS_IT_CHILD) {
   psql(m064, "bonus_it"); psql(m064, "bonus_it"); // idempotent
   const m065 = readFileSync(new URL("sql/065_trial_dedup_evidence.sql", root), "utf8");
   psql(m065, "bonus_it"); psql(m065, "bonus_it"); // idempotent
+  const m067 = readFileSync(new URL("sql/067_free_policy_modes_schedule.sql", root), "utf8");
+  psql(m067, "bonus_it"); psql(m067, "bonus_it"); // idempotent · 067: trigger ใช้โหมดที่มีผล — กติกาโบนัส/trial เดิมต้องไม่เปลี่ยน
   sh("docker", ["run", "-d", "--name", PGRST, "--network", NET, "-p", `127.0.0.1:${PORT}:3000`,
     "-e", `PGRST_DB_URI=postgres://authenticator:authenticator@${PG}:5432/bonus_it`,
     "-e", "PGRST_DB_SCHEMA=public", "-e", "PGRST_DB_ANON_ROLE=web_anon", "-e", `PGRST_JWT_SECRET=${JWT_SECRET}`,
@@ -336,7 +338,7 @@ await t("10 rollback: โค้ดใหม่จองแล้ว → worker �
 });
 
 await t("6 trial ON: กติกาเดิมของ 057 ยังอยู่ (คนเก่าไม่ eligible · คนใหม่ 2 ครั้ง · โบนัสจองเหมือนกัน)", async () => {
-  q(`select set_new_customer_trial_policy(true)`);
+  q(`select set_free_policy_mode('new_customer','harness', now() - interval '73 hours', false)`);
   try {
     const oldU = await newUser({ bonus: 0, dailyExhausted: false });
     q(`update app_users set created_at=now()-interval '30 days' where line_user_id='${oldU.uid}'`);
@@ -379,7 +381,7 @@ async function rights(uid, expect) {
   return a;
 }
 
-q(`select set_new_customer_trial_policy(true)`);
+q(`select set_free_policy_mode('new_customer','harness', now() - interval '73 hours', false)`);
 try {
   await t("11 trial ON: บัญชีเก่า (created_at ก่อน cutoff, โบนัส 0) ไม่ได้ฟรีรายวันอีก · ข้อความไม่สัญญาพรุ่งนี้ · DB กันแม้ snapshot สิทธิ์เก่าบอกว่าผ่าน", async () => {
     const u = await newUser({ bonus: 0, dailyExhausted: false });

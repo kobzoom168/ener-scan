@@ -39,7 +39,7 @@ test("status read errors and malformed data fail closed; no background daily fal
   for (const data of [null, {}, { enabled: true, eligible: true, used: -1, limit: 2 }]) {
     await assert.rejects(getNewCustomerTrialStatus("u", { rpc: async () => ({ data }) }), /unavailable/);
   }
-  assert.deepEqual(await getNewCustomerTrialStatus("u", { rpc: async () => ({ data: trial() }) }), trial());
+  assert.deepEqual(await getNewCustomerTrialStatus("u", { rpc: async () => ({ data: trial() }) }), { ...trial(), mode: "new_customer" }); // 067: mode อนุมานจาก enabled เมื่อ DB เก่า
   await assert.rejects(saveNewCustomerTrialPolicy("true"), /boolean/);
 });
 test("trial quota and paywall copy never promise tomorrow's daily free reset", () => {
@@ -101,36 +101,18 @@ function request(port, path, method = "GET", body = "", admin = true) {
   });
 }
 
-test("admin switch: authentication, CSRF, explicit confirmation, save failure, ON and OFF", async () => {
-  const session = { admin: { authenticated: true } }; let enabled = false; let writes = 0; let broken = false;
+test("legacy admin switch page is retired (067): GET redirects to /admin/free-policy, POST is 410 and never writes", async () => {
+  const session = { admin: { authenticated: true } };
   const app = express();
   app.use((req, _res, next) => { req.session = req.headers["x-test-admin"] ? session : {}; next(); });
-  app.use(createRouter({
-    read: async () => ({ ...trial(), enabled, eligible_since: null }),
-    save: async v => { if (broken) throw new Error("offline"); enabled = v; writes++; },
-    offer: () => ({ freeQuotaPerDay: 1 }),
-  }));
+  app.use(createRouter());
   const server = app.listen(0, "127.0.0.1");
   await new Promise((resolve, reject) => { server.once("listening", resolve); server.once("error", reject); });
   const port = server.address().port;
   try {
-    assert.equal((await request(port, "/admin/free-trial", "GET", "", false)).status, 302);
-    assert.equal((await request(port, "/admin/free-trial", "POST", "enabled=on", false)).status, 302);
-    const page = await request(port, "/admin/free-trial");
-    assert.match(page.text, /ปิด \(OFF\) — ฟรีรายวัน 1 ครั้ง/); assert.match(page.text, /ยกเลิกฟรีรายวัน — ให้ลูกค้าใหม่ทดลองรวม 2 ครั้ง/); assert.match(page.text, /Environment:/); assert.match(page.text, /Cutoff ลูกค้าใหม่/); assert.match(page.text, /อย่างน้อย 3 วัน/); assert.ok(!/ล่วงหน้า 7 วัน/.test(page.text));
-    assert.doesNotMatch(page.text, /name="enabled" checked/);
-    assert.equal((await request(port, "/admin/free-trial", "POST", "enabled=on&confirmed=on")).status, 403);
-    const csrf = session.freeTrialCsrf;
-    assert.equal((await request(port, "/admin/free-trial", "POST", `csrf=${csrf}&enabled=on`)).status, 400);
-    assert.equal(writes, 0);
-    assert.equal((await request(port, "/admin/free-trial", "POST", `csrf=${csrf}&enabled=on&confirmed=on`)).status, 303);
-    assert.equal(enabled, true);
-    assert.match((await request(port, "/admin/free-trial")).text, /name="enabled" checked/);
-    broken = true;
-    assert.equal((await request(port, "/admin/free-trial", "POST", `csrf=${csrf}&confirmed=on`)).status, 503);
-    assert.equal(enabled, true);
-    broken = false;
-    assert.equal((await request(port, "/admin/free-trial", "POST", `csrf=${csrf}&confirmed=on`)).status, 303);
-    assert.equal(enabled, false); assert.equal(writes, 2);
+    assert.equal((await request(port, "/admin/free-trial", "GET", "", false)).status, 302, "unauthenticated → login");
+    const g = await request(port, "/admin/free-trial");
+    assert.equal(g.status, 302); assert.equal(g.location, "/admin/free-policy");
+    assert.equal((await request(port, "/admin/free-trial", "POST", "enabled=on&confirmed=on")).status, 410);
   } finally { await new Promise(resolve => server.close(resolve)); }
 });

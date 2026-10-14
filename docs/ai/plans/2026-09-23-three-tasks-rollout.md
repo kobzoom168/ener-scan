@@ -9,7 +9,7 @@ branch: `release/three-tasks` · **ยังไม่ deploy Pro · ไม่ br
 | 2 ปลดล็อกคลัง/รายงานย้อนหลัง | `845c4ec` | **ไม่มีสวิตช์ — กติกาถาวร** | ผลทันทีเมื่อ deploy |
 | 3 อนุมัติสลิปผ่าน Telegram | `e414938` | `TELEGRAM_SLIP_APPROVAL_ENABLED` + 4 ตัวประกอบ | **ปิด** (ยังไม่มีรายชื่อผู้อนุมัติ) |
 
-## Migration ที่ต้อง apply (ตามลำดับ ก่อน deploy โค้ดเสมอ): 057 → 061 → 062 → 063 → 064 → 065 → 066
+## Migration ที่ต้อง apply (ตามลำดับ ก่อน deploy โค้ดเสมอ): 057 → 061 → 062 → 063 → 064 → 065 → 066 → 067
 | ไฟล์ | งาน | หมายเหตุ |
 |---|---|---|
 | `sql/057_new_customer_trial.sql` | 1 | idempotent · ไม่ backfill · policy เริ่มต้น OFF |
@@ -19,6 +19,7 @@ branch: `release/three-tasks` · **ยังไม่ deploy Pro · ไม่ br
 | `sql/064_bonus_reservation.sql` | 1 (+โบนัสทุกโหมด) | idempotent · ไม่เพิ่ม schema (ค่าใหม่ใน `free_access_kind`) · จอง/คืนโบนัสใน DB + trigger หลักฐานรูปซ้ำ · **ต้อง apply ก่อนเปิด trial เสมอ** (057 เดี่ยวนับ `bonus_reserved` เป็น trial) |
 | `sql/065_trial_dedup_evidence.sql` | 1 | idempotent · ฟังก์ชันเดียว (`new_customer_trial_used` ไม่ขึ้นกับ delivery status) · apply หลัง 064 · **rollback กลับ 064 ลดสิทธิ์คงเหลือได้** (ดูหัวข้อ 1 ต.ค.) |
 | `sql/066_telegram_approval_settings.sql` | 3 | idempotent · ตาราง settings (ciphertext) + role `telegram_config_admin` + RPC 4 ตัว REVOKE จาก web_anon/service_role · enabled=false เริ่มต้น · **rollback ห้าม DROP** (set_enabled false + ย้อนโค้ด) · ต้องมี env `TELEGRAM_CONFIG_KEY`/`TELEGRAM_CONFIG_DB_KEY` (ops) |
+| `sql/067_free_policy_modes_schedule.sql` | สิทธิ์ฟรี 3 โหมด+ตั้งเวลา | idempotent · `app_settings.free_policy{daily_enabled}` เริ่ม = NOT trial.enabled (โหมดที่มีผลไม่เปลี่ยน) · ตาราง `free_policy_schedule`/`free_policy_audit` + role `free_policy_admin` (GRANT ให้ telegram_config_admin) · redefine `new_customer_trial_status`/`guard_new_customer_trial_job`/`set_new_customer_trial_policy` ให้ใช้โหมดที่มีผลตามเวลา DB · RPC เขียน REVOKE จาก web_anon/service_role · **rollback ห้าม DROP** (ตั้งโหมดที่ต้องการแล้วย้อนโค้ด; ห้ามย้อนโค้ดขณะโหมด none) · env optional `FREE_POLICY_DB_KEY` (ไม่ตั้ง = ใช้ TELEGRAM_CONFIG_DB_KEY) · แผน/ผล `docs/ai/plans/2026-10-14-free-policy-admin-schedule-plan.md` · **สถานะ 14 ต.ค.: โค้ด+เทสต์เสร็จ รอ Codex ตรวจ ยังไม่ apply staging** |
 (งาน 2 **ไม่มี migration** — เป็นการถอดเงื่อนไขในโค้ดล้วน)
 
 `058/059/060` (optout) ขึ้น Pro ไปแล้ว ไม่ต้องทำซ้ำ
@@ -86,7 +87,7 @@ branch: `release/three-tasks` · **ยังไม่ deploy Pro · ไม่ br
 
 **ลำดับ migration ชุดรวมสำหรับ Pro (Pro ยังไม่มี 057 — ห้าม apply 064/065 เดี่ยว):**
 1. preflight read-only `scripts/ops/preflight-three-tasks-migrations.sql` → แถว `prereq` ต้อง `t` ครบ (ตรวจ 26 ก.ย.: Pro prereq ครบ 18/18, `applied` 057–064 = f ทั้งหมด)
-2. `057` → `061` → `062` (ตรวจ approve_notify ไม่ซ้ำก่อน — อยู่ใน preflight) → `063` → `064` → `065` → `066` · แต่ละไฟล์ `psql -v ON_ERROR_STOP=1` แยกกัน หยุดทันทีที่ล้ม · ครบทั้งเจ็ดก่อน deploy โค้ดทีเมื่อ error
+2. `057` → `061` → `062` (ตรวจ approve_notify ไม่ซ้ำก่อน — อยู่ใน preflight) → `063` → `064` → `065` → `066` → `067` · แต่ละไฟล์ `psql -v ON_ERROR_STOP=1` แยกกัน หยุดทันทีที่ล้ม · ครบทั้งแปดก่อน deploy โค้ดทีเมื่อ error
 3. `NOTIFY pgrst, 'reload schema'` → preflight ซ้ำ แถว `applied` ต้อง `t` ครบ
 4. deploy โค้ด → ตรวจ runtime hash ทุกคอนเทนเนอร์
 5. ถ้า 064 apply ไม่ผ่านแต่ 057 ผ่าน: **ห้ามเปิด trial** (057 เดี่ยวนับ `bonus_reserved` เป็น trial usage — T9) และห้าม deploy โค้ดใหม่จนกว่า 064 ผ่าน

@@ -103,7 +103,11 @@ export function buildScanOfferReply({
     replyType === "free_quota_exhausted" ? "offer_intro" : replyType;
   // โหมดลูกค้าใหม่ (accessContext.freePolicy) → pool _trial (ไม่มีฟรีรายวัน/พรุ่งนี้)
   // ลูกค้าเดิมที่ไม่ eligible → existing_no_rights_trial
-  if (accessContext?.freePolicy === "new_customer") {
+  // โหมด none (ปิดฟรี · 067) → existing_no_rights_trial เสมอ (ไม่มีคำ "ทดลองฟรี"/ฟรีรายวัน)
+  const nonDailyPolicy = accessContext?.freePolicy === "new_customer" || accessContext?.freePolicy === "none";
+  if (accessContext?.freePolicy === "none") {
+    templatePoolKey = "existing_no_rights_trial";
+  } else if (accessContext?.freePolicy === "new_customer") {
     if (templatePoolKey === "offer_intro" && accessContext?.trialEligible === false) templatePoolKey = "existing_no_rights_trial";
     else if (SCAN_OFFER_TEMPLATES_TH[`${templatePoolKey}_trial`]) templatePoolKey = `${templatePoolKey}_trial`;
   }
@@ -134,12 +138,13 @@ export function buildScanOfferReply({
   });
 
   // alternates จาก pool free_quota_exhausted (ข้อความฟรีรายวัน) เฉพาะโหมด daily — โหมดลูกค้าใหม่ห้ามหลุด
-  if (replyType === "free_quota_exhausted" && accessContext?.freePolicy !== "new_customer") {
+  if (replyType === "free_quota_exhausted" && !nonDailyPolicy) {
     const ex = SCAN_OFFER_TEMPLATES_TH.free_quota_exhausted || [];
     ex.forEach((variant) => addAlt(renderVariant(variant, vars)));
   }
   // primary fallback ต้องตามโหมดด้วย
-  const fallbackPoolKey = accessContext?.freePolicy === "new_customer" ? "offer_intro_trial" : "offer_intro";
+  const fallbackPoolKey = accessContext?.freePolicy === "none" ? "existing_no_rights_trial"
+    : accessContext?.freePolicy === "new_customer" ? "offer_intro_trial" : "offer_intro";
 
   const primaryText =
     primaryRendered ||

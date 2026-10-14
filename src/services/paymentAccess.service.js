@@ -12,6 +12,7 @@ import {
 } from "./scanOfferAccess.resolver.js";
 import { buildScanOfferReply } from "./scanOffer.copy.js";
 import { getNewCustomerTrialStatus, applyTrialToGate, buildTrialPaywallText } from "./newCustomerTrial.service.js";
+import { resolveEntitlementState, buildPaywallCopy } from "./entitlementCopy.service.js";
 
 export async function checkScanAccess({ userId, now = new Date(), consumeBonus = false }) {
   const lineUserId = String(userId || "").trim();
@@ -97,12 +98,13 @@ export async function checkScanAccess({ userId, now = new Date(), consumeBonus =
 
   const paidActiveNow = computePaidActive(paidUntil, paidRemainingScans, now);
   const trial = await getNewCustomerTrialStatus(lineUserId);
+  const freeMode = trial.mode; // daily | new_customer | none (sql/067 — โหมดที่มีผลตามเวลา DB)
 
   // Free usage for gate math:
   // - paid_active => keep free quota untouched for this request (prevents paid scans from exhausting free quota)
   // - non-paid path => count scans created today, then apply admin offset
   let freeUsedToday = 0;
-  if (appUserId && !paidActiveNow && !trial.enabled) {
+  if (appUserId && !paidActiveNow && freeMode === "daily") {
     freeUsedToday = await countScanResultsTodayForAppUser(appUserId, now);
   }
 
@@ -127,8 +129,8 @@ export async function checkScanAccess({ userId, now = new Date(), consumeBonus =
   }), trial);
 
   const ctx = resolveScanOfferAccessContext({
-    offer: trial.enabled ? { ...offer, freeQuotaPerDay: gate.freeScansLimit } : offer,
-    freeUsedToday: trial.enabled ? gate.usedScans : freeUsedToday,
+    offer: freeMode !== "daily" ? { ...offer, freeQuotaPerDay: gate.freeScansLimit } : offer,
+    freeUsedToday: freeMode !== "daily" ? gate.usedScans : freeUsedToday,
     paidUntil,
     paidRemainingScans,
     now,
@@ -141,7 +143,7 @@ export async function checkScanAccess({ userId, now = new Date(), consumeBonus =
   console.log(
     JSON.stringify({
       event: "SCAN_OFFER_ACCESS_RESOLVED",
-      freePolicy: trial.enabled ? "new_customer" : "daily",
+      freePolicy: freeMode,
       userIdPrefix: lineUserId.slice(0, 8),
       scenario: ctx.scenario,
       offerLabel: ctx.offerLabel,
@@ -170,7 +172,7 @@ export async function checkScanAccess({ userId, now = new Date(), consumeBonus =
   if (viaBonus) {
     gate.allowed = true;
     gate.reason = "free";
-    gate.remaining = trial.enabled ? bonusScansAvail : Math.max(1, Number(gate.remaining) || 0);
+    gate.remaining = freeMode !== "daily" ? bonusScansAvail : Math.max(1, Number(gate.remaining) || 0);
   }
 
   const finalDecision = gate.allowed
@@ -199,19 +201,36 @@ export async function checkScanAccess({ userId, now = new Date(), consumeBonus =
     paidUntil: gate.paidUntil,
     paidRemainingScans,
     freePolicy: gate.freePolicy || "daily",
-    freeAccessKind: viaBonus ? "bonus" : trial.enabled ? "trial" : "daily",
+    freeAccessKind: viaBonus ? "bonus" : freeMode === "new_customer" ? "trial" : freeMode === "none" ? "none" : "daily",
     // อนุญาตเพราะโบนัส (ยังไม่จอง — จองตอน INSERT งาน)
     viaBonus,
     // โบนัสคงเหลือจริง — ให้ LIFF แยกแสดง "โบนัส" ออกจากฟรี/ทดลอง/ซื้อ
     bonusScansAvailable: bonusScansAvail,
     trialEligible: gate.trialEligible ?? null,
-    trialPending: trial.enabled ? Number(trial.pending) || 0 : 0,
+    trialPending: freeMode === "new_customer" ? Number(trial.pending) || 0 : 0,
   };
 }
 
 /** Text-only paywall reply (LINE Flex reserved for final scan result). */
 export async function buildPaymentGateReply({ decision, userId = null }) {
   const offer = loadActiveScanOffer();
+  if (decision?.freePolicy === "none") {
+    // ปิดฟรี: ข้อความชุดเดียวกับ LIFF (entitlementCopy) — ไม่พูดฟรีรายวัน/ทดลองฟรี
+    const es = resolveEntitlementState(decision);
+    const copy = buildPaywallCopy(es, { offer });
+    const primaryText = copy.textLines.join("\n");
+    return {
+      fallbackText: primaryText,
+      scanOffer: {
+        replyType: "free_quota_exhausted",
+        semanticKey: "scan_offer:free_policy_none",
+        primaryText,
+        alternateTexts: [],
+        scanOfferMeta: { freePolicy: "none" },
+      },
+      decision,
+    };
+  }
   if (decision?.freePolicy === "new_customer") {
     const primaryText = buildTrialPaywallText(offer);
     return {

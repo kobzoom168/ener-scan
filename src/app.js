@@ -16,6 +16,7 @@ import createAdminVoiceRouter from "./routes/adminVoice.routes.js";
 import createAdminHomeRouter from "./routes/adminHome.routes.js";
 import createAdminPromoRouter from "./routes/adminPromo.routes.js";
 import createAdminTelegramApprovalRouter from "./routes/adminTelegramApproval.routes.js";
+import createAdminFreePolicyRouter from "./routes/adminFreePolicy.routes.js";
 import { saveBirthdate } from "./stores/userProfile.db.js";
 import { checkScanAccess } from "./services/paymentAccess.service.js";
 import { schedulePersonaAbRecompute } from "./services/personaAbSchedule.service.js";
@@ -509,6 +510,7 @@ app.use(createAdminVoiceRouter());
 app.use(createAdminHomeRouter());
 app.use(createAdminPromoRouter());
 app.use(createAdminTelegramApprovalRouter()); // ตั้งค่า Telegram อนุมัติสลิป (บันทึกค่า ≠ เปิดใช้งาน)
+app.use(createAdminFreePolicyRouter()); // สิทธิ์ฟรี 3 โหมด + ตั้งเวลา (sql/067) — session-only
 
 app.post(
   "/webhook/line",

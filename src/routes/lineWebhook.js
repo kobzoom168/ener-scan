@@ -3561,14 +3561,18 @@ async function finalizeAcceptedImage({
       }
       try {
         if (ingestReason === "quota_exhausted_at_insert") {
-          // DB กันตอนจอง (โบนัส/ทดลองหมดพอดี เช่น ส่งหลายรูปพร้อมกัน) → paywall เดิม ไม่ใช่ "รูปไม่ครบ"
+          // DB กันตอนจอง → paywall เดิม ไม่ใช่ "รูปไม่ครบ" · 067: นโยบายเปลี่ยนระหว่างด่าน → อ่านสิทธิ์ใหม่ (ล้ม → snapshot)
+          let paywallDecision = accessDecision;
+          if (ingestErrorMessage === "free_policy_none" || ingestErrorMessage === "trial_not_eligible") {
+            try { paywallDecision = await checkScanAccess({ userId }); } catch { paywallDecision = accessDecision; }
+          }
           await sendFreeQuotaExhaustedPaywallViaGateway({
             client,
             userId,
             replyToken: event.replyToken,
             flowVersion,
             messageId: event?.message?.id ?? null,
-            accessDecision,
+            accessDecision: paywallDecision,
             pathSegment: "ingest_quota_guard",
             turnPerf,
           });
@@ -3825,7 +3829,7 @@ async function handleImageMessage({ client, event, userId, session }) {
   // Reject exhausted trials before image download/objectCheck, after the
   // in-flight notice. Pending payment images must still reach slip validation.
   if (!imageWillUseSlipPath && !routeAccessDecision?.allowed &&
-      (routeAccessDecision?.freePolicy === "new_customer" || routeAccessDecision?.accessUnavailable)) {
+      (routeAccessDecision?.freePolicy === "new_customer" || routeAccessDecision?.freePolicy === "none" || routeAccessDecision?.accessUnavailable)) {
     if (routeAccessDecision.accessUnavailable) {
       await sendNonScanReply({ client, userId, replyToken: event.replyToken,
         replyType: "scan_access_unavailable", semanticKey: `scan_access_unavailable:${event.message?.id}`,

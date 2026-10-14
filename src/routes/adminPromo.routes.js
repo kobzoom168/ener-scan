@@ -105,7 +105,7 @@ small{color:var(--muted);font-size:.7rem}</style>
   <form method="POST" action="/admin/promo/save" id="promoForm">
     <div class="card">
       <h2>โควตาฟรี</h2>
-      <p><a class="btn" href="/admin/free-trial">ตั้งค่า: ลูกค้าใหม่ฟรีรวม 2 ครั้ง / ฟรีรายวัน</a></p>
+      <p><a class="btn" href="/admin/free-policy">ตั้งค่าสิทธิ์ฟรี: ฟรีรายวัน / ลูกค้าใหม่ 2 ครั้ง / ปิดฟรี (+ ตั้งเวลา)</a></p>
       <small>จำนวนด้านล่างใช้เมื่อปิดโหมดลูกค้าใหม่เท่านั้น</small>
       <label style="max-width:220px">ฟรีวันละ (ครั้ง/คน)
         <input type="number" name="freeQuotaPerDay" min="0" value="${offer.freeQuotaPerDay}"/>
