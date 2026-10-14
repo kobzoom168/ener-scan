@@ -77,3 +77,9 @@
 - ทางที่ไม่แนะนำ: ตั้ง `CANARY_DLQ_DEAD_ALERT_THRESHOLD=2` บน staging (ซ่อนงานเสียจริง 1 แถว) · เปลี่ยนสถานะแถวทดสอบเป็น `suppressed_banned` (ความหมายผิด)
 - **patch ทำแล้ว (14 ต.ค.) รอ deploy staging อนุมัติแยก:** `maintenanceDlqAlert.service.js` — signature = (dead, failed, ชุด id, max updated_at) · marker `dlq_alert:sent:<env>:<admin8>` ตั้ง**หลังส่งสำเร็จ**เท่านั้น TTL 6 ชม. (ส่งล้ม = รอบถัดไปลองใหม่) · lock สั้น `dlq_alert:lock:<env>:<admin8>:<sig>` 50 วิ กันส่งพร้อมกัน · Redis ใช้ไม่ได้ = fail-open แจ้งทุกรอบ · ข้อความ `[DLQ Alert][<env>] … ฐานข้อมูลของระบบ` ไม่มีคำว่า Supabase · maintenanceWorker ส่ง items (id+updated_at, limit 200) · ไม่แตะ status/threshold ไม่ปิด alert · unit `tests/dlqAlert.dedupe.test.js` 7/7 (สถานะเดิมไม่รัว/เสียใหม่แจ้ง/ส่งล้มลองใหม่/พร้อมกัน/fail-open/env-admin แยก/ข้อความ) · gate ✅
 - ระหว่างรอ deploy: กบยังได้รับแจ้งทุกนาที (staging เท่านั้น) — ปิดเสียงแชท bot ชั่วคราวได้
+
+### Deploy patch DLQ `b1f1ea7` บน staging — 14 ต.ค. 2026 02:53Z (อนุมัติโดยกบตามชุด Codex) ✅
+- 02:51Z หยุด `worker-maintenance` ชั่วคราวตามคำขอกบ (แจ้งไปแล้ว ~50 ข้อความ กินโควตา LINE OA ทดสอบ) → deploy blue-green `197d1eb → b1f1ea7` (fast-forward, GREEN/BLUE healthy) → runtime maintenance md5 2 ไฟล์ตรง `b1f1ea7`
+- เฝ้า 6 รอบ: 02:54 `DLQ_ALERT_SENT env=test.my-ener.uk signature=34c4a9cf… itemsComplete=true dedupe=redis` (1 ครั้ง) → 02:55–02:59 `DLQ_ALERT_SKIPPED same_state_already_alerted` ×5 · Redis marker `scanv2_stagingdedupe:dlq_alert:sent:test.my-ener.uk:<hash>` = signature, TTL ≈ 21,293 วิ (≈5.9 ชม.)
+- คงตามสัญญา: แถว `dead` 9cd40af1… ยังอยู่ · threshold/สิทธิ์ลูกค้าไม่แตะ · Telegram `enabled=false` webhook ว่าง (404) · Pro ไม่แตะ (`be67a98`, maintenance running) · health staging/Pro 200
+- ป้าย env = `[test.my-ener.uk]` (ไม่มี APP_ENV) — แยกระบบได้ ไม่แก้รอบนี้ · สถานะเดิมจะแจ้งซ้ำทุก ~6 ชม. ไม่ใช่ปิดถาวร

@@ -188,6 +188,8 @@ WHERE j.access_source='free' AND COALESCE(j.free_access_kind,'daily') NOT LIKE '
 - **ยังไม่ทำ:** เปิด flag · setWebhook · ส่งข้อความ · ปุ่มเปิด/ตั้ง webhook/ส่งทดสอบ (ปิดในหน้า) · Pro · การบันทึกจริงด้วย session+CSRF รอกบกรอกบนหน้า (ผมไม่มี credential admin)
 - **rollback:** โค้ด → `deploy-ener.sh staging` ที่ `1094347` · `.env` → คืนจาก backup (หรือคง 2 key ไว้ก็ไม่มีผลกับโค้ดเก่า) · 066 คงไว้ (enabled=false; ห้าม DROP)
 
+## อัปเดต 14 ต.ค. 2026 — staging = `b1f1ea7` (DLQ alert dedupe + ข้อความ) · Telegram approval บน staging: live ผ่านเฉพาะ STG-TG-2 สองขั้น; ปิดอยู่ (enabled=false, ไม่มี webhook) · รายละเอียด `docs/ai/plans/2026-10-02-telegram-staging-live-approval.md`
+
 ## สิ่งที่ยังไม่ได้ทำ (ต้องมีอนุมัติแยก)
 - ประกาศล่วงหน้า 3 วันของงาน 1 (ร่างแล้ว ยังไม่ส่ง — เดิม 7 วัน เปลี่ยน 30 ก.ย.)
 - งาน 3 Telegram approval: แผน `docs/ai/plans/2026-10-01-telegram-approval-staging-plan.md` (bot แยก · secret hex · config 5 ตัว `ENABLED=false` · recreate เฉพาะ `ener-scan` ผูก image ID + `--no-build --pull never --no-deps` · กักข้อความลูกค้าด้วย ban gate เดิม · "ปฏิเสธสลิปใน Telegram" ยังไม่มี) — **พบบั๊ก 1 ต.ค.: app.js ไม่มี JSON parser ก่อน router Telegram → ทุกปุ่มถูก ignored** แก้ใน router แล้ว (commit แยก) · harness `scripts/ops/test-telegram-approval-integration.mjs` 12/12 PASS · **วิธี A**: ทดสอบ Telegram จริงบนระบบแยก (โหมด `--live`, SHA `e35f18e`) ชุดขออนุมัติ `docs/ai/plans/2026-10-01-telegram-live-isolated-approval.md` — ไม่ต้อง deploy/เปิด flag staging ก่อน · deploy/config staging จริง = ขั้นถัดไป
