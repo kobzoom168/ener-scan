@@ -1,4 +1,6 @@
-# ชุดขออนุมัติ Pro: release/three-tasks `7a5906e` (ตรวจ Pro แบบ read-only 14 ต.ค. 2026 09:30Z) — รอ Codex ตรวจ + กบอนุมัติ · **ยังไม่ apply/deploy · ไม่สร้างกำหนดการ · ไม่ broadcast · Telegram ปิด · คงฟรีรายวันเดิม**
+# ชุดขออนุมัติ Pro: release/three-tasks `7a5906e` (ตรวจ Pro แบบ read-only 14 ต.ค. 2026 09:30Z · แก้แผน 4 จุดตาม Codex 15 ต.ค.) — รอ Codex ตรวจ + กบอนุมัติ · **ยังไม่ apply/deploy · ไม่สร้างกำหนดการ · ไม่ broadcast · Telegram ปิด · คงฟรีรายวันเดิม**
+
+> **Codex 15 ต.ค. — 4 จุดที่แก้ในชุดนี้:** (1) ตรึง SHA ก่อน build/สลับ ด้วย branch แช่แข็ง `pro/three-tasks-7a5906e` (origin+mirror = `7a5906e` ตรวจแล้ว) และ rollback ตรึง `origin/pro/optout-be67a98` (= `be67a98` ตรวจแล้ว) — §6 · (2) nginx masking กลับเป็น **ขั้นก่อน GO** — §9 · (3) rollback ครอบ grant ที่ยังไม่แจ้ง — §7 + §10 · (4) key ใช้ **recreate** ไม่ใช่ restart + ตรึง image + ตรวจค่าแบบไม่โชว์ secret — §5
 
 ## 0. ขอบเขตรอบนี้
 - โค้ด: `release/three-tasks` ที่ **`7a5906e`** (= โค้ดที่ Codex ตรวจและ staging ใช้อยู่; HEAD branch `1780936` ต่างแค่ docs — deploy ใช้ branch HEAD ได้ ตรวจ `git diff 7a5906e HEAD -- ':!docs'` ว่าง)
@@ -44,31 +46,60 @@ env ใหม่ที่โค้ดอ้าง (ทั้งหมด optiona
 | trial ลูกค้าใหม่ e2e ด้วยบัญชี LINE ใหม่จริง | **ไม่เคยทดสอบ** (ทดสอบด้วยบัญชีสังเคราะห์ผ่าน router จริง 8/8 + harness 20/20) — รอบนี้ trial ยังไม่เปิดบน Pro จึงไม่บล็อก deploy แต่บล็อก "เปิด trial" |
 | Telegram approval live | staging ผ่านเฉพาะ STG-TG-2 (สองขั้น) · กดซ้ำ/concurrent/denied ไม่ได้ทดสอบจริง · Pro: ปิด ไม่มี key → ไม่บล็อก |
 | คลังเจ้าของบนมือถือกบ (กำไล/หิน) | server-side ผ่าน 6 รายงาน · สกรีนช็อตมือถือยังไม่ได้ |
-| nginx private-token masking | เสนอแล้ว ยังไม่อนุมัติ (app masking มีแล้ว) |
+| nginx private-token masking | **เงื่อนไขก่อน GO (Codex 15 ต.ค.)** — ชุดขออนุมัติ §9 (snippet ทดสอบในคอนเทนเนอร์แยกผ่าน 15 ต.ค.) ต้อง apply+reload ก่อนขั้น 6 |
 | หน้า Admin โชว์ Environment=production บน staging | cosmetic — Pro จะโชว์ production ถูกต้อง |
 | กติกาซื้อแพ็กซ้ำ | ยังไม่เคาะ ไม่อยู่ในชุดนี้ |
 | harness/gate | Codex ยังไม่ได้รันซ้ำเอง (อ้างอิงรายงาน Claude: line 8/8, bonus 20/20, telegram 21/21, gate ✅ ที่ 7a5906e) |
 
 ## 5. ops ที่ต้องตัดสินแยก (ไม่ทำในรอบ deploy)
-- **key หน้า Admin บน Pro:** หน้า `/admin/free-policy` อ่านได้ทันทีหลัง deploy แต่ **บันทึก/ตั้งเวลาไม่ได้** จนกว่า `.env` Pro มี `FREE_POLICY_DB_KEY` (JWT role `free_policy_admin` เซ็นด้วย `POSTGREST_JWT_SECRET` ของ Pro) · ต้องสร้างบนเซิร์ฟเวอร์โดยสคริปต์ที่อ่านค่าจาก `.env` และเขียนต่อท้าย `.env` **โดยไม่พิมพ์ค่าใด ๆ** + backup `.env` ก่อน + restart app/worker → ขออนุมัติแยกก่อนกบจะตั้งเวลา (ทำได้หลัง deploy)
+- **key หน้า Admin บน Pro (ขออนุมัติแยก — ทำได้หลัง deploy):** หน้า `/admin/free-policy` อ่านได้ทันทีหลัง deploy แต่ **บันทึก/ตั้งเวลาไม่ได้** จนกว่า `.env` Pro มี `FREE_POLICY_DB_KEY` (JWT HS256 role `free_policy_admin` เซ็นด้วย `POSTGREST_JWT_SECRET` ของ Pro, exp 2038)
+  1. `node scripts/ops/gen-restricted-jwt.mjs /root/ener-scan-pro/.env FREE_POLICY_DB_KEY free_policy_admin --dry-run` → พิมพ์แค่ role/exp/fingerprint (sha256 8 ตัว) · แล้วรันจริง: สคริปต์ backup `.env` → `.env.bak-<ts>` (600) และต่อท้ายตัวแปร **ไม่พิมพ์ค่า** · ปฏิเสธถ้ามีอยู่แล้ว (ทดสอบบนไฟล์ชั่วคราวแล้ว: เซ็นถูก, role ถูก, run ซ้ำ exit 3, บรรทัดเดิมคงอยู่)
+  2. compose ใช้ `env_file: .env` → **restart ไม่รับค่าใหม่** ต้อง **recreate** เฉพาะบริการที่ใช้ key: `worker-maintenance` (apply_due) และ `ener-scan` (หน้า Admin) · ตรึง image: บันทึก `docker inspect --format '{{.Image}}'` ของทั้งสองก่อน แล้ว `docker compose up -d --no-build --force-recreate --no-deps worker-maintenance ener-scan` → image id หลังต้องเท่าก่อน (ไม่ build ใหม่) · ener-scan recreate = เว็บดับ ~5–10 วิ (nginx `proxy_next_upstream` มีขาเดียวนอกช่วง deploy) → ทำช่วงคิวว่าง หรือเลือกทางเลือก **ตั้ง key ก่อนขั้น 6 ของ §6** ให้ deploy recreate ครั้งเดียว (ถ้ากบอนุมัติ key พร้อม deploy)
+  3. ตรวจค่าแบบไม่โชว์ secret: `docker exec ener-scan-pro node -e 'const k=process.env.FREE_POLICY_DB_KEY||"";const p=k.split(".");console.log(JSON.stringify({parts:p.length,role:p[1]?JSON.parse(Buffer.from(p[1],"base64url")).role:null,fp:require("crypto").createHash("sha256").update(k).digest("hex").slice(0,8)}))'` → `{parts:3, role:"free_policy_admin", fp:<ตรงกับสคริปต์>}` ทั้ง ener-scan และ worker-maintenance · log worker หลัง recreate ต้องไม่มี `FREE_POLICY_APPLY_SKIPPED` อีก · หน้า Admin ปุ่มบันทึกเปิด (ยังไม่กด)
+  - rollback key: คืน `.env` จาก `.env.bak-<ts>` แล้ว recreate 2 บริการเดิมด้วย image id เดิม
 - ลบ `migrate-*.mjs` untracked เก่า — ไม่ทำ (ไม่จำเป็น)
 - `APP_ENV=production` — optional
 
 ## 6. ขั้นตอนที่จะทำเมื่อได้ GO + กบอนุมัติ (ทีละขั้น หยุดเมื่อผิดคาด)
-0. ช่วงคิวว่าง (pending_verify/queued = 0 เหมือนตอนตรวจ) · กบรับทราบว่า Pro จะ recreate containers (blue-green เว็บไม่ดับ, worker หยุดสั้น ๆ งานค้างถูก sweeper โยนกลับ)
+0. **เงื่อนไขก่อน GO:** nginx masking (§9) apply+reload+ตรวจแล้ว · ช่วงคิวว่าง (pending_verify/queued = 0 เหมือนตอนตรวจ) · กบรับทราบว่า Pro จะ recreate containers (blue-green เว็บไม่ดับ, worker หยุดสั้น ๆ งานค้างถูก sweeper โยนกลับ)
 1. **backup** → `/root/backup-ops-20261002/pro-three-tasks-<ts>/` (700): `pg_dump --schema-only`, `COPY app_settings`, snapshot `app_users` (id, paid_*, bonus_scans, created_at), count ตาราง, `git rev-parse HEAD`, `git diff docker-compose.yml` (เก็บ local edit), `docker ps`, `.env` (cp โดยไม่อ่าน)
 2. **preflight ก่อน** (ไฟล์ 7a5906e stdin, read-only) → prereq 18/18 t
 3. **apply ทีละไฟล์** `057 → 061 → 062 → 063 → 064 → 065 → 066 → 067` ด้วย `psql -v ON_ERROR_STOP=1` (ทุกไฟล์ idempotent; ล้มไฟล์ไหน = หยุด รายงาน ไม่ไปต่อ; 057 ผ่านแต่ 064 ไม่ผ่าน = **ห้ามเปิด trial และห้าม deploy โค้ดใหม่**) · บันทึก sha256 ทุกไฟล์ · `NOTIFY pgrst, 'reload schema'`
 4. **preflight หลัง** → applied ทุกแถว t · **md5 31/31** (`verify-migration-versions.sh` จาก 7a5906e)
 5. **ยืนยันคงฟรีรายวัน:** `free_policy_mode_now()` mode=daily, trial enabled=false, eligible_since null, schedule 0, audit 0 · `new_customer_trial_status(null)`.daily_enabled=true · สิทธิ์ app_users diff ว่าง
-6. **deploy โค้ด:** `cd /root/ener-scan-pro && git fetch origin release/three-tasks && git checkout release/three-tasks` (compose ที่แก้บนเครื่องคงอยู่ — ไฟล์นี้ไม่ต่างระหว่าง branch · untracked ไม่กระทบ) → `bash /root/deploy-ener.sh pro` (script `git pull`) → HEAD = branch HEAD · `git diff 7a5906e HEAD -- ':!docs'` ว่าง · md5 ไฟล์ runtime ในคอนเทนเนอร์ 5 ไฟล์ตรง 7a5906e
+6. **deploy โค้ดแบบตรึง SHA (ตรวจก่อน build/สลับ ไม่ใช่หลัง):**
+   a. branch แช่แข็ง `pro/three-tasks-7a5906e` ชี้ `7a5906e` บน origin และ mirror (สร้างแล้ว 15 ต.ค. ไม่ขยับ) · rollback branch `pro-optout` upstream `origin/pro/optout-be67a98` = `be67a98` (ตรวจแล้ว)
+   b. `cd /root/ener-scan-pro && git fetch origin pro/three-tasks-7a5906e && git checkout -b pro-three-tasks origin/pro/three-tasks-7a5906e` → compose ที่แก้บนเครื่องคงอยู่ (ไฟล์ไม่ต่างระหว่าง branch · untracked ไม่กระทบ)
+   c. **gate ก่อน build:** `test "$(git rev-parse HEAD)" = 7a5906e5914120a0cb25d24c9aae01ec58b1e093` และ `test "$(git rev-parse origin/pro/three-tasks-7a5906e)" = 7a5906e…` และ `git status --short` มีแค่ ` M docker-compose.yml` + untracked เดิม → ไม่ตรง = **หยุด ไม่รัน deploy script**
+   d. `bash /root/deploy-ener.sh pro` — script ทำ `git pull` จาก upstream ที่แช่แข็ง = no-op (ตรวจ HEAD ซ้ำทันทีหลัง script จบ ต้องยัง 7a5906e; ถ้า pull ขยับได้แปลว่า branch ถูกแก้ = หยุดและรายงาน) → build → green → recreate blue/workers
+   e. หลัง deploy: `git rev-parse HEAD` = 7a5906e · md5 ไฟล์ runtime ในคอนเทนเนอร์ 5 ไฟล์ตรง 7a5906e · บันทึก image id ใหม่ของทุก service (ใช้ตรึงในขั้น key/rollback)
 7. **ตรวจหลัง deploy:** health 200 · 6 containers Up · log app/worker 5 นาที: error 0, `FREE_POLICY_APPLY_SKIPPED` 1 ครั้ง (ไม่มี key — คาด), ไม่มี `FREE_POLICY_SCHEDULE_APPLIED` · `/admin/*` ไม่ login → 302 · กบเปิด `/admin/free-policy` เห็น "ฟรีรายวัน (1 ครั้ง/วัน)" + "ops ยังไม่ตั้ง FREE_POLICY_DB_KEY" (อ่านอย่างเดียว) · ส่งรูปด้วยบัญชีทดสอบกบบน Pro 1 ครั้ง → ได้ฟรีรายวันตามปกติ / paywall ชุดใหม่โหมด daily · LIFF แสดง "ฟรีวันนี้" · คลังของฉันเปิดได้
-8. **รายงาน** exact SHA, sha256 8 ไฟล์, preflight ก่อน/หลัง, md5, ค่าโหมด/สิทธิ์ก่อน/หลัง, health/log
+8. **รายงาน** exact SHA, sha256 8 ไฟล์, preflight ก่อน/หลัง, md5, ค่าโหมด/สิทธิ์ก่อน/หลัง, health/log, image id ทุก service, `pending_notify=0` (§10)
 
 ## 7. Rollback
-- **โค้ด:** `git checkout pro-optout` (be67a98) → `deploy-ener.sh pro` · ปลอดภัยเพราะนโยบายฟรียังเป็น daily และ Telegram ปิด (ไม่ต้องปิดสวิตช์ก่อน) · โค้ดเก่าอยู่กับ DB ใหม่ได้ (§3 ข้อสุดท้าย) · uq approve_notify: โค้ดเก่าส่ง approve_notify ซ้ำต่อ payment ไม่ได้อีก (dup=0 ปัจจุบัน; ถ้าเกิดจะเป็น error ตอน enqueue ไม่ใช่สิทธิ์หาย)
+- **โค้ด:** ตรวจ §10 ก่อน (`pending_notify=0`) → `git checkout pro-optout` (upstream แช่แข็ง `origin/pro/optout-be67a98` = be67a98; gate `git rev-parse HEAD` = be67a98185e3… ก่อน build) → `deploy-ener.sh pro` · ปลอดภัยเพราะนโยบายฟรียังเป็น daily และ Telegram ปิด (ไม่ต้องปิดสวิตช์ก่อน) · โค้ดเก่าอยู่กับ DB ใหม่ได้ (§3 ข้อสุดท้าย) · uq approve_notify: โค้ดเก่าส่ง approve_notify ซ้ำต่อ payment ไม่ได้อีก (dup=0 ปัจจุบัน; ถ้าเกิดจะเป็น error ตอน enqueue ไม่ใช่สิทธิ์หาย)
 - **DB:** **ไม่ย้อน schema ไม่ DROP** (additive; `payment_approval_audit` ห้ามลบ) · ถ้าต้องปิดอะไร: ไม่มีสวิตช์ที่เปิดอยู่
 - **ข้อมูลลูกค้า:** ไม่มีการแก้สิทธิ์ใด ๆ ในรอบนี้ จึงไม่มีอะไรต้องคืน
+- **ข้อความแจ้งเติมสิทธิ์ที่ค้าง (Codex 15 ต.ค.):** โค้ดใหม่อนุมัติสลิป → RPC เติมสิทธิ์ + แถว `payment_entitlement_grants` → enqueue approve_notify → stamp `notified_at` (เฉพาะเมื่อ enqueue สำเร็จ/dedup) · ถ้า enqueue ล้ม สิทธิ์เติมแล้วแต่ยังไม่แจ้ง → `runPaymentGrantNotifySweep` ใน worker-maintenance ใหม่กู้ทุก 60 วิ · **`be67a98` ไม่มี sweep นี้** → ขั้นตอน §10 ก่อน/หลังย้อนบังคับ (ห้ามเติมสิทธิ์ซ้ำ ห้าม stamp มือ)
 
 ## 8. สิ่งที่ Codex ควรตรวจเป็นพิเศษ
 1) ลำดับ 8 ไฟล์และเงื่อนไข "057 ผ่าน 064 ไม่ผ่าน" 2) uq `uq_outbound_approve_notify_per_payment` กับ path อนุมัติของโค้ดเก่าช่วง blue-green 3) role cluster-wide ที่มีอยู่แล้ว (066/067 ทำ `CREATE ROLE IF NOT EXISTS` + GRANT ซ้ำได้) 4) `git checkout release/three-tasks` บน Pro ทับ `pro-optout` ที่มี compose แก้บนเครื่อง (ไฟล์ไม่ต่างระหว่าง branch — ตรวจแล้ว `git diff --name-status be67a98 7a5906e -- docker-compose.yml` ว่าง) 5) การตั้ง key §5 เป็นเงื่อนไขก่อนกบตั้งเวลาจริง
+
+## 9. nginx private-token masking — ชุดขออนุมัติ (ขั้นก่อน GO · nginx แชร์ Pro+staging → reload กระทบทั้งสอง แบบ graceful)
+**ปัญหา:** `/etc/nginx/nginx.conf` บรรทัด 40 `access_log /var/log/nginx/access.log;` = format `combined` ระดับ http (มี `$request` เต็มรวม query + `$http_referer`) · site `ener-scan` (scan.my-ener.uk) และ `test.my-ener.uk` ไม่มี access_log ของตัวเอง → **สืบทอด combined** → token ใน `/myscans/<token>`, `/r/<token>/…`, `/api/public-report/<token>`, `?token=` และ Referer ลง access.log (รวม .gz 14 วันย้อนหลัง) · app masking ไม่ช่วยชั้นนี้
+**snippet (มีใน repo แล้ว):** `ops/nginx/private-token-access-log.conf` — `map $uri $ener_safe_log_uri` (3 path → `[redacted]`) + `log_format ener_private` (ไม่มี query/referrer/$request) · ไม่มี location → routing ไม่เปลี่ยน · เทสต์คอนเทนเนอร์แยก `scripts/ops/test-private-token-nginx.mjs` **PASS 15 ต.ค.** (nginx -t, 5 route ผ่านเหมือนเดิม, ไม่มี SYNTHETIC/QUERY_SECRET/REFERER_SECRET ใน log, /health ยังเห็น)
+**ขั้นตอน (เมื่ออนุมัติ):**
+1. backup: `cp -a /etc/nginx /root/backup-ops-20261002/nginx-<ts>/` (600) + `nginx -T > nginx-T-before.txt` (เก็บในโฟลเดอร์ 700 ไม่แปะในรายงาน)
+2. วาง `/etc/nginx/conf.d/ener-private-log.conf` = เนื้อ snippet (ถูก include ใน http{} โดย `include /etc/nginx/conf.d/*.conf` บรรทัด 59 — map/log_format ต้องอยู่ระดับ http ✓)
+3. แก้ **เฉพาะ** `access_log` ใน server blocks ของ `sites-enabled/ener-scan` (443 และ 80) และ `sites-enabled/test.my-ener.uk` (443 และ 80): เพิ่ม `access_log /var/log/nginx/access.log ener_private;` — ไม่แตะ location/proxy_pass/upstream/ssl · site อื่น (n8n/postiz/monitor/default) ไม่แตะ (ไม่มี token ของเรา) · config diff เก็บเป็นไฟล์ในโฟลเดอร์ backup ให้ Codex ดูได้
+4. `nginx -t` ต้อง ok · `nginx -s reload` (graceful: worker เก่าปิดเมื่อหมด request)
+5. ตรวจ: ยิง `GET /health` และ `GET /myscans/SYNTHETIC_TOKEN_<ts>?token=QUERY_SECRET_<ts>` + Referer สังเคราะห์ ไปที่ scan.my-ener.uk และ test.my-ener.uk (token ปลอม → แอปตอบ 401/404 ตามปกติ routing ไม่เปลี่ยน) → `grep -c SYNTHETIC_TOKEN_<ts> /var/log/nginx/access.log` = 0 และเห็น `/myscans/[redacted]` · route จริง: health 200, หน้า LIFF/report ด้วยลิงก์ของกบเปิดได้ (กบตรวจ)
+6. **rollback:** `rm /etc/nginx/conf.d/ener-private-log.conf` + คืน 2 ไฟล์ site จาก backup → `nginx -t && nginx -s reload` (routing ไม่เคยเปลี่ยนทั้งไป-กลับ)
+**ไม่อยู่ในชุดนี้ (แยก):** log เก่าที่มี token แล้ว (retention/ลบ/หมุน token) · error_log/upstream log/APM · `ไม่ลบ access.log*` ในรอบนี้
+
+## 10. Rollback coverage: grant ที่เติมสิทธิ์แล้วแต่ยังไม่แจ้ง (Codex 15 ต.ค.)
+- **ตรวจ (read-only) ทุกครั้งก่อนย้อนโค้ด:** `sudo -u postgres psql -d ener_scan_pro -Atq -f scripts/ops/check-grants-pending-notify.sql` → `pending_notify`, อายุแถวที่ค้างนานสุด, จำนวน outbound approve_notify ของแถวค้าง, รายการ 20 แถว (payment prefix 8 ตัว ไม่มีข้อมูลลูกค้า)
+- **ก่อนย้อน:** ถ้า `pending_notify > 0` → **ยังไม่ย้อน worker-maintenance** (คง image ใหม่ไว้) ให้ sweep ของโค้ดใหม่ทำงานจน 0 (ปกติ ≤ 60 วิ ถ้า enqueue สำเร็จ) · ถ้าค้างเพราะ enqueue ล้มซ้ำ (log `PAYMENT_GRANT_NOTIFY_FAILED`) → แก้ต้นเหตุ (DB/outbound) ก่อน ไม่ stamp มือ ไม่เติมสิทธิ์ซ้ำ · ย้อน ener-scan/worker-scan/worker-delivery ได้ก่อน แล้วย้อน worker-maintenance เป็นตัวสุดท้ายเมื่อ 0
+- **หลังย้อนแล้วพบค้าง (เช่น grant เกิดช่วง blue-green):** one-shot จาก image ใหม่ที่ตรึงไว้ (image id จาก §6e) ไม่ต้อง build: `docker run --rm --env-file /root/ener-scan-pro/.env --network ener-scan-pro_ener-scan-pro-net <image-id> node -e 'import("./src/services/payments/paymentGrantNotifier.service.js").then(m=>m.runPaymentGrantNotifySweep()).then(s=>console.log(JSON.stringify(s)))'` → enqueue approve_notify ผ่าน RPC (uq ต่อ payment กันซ้ำ) แล้ว stamp เฉพาะที่สำเร็จ · worker-delivery เก่าส่ง outbound ตามปกติ (kind approve_notify มีอยู่ก่อน 062) · รันซ้ำได้ (idempotent)
+- **ห้าม:** UPDATE `notified_at` มือ · เรียก approve RPC ซ้ำ · แก้ `paid_remaining_scans`/`paid_until` มือ · ลบแถว grant/audit
+- **ตอนนี้บน Pro:** ยังไม่มีตาราง (ก่อน 067) · หลัง apply จะว่าง · ค่าที่ต้องเห็นก่อน GO ย้อนทุกครั้ง = `pending_notify=0`
