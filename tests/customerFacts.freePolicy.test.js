@@ -51,7 +51,12 @@ function install({ mode, eligible = false, used = 0, eligibleSince = null, store
   return () => { supabase.from = orig.from; supabase.rpc = orig.rpc; };
 }
 const line = (ctx, re) => ctx.split("\n").find((l) => re.test(l)) || "";
-const run = async (opts, uid = "Utest") => { const restore = install(opts); try { const c = await buildCustomerFactsContext(uid); assert.ok(c, "context must build"); return c; } finally { restore(); } };
+const NOW = new Date("2026-10-15T07:00:00Z"); // ตรึงเวลา: 15 ต.ค. 2569 14:00 ไทย (ไม่ผูกกับวันที่รันจริง)
+const run = async (opts, uid = "Utest", now = NOW) => { const restore = install(opts); try { const c = await buildCustomerFactsContext(uid, { now }); assert.ok(c, "context must build"); return c; } finally { restore(); } };
+const noContradiction = (ctx) => { // ห้ามมีทั้ง "จะกลับมามีฟรีรายวัน" กับ "ห้ามสัญญา…ยังมีฟรีรายวัน" / หรือทั้ง "ไม่มีฟรีรายวันแล้ว" กับ "ตั้งแต่…จะไม่มีฟรีรายวัน"
+  assert.ok(!(/จะกลับมามีฟรีรายวัน/.test(ctx) && /ห้ามสัญญาว่าหลังจากนั้นยังมีฟรีรายวัน/.test(ctx)), "ขัดกัน: เป้าหมาย daily แต่สั่งห้ามพูดฟรีรายวัน");
+  assert.ok(!(/ไม่มีฟรีรายวันแล้ว/.test(ctx) && /จะไม่มีฟรีรายวัน/.test(ctx)), "ขัดกัน: บอกเปลี่ยนแล้ว แต่ยังพูดอนาคต");
+};
 
 test("daily ไม่มีกำหนดการ: พูดฟรีรายวันได้ ไม่มีบรรทัดกำหนดการ/ยกเลิก", async () => {
   const ctx = await run({ mode: "daily" });
@@ -67,14 +72,14 @@ test("ก่อนถึงเวลา (daily + กำหนดการอน�
   assert.match(l, /ประกาศลูกค้าแล้วเมื่อ 15 ต\.ค\. 2569 13:40 น\./);
   assert.match(l, /ตอนนี้ยังใช้ฟรีรายวัน \(วันละ 1 ครั้ง\) ได้ถึงสิ้นวันที่ 18 ต\.ค\. 2569/);
   assert.match(l, /ตั้งแต่ 19 ต\.ค\. 2569 00:00 น\. จะไม่มีฟรีรายวัน ส่วนบัญชีใหม่ที่เข้าเกณฑ์ทดลองฟรีรวม 2 ครั้ง/);
-  assert.match(l, /ห้ามบอกว่าเปลี่ยนแล้วก่อนถึงเวลา/); assert.match(l, /ห้ามรับปากว่าทุกคนจะเหลือฟรี 2 ครั้ง/);
+  assert.match(l, /ห้ามบอกว่าเปลี่ยนแล้วก่อนถึงเวลา/); assert.match(l, /ห้ามรับปากว่าทุกคนจะเหลือฟรี 2 ครั้ง/); assert.match(l, /ห้ามสัญญาว่าหลังจากนั้นยังมีฟรีรายวัน/); noContradiction(ctx);
   assert.match(line(ctx, /กติกาสิทธิ์ฟรี/), /วันละ/); // ตอนนี้ยังเป็น daily
   assert.doesNotMatch(ctx, /ยกเลิกฟรีรายวันแล้ว/);
 });
 
 test("R1 กำหนดการถึงเวลาแล้วแต่แถวยัง pending (worker ช้า): ถือว่าเปลี่ยนแล้ว ไม่พูดว่า 'จะเปลี่ยน' · วันยกเลิก = เวลามีผลของกำหนดการ", async () => {
   const ctx = await run({ mode: "new_customer", storedMode: "daily", eligibleSince: PAST_EFF, schedule: { id: 2, status: "pending", target_mode: "new_customer", effective_at: PAST_EFF, announced_at: null } });
-  assert.doesNotMatch(ctx, /กำหนดการเปลี่ยนนโยบาย|จะไม่มีฟรีรายวัน/);
+  assert.doesNotMatch(ctx, /กำหนดการเปลี่ยนนโยบาย|จะไม่มีฟรีรายวัน/); noContradiction(ctx);
   const f = line(ctx, /^• นโยบายปัจจุบัน/);
   assert.match(f, /ยกเลิกฟรีรายวันแล้วตั้งแต่ 2 ต\.ค\. 2569 00:00 น\./);
   assert.match(f, /ตอนนี้ไม่มีฟรีรายวันแล้วครับ บัญชีใหม่ที่เข้าเกณฑ์ทดลองฟรีรวม 2 ครั้ง แพ็กและโบนัสเดิมยังใช้ได้ตามเงื่อนไข และผลเก่ายังเปิดดูได้/);
@@ -89,12 +94,15 @@ test("R2 ข้อความตรงโหมดเป้าหมาย: non
   const toDaily = await run({ mode: "none", schedule: { id: 4, status: "pending", target_mode: "daily", effective_at: EFF, announced_at: ANN } });
   const l2 = line(toDaily, /กำหนดการเปลี่ยนนโยบาย/);
   assert.match(l2, /จะกลับมามีฟรีรายวัน \(วันละ 1 ครั้ง\)/); assert.match(l2, /ตอนนี้ยังเป็น "ปิดสิทธิ์ฟรีทุกบัญชี/);
+  assert.doesNotMatch(l2, /ห้ามสัญญาว่าหลังจากนั้นยังมีฟรีรายวัน/, "เป้าหมาย daily ต้องไม่มีคำสั่งขัดกัน"); noContradiction(toDaily); noContradiction(toNone);
+  assert.match(l1, /ห้ามสัญญาว่าหลังจากนั้นยังมีฟรีหรือทดลองฟรีใด ๆ/);
 });
 
-test("R3 cutoff = เกณฑ์บัญชีใหม่ ไม่ใช่วันยกเลิกฟรีรายวัน: cutoff 26 ก.ย. แต่ยกเลิกรอบล่าสุด 19 ต.ค. (last_applied) · ไม่มี last_applied = ไม่พูดวัน", async () => {
-  const ctx = await run({ mode: "new_customer", eligibleSince: CUTOFF_OLD, lastApplied: { id: 1, status: "applied", target_mode: "new_customer", effective_at: EFF, applied_from_mode: "daily" } });
+test("R3 cutoff = เกณฑ์บัญชีใหม่เท่านั้น · last_applied ไม่ใช่หลักฐานการเปลี่ยนรอบล่าสุด → ไม่อ้างวัน · วันพูดได้เฉพาะกรณีถึงเวลาแล้วแต่ยัง pending", async () => {
+  // เคส Codex: เคยตั้งเวลาเข้า new_customer (last_applied 2 ต.ค.) แล้วเปลี่ยนมือ daily → new_customer ทีหลัง → ห้ามอ้างวัน 2 ต.ค.
+  const ctx = await run({ mode: "new_customer", eligibleSince: CUTOFF_OLD, lastApplied: { id: 1, status: "applied", target_mode: "new_customer", effective_at: PAST_EFF, applied_from_mode: "daily" } });
   const f = line(ctx, /^• นโยบายปัจจุบัน/);
-  assert.match(f, /ยกเลิกฟรีรายวันแล้วตั้งแต่ 19 ต\.ค\. 2569 00:00 น\./);
+  assert.match(f, /นโยบายปัจจุบัน: ไม่มีฟรีรายวันแล้ว ฟรีเฉพาะบัญชีใหม่ที่เข้าเกณฑ์/); assert.doesNotMatch(ctx, /ยกเลิกฟรีรายวันแล้วตั้งแต่/);
   assert.match(f, /บัญชีใหม่ = บัญชีที่เริ่มใช้ตั้งแต่ 26 ก\.ย\. 2569 16:07 น\./);
   assert.doesNotMatch(f, /ยกเลิกฟรีรายวันแล้วตั้งแต่ 26 ก\.ย\./);
   const manual = await run({ mode: "new_customer", eligibleSince: CUTOFF_OLD, lastApplied: null });
@@ -113,7 +121,7 @@ test("สิทธิ์รายบุคคลจาก DB: ลูกค้า
 
 test("none: ไม่มีฟรีใด ๆ · โบนัสยังใช้ได้ · มีวันปิดเมื่อมาจากกำหนดการ", async () => {
   const ctx = await run({ mode: "none", lastApplied: { id: 5, status: "applied", target_mode: "none", effective_at: PAST_EFF, applied_from_mode: "new_customer" } });
-  assert.match(line(ctx, /^• นโยบายปัจจุบัน/), /ปิดสิทธิ์ฟรีทุกบัญชี/); assert.match(line(ctx, /กติกาสิทธิ์ฟรี/), /ปิดสิทธิ์ฟรีทุกบัญชีแล้ว ตั้งแต่ 2 ต\.ค\. 2569/);
+  assert.match(line(ctx, /^• นโยบายปัจจุบัน/), /ปิดสิทธิ์ฟรีทุกบัญชี/); assert.match(line(ctx, /กติกาสิทธิ์ฟรี/), /ปิดสิทธิ์ฟรีทุกบัญชีแล้ว \(ไม่มีฟรีรายวัน/); assert.doesNotMatch(ctx, /ตั้งแต่ 2 ต\.ค\./, "last_applied ไม่ใช่หลักฐาน → ไม่อ้างวัน");
   assert.match(line(ctx, /โปรตอนนี้/), /ไม่มีสิทธิ์ฟรีใด ๆ/); assert.doesNotMatch(ctx, /สิทธิ์ฟรีวันนี้เหลือ/);
   const b = await run({ mode: "none", user: { bonus_scans: 2 } }, "Ub");
   assert.match(line(b, /^• นโยบายปัจจุบัน/), /มีโบนัสจากการชวนเพื่อน 2 ครั้ง/);
@@ -123,6 +131,17 @@ test("อ่าน snapshot ไม่ได้ / DB ก่อน 067: ใช้ 
   const a = await run({ mode: "daily", statusFail: true }); assert.doesNotMatch(a, /กำหนดการเปลี่ยนนโยบาย/); assert.doesNotMatch(a, /ระบบ/);
   const b = await run({ mode: "new_customer", noStatusRpc: true, eligibleSince: CUTOFF_OLD }); assert.match(line(b, /^• นโยบายปัจจุบัน/), /ไม่มีฟรีรายวันแล้ว ฟรีเฉพาะบัญชีใหม่/); assert.doesNotMatch(b, /กำหนดการเปลี่ยนนโยบาย/);
   const c = await run({ mode: "daily", schedule: { id: 9, status: "pending", target_mode: "new_customer", effective_at: EFF, announced_at: ANN } }); assert.doesNotMatch(c, /ระบบ/);
+});
+
+test("R2b ข้ามเวลามีผลระหว่างรอ DB: now ที่จับไว้ยังก่อนกำหนด แต่ snapshot บอกโหมด = เป้าหมายแล้ว → ถือว่าเปลี่ยนแล้ว ไม่พูดอนาคต ไม่ขัดกัน", async () => {
+  const justBefore = new Date("2026-10-18T16:59:59Z"); // 1 วิก่อน 19 ต.ค. 00:00 ไทย
+  const ctx = await run({ mode: "new_customer", storedMode: "daily", eligibleSince: EFF, schedule: { id: 1, status: "pending", target_mode: "new_customer", effective_at: EFF, announced_at: ANN } }, "Utest", justBefore);
+  assert.doesNotMatch(ctx, /กำหนดการเปลี่ยนนโยบาย|จะไม่มีฟรีรายวัน|ยังใช้ฟรีรายวัน/);
+  assert.match(line(ctx, /^• นโยบายปัจจุบัน/), /ยกเลิกฟรีรายวันแล้วตั้งแต่ 19 ต\.ค\. 2569 00:00 น\./); noContradiction(ctx);
+  // กลับกัน: now เลยเวลาแล้วเล็กน้อย แต่ DB ยังตอบโหมดเดิม (เสี้ยววินาที) → ไม่พูดกำหนดการเลย ดีกว่าพูดสวนโหมด
+  const justAfter = new Date("2026-10-18T17:00:01Z");
+  const ctx2 = await run({ mode: "daily", storedMode: "daily", schedule: { id: 1, status: "pending", target_mode: "new_customer", effective_at: EFF, announced_at: ANN } }, "Utest", justAfter);
+  assert.doesNotMatch(ctx2, /กำหนดการเปลี่ยนนโยบาย|ยกเลิกฟรีรายวันแล้ว/); assert.match(line(ctx2, /กติกาสิทธิ์ฟรี/), /วันละ/); noContradiction(ctx2);
 });
 
 test("orchestrator fallback ของ guard สิทธิ์ปลอมไม่สัญญาฟรีรายวันนอกโหมด daily · consult prompt รู้ 3 โหมด (static)", () => {

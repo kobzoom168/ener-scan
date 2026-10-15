@@ -35,7 +35,7 @@ function thaiDateTime(iso) {
  * แยก (Codex 15 ต.ค.): กำหนดการ "อนาคต" (effective_at > now) vs "มีผลแล้วแต่แถวยัง pending" (worker ยังไม่บันทึก) —
  * อย่างหลังถือว่าเปลี่ยนแล้ว (mode ที่มีผลสะท้อนอยู่แล้ว) ห้ามพูดว่า "จะเปลี่ยน"
  */
-async function readFreePolicySnapshot(db, uid, now) {
+async function readFreePolicySnapshot(db, uid, now, pinnedNow = false) {
   let data = null;
   try {
     const r = await db.rpc("free_policy_status", { p_line_user_id: uid });
@@ -47,20 +47,22 @@ async function readFreePolicySnapshot(db, uid, now) {
   }
   const trial = { ...data, mode: freePolicyModeOf(data) };
   const mode = trial.mode;
-  const sched = data.schedule && data.schedule.status === "pending" ? data.schedule : null;
+  const stored = String(data.stored_mode || "");
+  const sched = data.schedule && data.schedule.status === "pending" && FREE_MODE_LABEL[data.schedule.target_mode] ? data.schedule : null;
+  const tAfter = pinnedNow ? now.getTime() : Date.now(); // เวลาหลัง DB ตอบ (DB ประเมินก่อนหน้านี้) — ใช้แค่กันกรณีเวลาผ่านไปแล้วแต่โหมดยังไม่สะท้อน
   const effMs = sched ? Date.parse(String(sched.effective_at || "")) : NaN;
   let upcoming = null, changedAt = null, changedTo = null, changedFrom = null;
-  if (sched && FREE_MODE_LABEL[sched.target_mode]) {
-    if (Number.isFinite(effMs) && effMs > now.getTime()) {
-      upcoming = { target: String(sched.target_mode), effectiveAt: sched.effective_at, announcedAt: sched.announced_at || null, from: mode };
-    } else if (Number.isFinite(effMs)) {
-      // ถึงเวลาแล้ว แต่ worker ยังไม่บันทึก → มีผลแล้ว (mode = target)
-      changedAt = sched.effective_at; changedTo = String(sched.target_mode); changedFrom = String(data.stored_mode || "");
+  if (sched && Number.isFinite(effMs)) {
+    const target = String(sched.target_mode);
+    if (mode === target && stored !== target) {
+      // snapshot บอกเองว่าโหมดที่มีผล = เป้าหมายแล้ว แต่แถวยังไม่บันทึก (worker ช้า) → เปลี่ยนแล้ว แม้ now ที่จับไว้ก่อนอ่าน DB จะยังไม่ถึง
+      changedAt = sched.effective_at; changedTo = target; changedFrom = stored;
+    } else if (effMs > tAfter) {
+      upcoming = { target, effectiveAt: sched.effective_at, announcedAt: sched.announced_at || null, from: mode };
     }
+    // อื่น ๆ (ช่วงเสี้ยววินาทีที่ DB ยังไม่สะท้อน หรือข้อมูลไม่สอดคล้อง) → ไม่พูดถึงกำหนดการ ดีกว่าพูดสวนโหมด
   }
-  if (!changedAt && data.last_applied && data.last_applied.effective_at && data.last_applied.target_mode === mode) {
-    changedAt = data.last_applied.effective_at; changedTo = mode; changedFrom = String(data.last_applied.applied_from_mode || "");
-  }
+  // last_applied ไม่รับประกันว่าเป็นการเปลี่ยนโหมดครั้งล่าสุด (อาจมีการเปลี่ยนมือหลังจากนั้น) → ไม่ใช้อ้างวัน
   return { trial, mode, upcoming, changedAt, changedTo, changedFrom };
 }
 /** บรรทัดกำหนดการอนาคต — ข้อความตามโหมดเป้าหมาย · "ประกาศแล้ว" เฉพาะเมื่อมี announced_at จริง */
@@ -75,8 +77,13 @@ function buildUpcomingPolicyLine(up, currentMode, freeQuota) {
     : up.target === "none"
     ? `ตั้งแต่ ${when} จะไม่มีสิทธิ์ฟรีใด ๆ (ไม่มีฟรีรายวัน ไม่มีทดลองฟรี)`
     : `ตั้งแต่ ${when} จะกลับมามีฟรีรายวัน (วันละ ${freeQuota} ครั้ง)`;
+  const afterRule = up.target === "daily"
+    ? "ห้ามสัญญาจำนวนครั้งหรือสิทธิ์รายคนหลังจากนั้นนอกเหนือจากที่บอก"
+    : up.target === "new_customer"
+    ? "ห้ามสัญญาว่าหลังจากนั้นยังมีฟรีรายวัน · ห้ามรับปากว่าทุกคนจะเหลือฟรี 2 ครั้ง (บัญชีเก่าไม่ได้)"
+    : "ห้ามสัญญาว่าหลังจากนั้นยังมีฟรีหรือทดลองฟรีใด ๆ";
   return `• ⚠️ กำหนดการเปลี่ยนนโยบาย (${announced}): ${nowPart} · ${thenPart} · แพ็กและโบนัสเดิมยังใช้ได้ตามเงื่อนไข ผลเก่ายังเปิดดูได้` +
-    ` — ถ้าลูกค้าถามว่ายังฟรีไหม/ฟรีถึงเมื่อไหร่ ให้ตอบตามนี้ตรง ๆ ห้ามบอกว่าเปลี่ยนแล้วก่อนถึงเวลา ห้ามสัญญาว่าหลังจากนั้นยังมีฟรีรายวัน · สิทธิ์ของคนนี้ยึดจากบรรทัดสิทธิ์ด้านบน ห้ามรับปากว่าทุกคนจะเหลือฟรี 2 ครั้ง`;
+    ` — ถ้าลูกค้าถามว่ายังฟรีไหม/ฟรีถึงเมื่อไหร่ ให้ตอบตามนี้ตรง ๆ ห้ามบอกว่าเปลี่ยนแล้วก่อนถึงเวลา · ${afterRule} · สิทธิ์ของคนนี้ยึดจากบรรทัดสิทธิ์ด้านบน`;
 }
 /** "ถึงสิ้นวันที่ 18 ต.ค." เมื่อเวลามีผลเป็นเที่ยงคืนไทย · ไม่งั้น "จนถึง <วัน เวลา>" */
 function untilPhrase(effectiveIso) {
@@ -133,11 +140,11 @@ async function buildScoreStatsLine() {
  * @param {string} lineUserId
  * @returns {Promise<string|null>} Thai fact block for the prompt, or null on failure.
  */
-export async function buildCustomerFactsContext(lineUserId) {
+export async function buildCustomerFactsContext(lineUserId, opts = {}) {
   const uid = String(lineUserId || "").trim();
   if (!uid) return null;
   try {
-    const now = new Date();
+    const now = opts.now instanceof Date ? opts.now : new Date(); // ฉีดได้เพื่อตรึงเวลาในเทสต์
     const [birthdate, userRow] = await Promise.all([
       getSavedBirthdate(uid).catch(() => null),
       supabase
@@ -158,7 +165,7 @@ export async function buildCustomerFactsContext(lineUserId) {
 
     let freeLine;
     let adminResetLine = null;
-    const snap = await readFreePolicySnapshot(supabase, uid, now);
+    const snap = await readFreePolicySnapshot(supabase, uid, now, opts.now instanceof Date);
     const trial = snap.trial;
     const freeMode = snap.mode; // daily | new_customer | none — โหมดที่มีผล ณ ตอนนี้ (รวมกำหนดการที่ถึงเวลาแล้วแม้ยังไม่บันทึก)
     const pendingSchedule = snap.upcoming; // เฉพาะกำหนดการอนาคตจริง
