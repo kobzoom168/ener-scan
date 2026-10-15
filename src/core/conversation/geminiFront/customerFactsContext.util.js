@@ -29,15 +29,65 @@ function thaiDateTime(iso) {
   const time = new Intl.DateTimeFormat("th-TH", { timeZone: "Asia/Bangkok", hour: "2-digit", minute: "2-digit", hour12: false }).format(d);
   return `${date} ${time} น.`;
 }
-/** กำหนดการเปลี่ยนนโยบายที่ประกาศแล้ว (free_policy_status.schedule) — อ่านไม่ได้ = ไม่พูดถึง */
-async function readPendingPolicySchedule(db) {
+/**
+ * สถานะนโยบายฟรี snapshot เดียว (free_policy_status(uid) — sql/067): โหมดที่มีผล + สิทธิ์คนนี้ + schedule + last_applied
+ * สอดคล้องกันในคำสั่งเดียว · DB ก่อน 067 (ไม่มี RPC) → fallback new_customer_trial_status ไม่มีกำหนดการ
+ * แยก (Codex 15 ต.ค.): กำหนดการ "อนาคต" (effective_at > now) vs "มีผลแล้วแต่แถวยัง pending" (worker ยังไม่บันทึก) —
+ * อย่างหลังถือว่าเปลี่ยนแล้ว (mode ที่มีผลสะท้อนอยู่แล้ว) ห้ามพูดว่า "จะเปลี่ยน"
+ */
+async function readFreePolicySnapshot(db, uid, now) {
+  let data = null;
   try {
-    const { data, error } = await db.rpc("free_policy_status", { p_line_user_id: null });
-    if (error || !data || !data.schedule || data.schedule.status !== "pending") return null;
-    const target = String(data.schedule.target_mode || "");
-    if (!FREE_MODE_LABEL[target]) return null;
-    return { target, effectiveAt: data.schedule.effective_at };
-  } catch { return null; }
+    const r = await db.rpc("free_policy_status", { p_line_user_id: uid });
+    if (!r.error && r.data && typeof r.data.enabled === "boolean") data = r.data;
+  } catch { data = null; }
+  if (!data) {
+    const t = await getNewCustomerTrialStatus(uid);
+    return { trial: t, mode: freePolicyModeOf(t), upcoming: null, changedAt: null, changedTo: null, changedFrom: null };
+  }
+  const trial = { ...data, mode: freePolicyModeOf(data) };
+  const mode = trial.mode;
+  const sched = data.schedule && data.schedule.status === "pending" ? data.schedule : null;
+  const effMs = sched ? Date.parse(String(sched.effective_at || "")) : NaN;
+  let upcoming = null, changedAt = null, changedTo = null, changedFrom = null;
+  if (sched && FREE_MODE_LABEL[sched.target_mode]) {
+    if (Number.isFinite(effMs) && effMs > now.getTime()) {
+      upcoming = { target: String(sched.target_mode), effectiveAt: sched.effective_at, announcedAt: sched.announced_at || null, from: mode };
+    } else if (Number.isFinite(effMs)) {
+      // ถึงเวลาแล้ว แต่ worker ยังไม่บันทึก → มีผลแล้ว (mode = target)
+      changedAt = sched.effective_at; changedTo = String(sched.target_mode); changedFrom = String(data.stored_mode || "");
+    }
+  }
+  if (!changedAt && data.last_applied && data.last_applied.effective_at && data.last_applied.target_mode === mode) {
+    changedAt = data.last_applied.effective_at; changedTo = mode; changedFrom = String(data.last_applied.applied_from_mode || "");
+  }
+  return { trial, mode, upcoming, changedAt, changedTo, changedFrom };
+}
+/** บรรทัดกำหนดการอนาคต — ข้อความตามโหมดเป้าหมาย · "ประกาศแล้ว" เฉพาะเมื่อมี announced_at จริง */
+function buildUpcomingPolicyLine(up, currentMode, freeQuota) {
+  const when = thaiDateTime(up.effectiveAt);
+  const announced = up.announcedAt ? `ประกาศลูกค้าแล้วเมื่อ ${thaiDateTime(up.announcedAt)}` : "ยังไม่มีบันทึกว่าประกาศลูกค้า — ห้ามอ้างว่าแจ้งไปแล้ว";
+  const nowPart = currentMode === "daily"
+    ? `ตอนนี้ยังใช้ฟรีรายวัน (วันละ ${freeQuota} ครั้ง) ได้${untilPhrase(up.effectiveAt)}`
+    : `ตอนนี้ยังเป็น "${FREE_MODE_LABEL[currentMode]}" ${untilPhrase(up.effectiveAt)}`;
+  const thenPart = up.target === "new_customer"
+    ? `ตั้งแต่ ${when} จะไม่มีฟรีรายวัน ส่วนบัญชีใหม่ที่เข้าเกณฑ์ทดลองฟรีรวม 2 ครั้ง`
+    : up.target === "none"
+    ? `ตั้งแต่ ${when} จะไม่มีสิทธิ์ฟรีใด ๆ (ไม่มีฟรีรายวัน ไม่มีทดลองฟรี)`
+    : `ตั้งแต่ ${when} จะกลับมามีฟรีรายวัน (วันละ ${freeQuota} ครั้ง)`;
+  return `• ⚠️ กำหนดการเปลี่ยนนโยบาย (${announced}): ${nowPart} · ${thenPart} · แพ็กและโบนัสเดิมยังใช้ได้ตามเงื่อนไข ผลเก่ายังเปิดดูได้` +
+    ` — ถ้าลูกค้าถามว่ายังฟรีไหม/ฟรีถึงเมื่อไหร่ ให้ตอบตามนี้ตรง ๆ ห้ามบอกว่าเปลี่ยนแล้วก่อนถึงเวลา ห้ามสัญญาว่าหลังจากนั้นยังมีฟรีรายวัน · สิทธิ์ของคนนี้ยึดจากบรรทัดสิทธิ์ด้านบน ห้ามรับปากว่าทุกคนจะเหลือฟรี 2 ครั้ง`;
+}
+/** "ถึงสิ้นวันที่ 18 ต.ค." เมื่อเวลามีผลเป็นเที่ยงคืนไทย · ไม่งั้น "จนถึง <วัน เวลา>" */
+function untilPhrase(effectiveIso) {
+  const ms = Date.parse(String(effectiveIso || "")); if (!Number.isFinite(ms)) return "";
+  const d = new Date(ms);
+  const hhmm = new Intl.DateTimeFormat("th-TH", { timeZone: "Asia/Bangkok", hour: "2-digit", minute: "2-digit", hour12: false }).format(d);
+  if (hhmm === "00:00") {
+    const prev = new Date(ms - 60_000);
+    return `ถึงสิ้นวันที่ ${new Intl.DateTimeFormat("th-TH", { timeZone: "Asia/Bangkok", day: "numeric", month: "short", year: "numeric" }).format(prev)}`;
+  }
+  return `จนถึง ${thaiDateTime(effectiveIso)}`;
 }
 import { getValue, setLargeValueWithTtl } from "../../../redis/scanV2Redis.js";
 
@@ -108,10 +158,14 @@ export async function buildCustomerFactsContext(lineUserId) {
 
     let freeLine;
     let adminResetLine = null;
-    const trial = await getNewCustomerTrialStatus(uid);
-    const freeMode = freePolicyModeOf(trial); // daily | new_customer | none — โหมดที่มีผล ณ ตอนนี้ (รวมกำหนดการที่ถึงเวลาแล้ว)
-    const pendingSchedule = await readPendingPolicySchedule(supabase);
-    const sinceLine = trial.eligible_since ? ` (ยกเลิกฟรีรายวันแล้วตั้งแต่ ${thaiDateTime(trial.eligible_since)} · บัญชีใหม่ = เริ่มใช้ตั้งแต่เวลานั้น)` : "";
+    const snap = await readFreePolicySnapshot(supabase, uid, now);
+    const trial = snap.trial;
+    const freeMode = snap.mode; // daily | new_customer | none — โหมดที่มีผล ณ ตอนนี้ (รวมกำหนดการที่ถึงเวลาแล้วแม้ยังไม่บันทึก)
+    const pendingSchedule = snap.upcoming; // เฉพาะกำหนดการอนาคตจริง
+    // วันที่ "ยกเลิกฟรีรายวันรอบล่าสุด" = เวลามีผลของกำหนดการที่พาเข้าโหมดนี้ (ไม่ใช่ cutoff) · ไม่มี = ไม่พูดวัน
+    const changedPhrase = snap.changedAt && snap.changedTo === freeMode && snap.changedFrom === "daily" ? ` ยกเลิกฟรีรายวันแล้วตั้งแต่ ${thaiDateTime(snap.changedAt)}` : " ไม่มีฟรีรายวันแล้ว";
+    // cutoff = เกณฑ์บัญชีใหม่เท่านั้น
+    const cutoffPhrase = trial.eligible_since ? ` (บัญชีใหม่ = บัญชีที่เริ่มใช้ตั้งแต่ ${thaiDateTime(trial.eligible_since)})` : "";
     if (paidActive) {
       freeLine =
         `สิทธิ์แบบชำระเงินยังใช้งานอยู่ เหลือ ${paidRemaining} ครั้ง (ตัดสิทธิ์จ่ายก่อน โควต้าฟรีถูกกันไว้)` +
@@ -129,8 +183,8 @@ export async function buildCustomerFactsContext(lineUserId) {
         ? `ลูกค้าใหม่ สิทธิ์ทดลองเหลือ ${remaining} จาก 2 ครั้ง`
         : "ลูกค้าเดิม (ไม่มีสิทธิ์ทดลอง) ต้องมีแพ็กหรือโบนัสจึงสแกนองค์ใหม่ได้";
       freeLine =
-        `นโยบายปัจจุบัน: ฟรีเฉพาะบัญชีใหม่ ทดลองฟรีรวม 2 ครั้งต่อบัญชี ไม่เติมใหม่รายวัน${sinceLine}; คนนี้: ${who}` +
-        ` — ถ้าลูกค้าถามว่ายังฟรีไหม ให้ตอบตรง ๆ ว่าตอนนี้ไม่มีฟรีรายวันแล้ว ฟรีมีเฉพาะบัญชีใหม่ 2 ครั้ง` +
+        `นโยบายปัจจุบัน:${changedPhrase} ฟรีเฉพาะบัญชีใหม่ที่เข้าเกณฑ์ ทดลองฟรีรวม 2 ครั้งต่อบัญชี ไม่เติมใหม่รายวัน${cutoffPhrase}; คนนี้: ${who}` +
+        ` — ถ้าลูกค้าถามว่ายังฟรีไหม ให้ตอบตรง ๆ ว่า "ตอนนี้ไม่มีฟรีรายวันแล้วครับ บัญชีใหม่ที่เข้าเกณฑ์ทดลองฟรีรวม 2 ครั้ง แพ็กและโบนัสเดิมยังใช้ได้ตามเงื่อนไข และผลเก่ายังเปิดดูได้" · สิทธิ์ของคนนี้ยึดตามบรรทัดนี้เท่านั้น ห้ามรับปากว่าทุกคนยังเหลือฟรี 2 ครั้ง` +
         (bonus > 0 ? `; มีโบนัสจากการชวนเพื่อน ${bonus} ครั้ง (ยังสแกนได้ ห้ามบอกว่าหมดสิทธิ์)` : "") +
         ` ⛔️ ห้ามพูดว่า "ฟรีวันละครั้ง" "วันนี้ใช้ฟรีครบแล้ว" "พรุ่งนี้มีฟรี" "รอหลังเที่ยงคืน"` +
         ` · คลัง/รายงานเดิมของลูกค้าเปิดดูได้เสมอ ไม่ต้องซื้อแพ็ก (พิมพ์ ดูผลเก่า) ห้ามชวนซื้อเพื่อดูของเดิม`;
@@ -219,13 +273,11 @@ export async function buildCustomerFactsContext(lineUserId) {
       `• วันเกิดที่บันทึกไว้: ${birthdate ? `${birthdate} (มีแล้ว — ห้ามถามซ้ำ)` : "ยังไม่มี"}`,
       `• ${freeLine}`,
       freeMode === "none"
-        ? "• กติกาสิทธิ์ฟรี: ปิดสิทธิ์ฟรีทุกบัญชีแล้ว (ไม่มีฟรีรายวัน ไม่มีทดลองฟรี) สแกนองค์ใหม่ต้องมีค่าครูหรือโบนัส ห้ามพูดถึงฟรี/พรุ่งนี้"
+        ? `• กติกาสิทธิ์ฟรี: ปิดสิทธิ์ฟรีทุกบัญชีแล้ว${snap.changedAt && snap.changedTo === "none" ? ` ตั้งแต่ ${thaiDateTime(snap.changedAt)}` : ""} (ไม่มีฟรีรายวัน ไม่มีทดลองฟรี) สแกนองค์ใหม่ต้องมีค่าครูหรือโบนัส ห้ามพูดถึงฟรี/พรุ่งนี้`
         : freeMode === "new_customer"
-        ? `• กติกาสิทธิ์ฟรี: ยกเลิกฟรีรายวันแล้ว${trial.eligible_since ? ` ตั้งแต่ ${thaiDateTime(trial.eligible_since)}` : ""} — ฟรีเฉพาะบัญชีใหม่ที่เริ่มใช้หลังจากนั้น รวม 2 ครั้งต่อบัญชี ไม่เติมใหม่รายวัน ห้ามพูดถึงฟรีรายวัน/พรุ่งนี้ ไม่รีเซ็ตรายวัน`
+        ? `• กติกาสิทธิ์ฟรี:${changedPhrase} ฟรีเฉพาะบัญชีใหม่ที่เข้าเกณฑ์${cutoffPhrase} รวม 2 ครั้งต่อบัญชี ไม่เติมใหม่รายวัน ห้ามพูดถึงฟรีรายวัน/พรุ่งนี้ ไม่รีเซ็ตรายวัน`
         : `• กติกาสิทธิ์ฟรี: วันละ ${freeQuota} ครั้ง รีเซ็ตหลังเที่ยงคืนเวลาไทย ใช้ไม่หมดไม่ทบไปวันถัดไป`,
-      ...(pendingSchedule
-        ? [`• ⚠️ ประกาศเปลี่ยนนโยบายแล้ว (ส่งถึงลูกค้าทาง LINE): ตั้งแต่ ${thaiDateTime(pendingSchedule.effectiveAt)} สิทธิ์ฟรีจะเป็น "${FREE_MODE_LABEL[pendingSchedule.target]}" — ตอนนี้ยังเป็น "${FREE_MODE_LABEL[freeMode]}" ตามปกติจนถึงเวลานั้น · ถ้าลูกค้าถามว่ายังฟรีไหม/ฟรีถึงเมื่อไหร่/ทำไมประกาศ ให้ตอบตามนี้ตรง ๆ (วัน เวลา และสิ่งที่เปลี่ยน) ห้ามบอกว่าเปลี่ยนแล้วก่อนถึงเวลา ห้ามสัญญาว่าหลังจากนั้นยังมีฟรีรายวัน · แพ็กและโบนัสที่มีอยู่ใช้ได้ตามเดิม คลังเดิมดูได้เสมอ`]
-        : []),
+      ...(pendingSchedule ? [buildUpcomingPolicyLine(pendingSchedule, freeMode, freeQuota)] : []),
       "• ค่าครู (ภาษาการเงิน — กบ 30 ก.ค.): เรียกการชำระเงินทุกแบบว่า ค่าครู เสมอ ห้ามใช้คำว่า ซื้อแพ็ก/แพ็กเกจ/สมัครสมาชิก · ห้ามอาจารย์เชียร์ขายหรือเลือกแทนลูกค้าเด็ดขาด — ลูกค้าอยากเปิดสิทธิ์ ให้บอกว่าบอกอาจารย์มาได้เลย เดี๋ยวมีตัวเลือกเด้งให้แตะเลือก (ห้ามสอนพิมพ์คำสั่ง) · ⛔️ ถ้าข้อความล่าสุดของลูกค้าเป็นการตอบคำถามที่อาจารย์ถามไป (เช่น บอกว่าพกเพื่ออะไร บอกชื่อพระ) ให้รับทราบเรื่องนั้น ห้ามสวนด้วยการพูดราคา/ชวนจ่ายเด็ดขาด (เคสจริง 8 ส.ค.: ลูกค้าตอบว่าใส่เสริมงาน แต่บอทตอบราคา 49 จนแอดมินต้องขอโทษ)",
       `• โปรตอนนี้ (ข้อเท็จจริง — ตอบได้เฉพาะเมื่อลูกค้าถามเรื่องโปร/แพ็ก/ราคาเอง ห้ามยกขึ้นมาเสนอก่อน): ${(offer?.packages || [])
         .filter((p) => p && p.active !== false)
