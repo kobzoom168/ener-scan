@@ -13,7 +13,32 @@ import {
 } from "../../../stores/paymentAccess.db.js";
 import { computePaidActive } from "../../../services/scanOfferAccess.resolver.js";
 import { loadActiveScanOffer } from "../../../services/scanOffer.loader.js";
-import { getNewCustomerTrialStatus } from "../../../services/newCustomerTrial.service.js";
+import { getNewCustomerTrialStatus, freePolicyModeOf } from "../../../services/newCustomerTrial.service.js";
+
+// ป้ายโหมดสิทธิ์ฟรี (sql/067) สำหรับบอกอาจารย์ — ห้ามเดา ให้ยึดโหมดที่มีผลจริง + กำหนดการที่ประกาศแล้ว
+const FREE_MODE_LABEL = {
+  daily: "ฟรีรายวัน",
+  new_customer: "เฉพาะบัญชีใหม่ทดลองฟรีรวม 2 ครั้ง (ไม่มีฟรีรายวัน)",
+  none: "ปิดสิทธิ์ฟรีทุกบัญชี (แพ็ก/โบนัสที่มีใช้ได้)",
+};
+function thaiDateTime(iso) {
+  const ms = Date.parse(String(iso || ""));
+  if (!Number.isFinite(ms)) return "";
+  const d = new Date(ms);
+  const date = new Intl.DateTimeFormat("th-TH", { timeZone: "Asia/Bangkok", day: "numeric", month: "short", year: "numeric" }).format(d);
+  const time = new Intl.DateTimeFormat("th-TH", { timeZone: "Asia/Bangkok", hour: "2-digit", minute: "2-digit", hour12: false }).format(d);
+  return `${date} ${time} น.`;
+}
+/** กำหนดการเปลี่ยนนโยบายที่ประกาศแล้ว (free_policy_status.schedule) — อ่านไม่ได้ = ไม่พูดถึง */
+async function readPendingPolicySchedule(db) {
+  try {
+    const { data, error } = await db.rpc("free_policy_status", { p_line_user_id: null });
+    if (error || !data || !data.schedule || data.schedule.status !== "pending") return null;
+    const target = String(data.schedule.target_mode || "");
+    if (!FREE_MODE_LABEL[target]) return null;
+    return { target, effectiveAt: data.schedule.effective_at };
+  } catch { return null; }
+}
 import { getValue, setLargeValueWithTtl } from "../../../redis/scanV2Redis.js";
 
 const REJECT_REASON_THAI = {
@@ -84,18 +109,28 @@ export async function buildCustomerFactsContext(lineUserId) {
     let freeLine;
     let adminResetLine = null;
     const trial = await getNewCustomerTrialStatus(uid);
+    const freeMode = freePolicyModeOf(trial); // daily | new_customer | none — โหมดที่มีผล ณ ตอนนี้ (รวมกำหนดการที่ถึงเวลาแล้ว)
+    const pendingSchedule = await readPendingPolicySchedule(supabase);
+    const sinceLine = trial.eligible_since ? ` (ยกเลิกฟรีรายวันแล้วตั้งแต่ ${thaiDateTime(trial.eligible_since)} · บัญชีใหม่ = เริ่มใช้ตั้งแต่เวลานั้น)` : "";
     if (paidActive) {
       freeLine =
         `สิทธิ์แบบชำระเงินยังใช้งานอยู่ เหลือ ${paidRemaining} ครั้ง (ตัดสิทธิ์จ่ายก่อน โควต้าฟรีถูกกันไว้)` +
         ` — ลูกค้าจ่ายเงินและเปิดสิทธิ์เรียบร้อยแล้ว ⛔️ ห้ามทวงสลิป ห้ามพูดเรื่องโอน/QR เด็ดขาด แม้ประวัติแชทจะค้างเรื่องโอนอยู่ (เรื่องจ่ายจบไปแล้ว) — ลูกค้าทักสั้น ๆ เฉย ๆ ให้รับทราบและบอกว่าส่งรูปมาใช้สิทธิ์ได้เลย`;
-    } else if (trial.enabled) {
+    } else if (freeMode === "none") {
+      const bonus = Number(userRow?.bonus_scans) || 0;
+      freeLine =
+        `นโยบายปัจจุบัน: ปิดสิทธิ์ฟรีทุกบัญชี — ไม่มีฟรีรายวัน ไม่มีทดลองฟรี; คนนี้: ${bonus > 0 ? `มีโบนัสจากการชวนเพื่อน ${bonus} ครั้ง (ยังสแกนได้ ห้ามบอกว่าหมดสิทธิ์)` : "ไม่มีสิทธิ์สแกนองค์ใหม่ ต้องเปิดค่าครูก่อน"}` +
+        ` ⛔️ ห้ามพูดว่ามีฟรี/ทดลองฟรี/ฟรีวันละครั้ง/พรุ่งนี้มีฟรี/รอหลังเที่ยงคืน — ถ้าลูกค้าถามว่ายังฟรีไหม ให้ตอบตรง ๆ ว่าตอนนี้ไม่มีสิทธิ์ฟรีแล้ว` +
+        ` · คลัง/รายงานเดิมของลูกค้าเปิดดูได้เสมอ ไม่ต้องซื้อแพ็ก (พิมพ์ ดูผลเก่า) ห้ามชวนซื้อเพื่อดูของเดิม`;
+    } else if (freeMode === "new_customer") {
       const remaining = trial.eligible ? Math.max(0, 2 - trial.used) : 0;
       const bonus = Number(userRow?.bonus_scans) || 0;
       const who = trial.eligible
         ? `ลูกค้าใหม่ สิทธิ์ทดลองเหลือ ${remaining} จาก 2 ครั้ง`
         : "ลูกค้าเดิม (ไม่มีสิทธิ์ทดลอง) ต้องมีแพ็กหรือโบนัสจึงสแกนองค์ใหม่ได้";
       freeLine =
-        `นโยบายปัจจุบัน: ลูกค้าใหม่ทดลองฟรีรวม 2 ครั้งต่อบัญชี ไม่เติมใหม่รายวัน; คนนี้: ${who}` +
+        `นโยบายปัจจุบัน: ฟรีเฉพาะบัญชีใหม่ ทดลองฟรีรวม 2 ครั้งต่อบัญชี ไม่เติมใหม่รายวัน${sinceLine}; คนนี้: ${who}` +
+        ` — ถ้าลูกค้าถามว่ายังฟรีไหม ให้ตอบตรง ๆ ว่าตอนนี้ไม่มีฟรีรายวันแล้ว ฟรีมีเฉพาะบัญชีใหม่ 2 ครั้ง` +
         (bonus > 0 ? `; มีโบนัสจากการชวนเพื่อน ${bonus} ครั้ง (ยังสแกนได้ ห้ามบอกว่าหมดสิทธิ์)` : "") +
         ` ⛔️ ห้ามพูดว่า "ฟรีวันละครั้ง" "วันนี้ใช้ฟรีครบแล้ว" "พรุ่งนี้มีฟรี" "รอหลังเที่ยงคืน"` +
         ` · คลัง/รายงานเดิมของลูกค้าเปิดดูได้เสมอ ไม่ต้องซื้อแพ็ก (พิมพ์ ดูผลเก่า) ห้ามชวนซื้อเพื่อดูของเดิม`;
@@ -183,9 +218,14 @@ export async function buildCustomerFactsContext(lineUserId) {
     return [
       `• วันเกิดที่บันทึกไว้: ${birthdate ? `${birthdate} (มีแล้ว — ห้ามถามซ้ำ)` : "ยังไม่มี"}`,
       `• ${freeLine}`,
-      trial.enabled
-        ? "• กติกาสิทธิ์ฟรี: เฉพาะลูกค้าใหม่ รวม 2 ครั้งต่อบัญชี ไม่เติมใหม่รายวัน ห้ามพูดถึงฟรีรายวัน/พรุ่งนี้ ไม่รีเซ็ตรายวัน"
+      freeMode === "none"
+        ? "• กติกาสิทธิ์ฟรี: ปิดสิทธิ์ฟรีทุกบัญชีแล้ว (ไม่มีฟรีรายวัน ไม่มีทดลองฟรี) สแกนองค์ใหม่ต้องมีค่าครูหรือโบนัส ห้ามพูดถึงฟรี/พรุ่งนี้"
+        : freeMode === "new_customer"
+        ? `• กติกาสิทธิ์ฟรี: ยกเลิกฟรีรายวันแล้ว${trial.eligible_since ? ` ตั้งแต่ ${thaiDateTime(trial.eligible_since)}` : ""} — ฟรีเฉพาะบัญชีใหม่ที่เริ่มใช้หลังจากนั้น รวม 2 ครั้งต่อบัญชี ไม่เติมใหม่รายวัน ห้ามพูดถึงฟรีรายวัน/พรุ่งนี้ ไม่รีเซ็ตรายวัน`
         : `• กติกาสิทธิ์ฟรี: วันละ ${freeQuota} ครั้ง รีเซ็ตหลังเที่ยงคืนเวลาไทย ใช้ไม่หมดไม่ทบไปวันถัดไป`,
+      ...(pendingSchedule
+        ? [`• ⚠️ ประกาศเปลี่ยนนโยบายแล้ว (ส่งถึงลูกค้าทาง LINE): ตั้งแต่ ${thaiDateTime(pendingSchedule.effectiveAt)} สิทธิ์ฟรีจะเป็น "${FREE_MODE_LABEL[pendingSchedule.target]}" — ตอนนี้ยังเป็น "${FREE_MODE_LABEL[freeMode]}" ตามปกติจนถึงเวลานั้น · ถ้าลูกค้าถามว่ายังฟรีไหม/ฟรีถึงเมื่อไหร่/ทำไมประกาศ ให้ตอบตามนี้ตรง ๆ (วัน เวลา และสิ่งที่เปลี่ยน) ห้ามบอกว่าเปลี่ยนแล้วก่อนถึงเวลา ห้ามสัญญาว่าหลังจากนั้นยังมีฟรีรายวัน · แพ็กและโบนัสที่มีอยู่ใช้ได้ตามเดิม คลังเดิมดูได้เสมอ`]
+        : []),
       "• ค่าครู (ภาษาการเงิน — กบ 30 ก.ค.): เรียกการชำระเงินทุกแบบว่า ค่าครู เสมอ ห้ามใช้คำว่า ซื้อแพ็ก/แพ็กเกจ/สมัครสมาชิก · ห้ามอาจารย์เชียร์ขายหรือเลือกแทนลูกค้าเด็ดขาด — ลูกค้าอยากเปิดสิทธิ์ ให้บอกว่าบอกอาจารย์มาได้เลย เดี๋ยวมีตัวเลือกเด้งให้แตะเลือก (ห้ามสอนพิมพ์คำสั่ง) · ⛔️ ถ้าข้อความล่าสุดของลูกค้าเป็นการตอบคำถามที่อาจารย์ถามไป (เช่น บอกว่าพกเพื่ออะไร บอกชื่อพระ) ให้รับทราบเรื่องนั้น ห้ามสวนด้วยการพูดราคา/ชวนจ่ายเด็ดขาด (เคสจริง 8 ส.ค.: ลูกค้าตอบว่าใส่เสริมงาน แต่บอทตอบราคา 49 จนแอดมินต้องขอโทษ)",
       `• โปรตอนนี้ (ข้อเท็จจริง — ตอบได้เฉพาะเมื่อลูกค้าถามเรื่องโปร/แพ็ก/ราคาเอง ห้ามยกขึ้นมาเสนอก่อน): ${(offer?.packages || [])
         .filter((p) => p && p.active !== false)
@@ -195,7 +235,7 @@ export async function buildCustomerFactsContext(lineUserId) {
             ? `${p.priceThb} บาท สมาชิกรายเดือน อาจารย์ดูแลทั้งเดือน สแกนไม่จำกัด`
             : `${p.priceThb} บาท สแกน ${p.scanCount} ครั้ง`,
         )
-        .join(", ") || "ยังไม่เปิดรับค่าครู"}${trial.enabled ? " และลูกค้าใหม่ทดลองฟรีรวม 2 ครั้ง" : ` และมีฟรีวันละ ${freeQuota} ครั้ง`}`,
+        .join(", ") || "ยังไม่เปิดรับค่าครู"}${freeMode === "new_customer" ? " และบัญชีใหม่ทดลองฟรีรวม 2 ครั้ง (ไม่มีฟรีรายวัน)" : freeMode === "none" ? " (ไม่มีสิทธิ์ฟรีใด ๆ)" : ` และมีฟรีวันละ ${freeQuota} ครั้ง`}`,
 
       ...(adminCaseLine ? [`• ${adminCaseLine}`] : []),
       ...(adminResetLine ? [`• ${adminResetLine}`] : []),

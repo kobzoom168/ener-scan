@@ -157,7 +157,8 @@ test("AI facts/prompt: ไม่มีกติกาฟรีรายวัน
   assert.ok(!/สิทธิ์ฟรีรายวัน รีเซ็ตหลังเที่ยงคืน/.test(prompt), "กติการายวันตายตัวใน prompt ต้องหายไป");
   assert.ok(!/⑤ ฟรีวันละ 1 ครั้ง/.test(prompt)); assert.ok(!/ค่าครูดูแลคลังพลัง/.test(prompt)); assert.match(prompt, /เจ้าของเปิดดูของตัวเองได้เสมอ ไม่ต้องซื้อแพ็ก/);
   const facts = read("src/core/conversation/geminiFront/customerFactsContext.util.js");
-  const trialBranch = facts.slice(facts.indexOf("} else if (trial.enabled) {"), facts.indexOf("} else {", facts.indexOf("} else if (trial.enabled) {")));
+  const NC = "} else if (freeMode === \"new_customer\") {"; // 067: สาขา new_customer (เดิม trial.enabled)
+  const trialBranch = facts.slice(facts.indexOf(NC), facts.indexOf("} else {", facts.indexOf(NC)));
   assert.match(trialBranch, /ห้ามพูดว่า "ฟรีวันละครั้ง" "วันนี้ใช้ฟรีครบแล้ว" "พรุ่งนี้มีฟรี"/); assert.match(trialBranch, /โบนัสจากการชวนเพื่อน/);
   assert.match(trialBranch, /ห้ามชวนซื้อเพื่อดูของเดิม/);
 });

@@ -37,8 +37,8 @@ import { turnAiBudgetRemaining, getTurnAiCallCount, TURN_AI_CALL_BUDGET } from "
 const ENTITLEMENT_CLAIM_RE =
   /เปิดสิทธิ์(?:ให้)?(?:แล้ว|เรียบร้อย)|อนุมัติ(?:แล้ว|เรียบร้อย)|(?:ได้|รับ)สลิปแล้ว|สแกนได้(?:อีก)?\s*\d+\s*ครั้ง|(?:ยังมี|เหลือ)สิทธิ์|สิทธิ์(?:ยัง)?เหลือ/;
 
-/** ข้อความตายตัวเมื่อ guard จับได้ — ตามสถานะจริง */
-function safeTextForBlockedClaim(phase1State) {
+/** ข้อความตายตัวเมื่อ guard จับได้ — ตามสถานะจริง · freePolicy (sql/067: daily | new_customer | none | unknown) ห้ามสัญญาฟรีรายวันนอกโหมด daily */
+function safeTextForBlockedClaim(phase1State, freePolicy = "unknown") {
   if (phase1State === "pending_verify") {
     return "สลิปกำลังตรวจอยู่ครับ พอเรียบร้อยผมเปิดสิทธิ์แล้วแจ้งในแชตนี้ทันที รอแปปนึงครับ";
   }
@@ -48,7 +48,13 @@ function safeTextForBlockedClaim(phase1State) {
   // P0-C (Codex 28 ส.ค. 2026): ห้าม "เดี๋ยวแจ้งกลับ" — ไม่มี durable owner ตามสัญญา (เคสจริง
   // "ค่าครู 49 บาทได้กี่ครั้ง" 28 ส.ค. handoff ค้าง) · บอกข้อเท็จจริงจากสถานะ: ไม่ใช่ paid_active =
   // ไม่มีสิทธิ์แพ็กเปิดอยู่ · ราคา/สิทธิ์ที่เหลือมี deterministic router (packageQuestion) ตอบ AI=0
-  return "ตอนนี้ยังไม่มีสิทธิ์แพ็กเปิดอยู่ครับ ใช้สแกนฟรีรายวันได้ตามปกติ อยากรู้แพ็กหรือสิทธิ์ที่เหลือ พิมพ์ถามได้เลย";
+  if (freePolicy === "daily") {
+    return "ตอนนี้ยังไม่มีสิทธิ์แพ็กเปิดอยู่ครับ ใช้สแกนฟรีรายวันได้ตามปกติ อยากรู้แพ็กหรือสิทธิ์ที่เหลือ พิมพ์ถามได้เลย";
+  }
+  if (freePolicy === "new_customer") {
+    return "ตอนนี้ยังไม่มีสิทธิ์แพ็กเปิดอยู่ครับ (ฟรีรายวันยกเลิกแล้ว มีทดลองฟรีเฉพาะบัญชีใหม่) อยากรู้แพ็กหรือสิทธิ์ที่เหลือ พิมพ์ถามได้เลย";
+  }
+  return "ตอนนี้ยังไม่มีสิทธิ์แพ็กเปิดอยู่ครับ อยากรู้แพ็กหรือสิทธิ์ที่เหลือ พิมพ์ถามได้เลย";
 }
 
 /**
@@ -86,6 +92,9 @@ export async function runGeminiFrontOrchestrator(ctx) {
   }
 
   const allowedActions = allowedActionsForPhase1State(phase1);
+  // โหมดสิทธิ์ฟรีที่มีผลจริง (067) — ใช้เลือกข้อความ fallback ของ guard ไม่ให้สัญญาฟรีรายวันนอกโหมด daily
+  const freePolicy = await import("../../../services/entitlementCopy.service.js")
+    .then((m) => m.resolveFreePolicy()).catch(() => "unknown");
   const conversationHistory = await getGeminiConversationHistory(ctx.userId, 8, 2000);
   const plannerPayload = buildPlannerContextPayload({
     userId: ctx.userId,
@@ -214,7 +223,7 @@ export async function runGeminiFrontOrchestrator(ctx) {
         sample: String(text).slice(0, 120),
       }),
     );
-    return safeTextForBlockedClaim(phase1);
+    return safeTextForBlockedClaim(phase1, freePolicy);
   }
 
   /** Customer-visible answer via the smart consult brain (Opus + real facts).
