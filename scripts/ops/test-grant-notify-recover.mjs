@@ -111,17 +111,17 @@ const pass = (name) => { results.push(name); console.log("PASS " + name); };
   pass("I bad max-wait / missing one-shot → exit 1"); rmSync(d, { recursive: true, force: true });
 }
 { // J: docker image inspect ค้าง → deadline เริ่มก่อน inspect → exit 6 เร็ว (ไม่ข้ามด้วย SKIP)
-  const d = setup({ old: 3, imagecheck: "hang" }); const r = run(d, 1, { RECOVER_SKIP_IMAGE_CHECK: "0" });
+  const d = setup({ old: 3, imagecheck: "hang" }); const r = run(d, 2, { RECOVER_SKIP_IMAGE_CHECK: "0" });
   assert.equal(r.code, 6, r.out); assert.ok(r.seconds < 8, `took ${r.seconds}s`); assert.match(r.out, /deadline reached while inspecting image/); assert.equal(r.runs, 0);
   pass(`J image inspect hangs → deadline (started before inspect) → exit 6 in ${r.seconds.toFixed(1)}s`); rmSync(d, { recursive: true, force: true });
 }
 { // K: count=0 แต่ query อายุแถวช้า 4 วิ, max-wait 1 → ต้องจบทันทีไม่เรียก query อายุ → exit 0 เร็ว
-  const d = setup({ old: 0, mode: "younghang" }); const r = run(d, 1);
+  const d = setup({ old: 0, mode: "younghang" }); const r = run(d, 5); // max-wait 5: ไม่ขึ้นกับจังหวะข้ามวินาที — จุดพิสูจน์คือ query อายุไม่ถูกเรียกและจบ < 2.5 วิ
   assert.equal(r.code, 0, r.out); assert.ok(r.seconds < 2.5, `took ${r.seconds}s`); assert.doesNotMatch(r.log, /granted_at >= now\(\)/, "young query must not run when count=0");
   pass(`K count=0 → DONE immediately without row-age query (${r.seconds.toFixed(1)}s)`); rmSync(d, { recursive: true, force: true });
 }
 { // K2: count>0 และ query อายุแถวช้า 4 วิ, max-wait 1 → query ใช้เวลาที่เหลือ → exit 6 ไม่ใช่ DONE
-  const d = setup({ old: 3, mode: "younghang" }); const r = run(d, 1);
+  const d = setup({ old: 3, mode: "younghang" }); const r = run(d, 2);
   assert.equal(r.code, 6, r.out); assert.ok(r.seconds < 8, `took ${r.seconds}s`); assert.match(r.out, /deadline reached while querying row ages/); assert.equal(r.runs, 0);
   pass(`K2 slow row-age query bounded by remaining time → exit 6 in ${r.seconds.toFixed(1)}s`); rmSync(d, { recursive: true, force: true });
 }
@@ -129,5 +129,15 @@ const pass = (name) => { results.push(name); console.log("PASS " + name); };
   const d = setup({ old: 3, oneshot: "hang", rmfail: "1" }); const r = run(d, 2, { RECOVER_GRACE: "3" });
   assert.equal(r.code, 6, r.out); assert.match(r.out, /NOT removed/); assert.match(r.out, /LEFTOVER containers \(not removed\): grant-oneshot-\d+-\d+-r1/); assert.doesNotMatch(r.out, /removed one-shot container/);
   pass("L rm fails → reports leftover container name, never claims removed"); rmSync(d, { recursive: true, force: true });
+}
+{ // M: กู้ครบ (pending=0) แต่ rm ล้ม → ห้าม DONE/exit 0 → exit 7 + LEFTOVER
+  const d = setup({ old: 1, rmfail: "1" }); const r = run(d, 30, { RECOVER_GRACE: "3" });
+  assert.equal(r.code, 7, r.out); assert.doesNotMatch(r.out, /DONE/); assert.match(r.out, /pending_notify=0 but one-shot container\(s\) NOT removed/); assert.match(r.out, /LEFTOVER containers \(not removed\): grant-oneshot-\d+-\d+-r1/);
+  pass("M recovered to 0 but container not removed → exit 7 with LEFTOVER (never DONE/0)"); rmSync(d, { recursive: true, force: true });
+}
+{ // N: สำเร็จจริง = pending 0 + ไม่มี leftover → DONE ระบุชัด
+  const d = setup({ old: 1 }); const r = run(d, 30);
+  assert.equal(r.code, 0, r.out); assert.match(r.out, /DONE: pending_notify=0 \(no leftover containers\)/); assert.doesNotMatch(r.out, /LEFTOVER/);
+  pass("N success requires pending=0 AND no leftover containers"); rmSync(d, { recursive: true, force: true });
 }
 console.log(`\nPASS grant-notify-recover: ${results.length} scenarios (fake psql/docker only; no real DB, Docker, staging or Pro touched)`);

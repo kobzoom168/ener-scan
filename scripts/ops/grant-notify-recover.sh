@@ -8,7 +8,9 @@
 #  - deadline เริ่ม **ก่อน** ตรวจ image (Codex รอบ 4) · ทุก query รวม query อายุแถวใช้เวลาที่เหลือ · count=0 จบทันทีไม่ถาม query อื่น
 #  - cleanup/report หลังหมดเวลามี **grace แยก** (RECOVER_GRACE default 20 วิ ต่อคำสั่ง: rm container, report query) นอก deadline แต่มีขอบเขต ·
 #    ลบ container ไม่สำเร็จ = รายงาน "NOT removed" + ชื่อ (ต้องเก็บมือ) ไม่อ้างว่าเก็บแล้ว
-#  - exit: 0 pending=0 · 2 RPC list ล้ม · 3 query ล้ม · 5 ยังค้างเมื่อหมดเวลา (รอบจบปกติ ไม่มีคำสั่งค้าง) · 6 หมดเวลาขณะคำสั่งค้าง (image inspect / psql / docker run / query อายุแถว) — 5/6 พิมพ์รายการ prefix 8 ตัว
+#  - exit: 0 **pending=0 และไม่มี container ค้าง** เท่านั้น · 2 RPC list ล้ม · 3 query ล้ม · 5 ยังค้างเมื่อหมดเวลา (รอบจบปกติ ไม่มีคำสั่งค้าง) ·
+#    6 หมดเวลาขณะคำสั่งค้าง (image inspect / psql / docker run / query อายุแถว) · 7 กู้ครบ (pending=0) แต่ลบ container ไม่สำเร็จ → ต้องเก็บมือก่อนย้อน maintenance — 5/6/7 พิมพ์ชื่อ/รายการ
+#  - `timeout 0` = ปิด timeout (ไม่ใช่หมดเวลา) → ทุกคำสั่งตรวจ remaining > 0 ก่อนเสมอ
 #  ตัวแปรสำหรับเทสต์ระบบแยกเท่านั้น (ค่า default = ของจริง): RECOVER_PSQL (คำสั่งแทน `sudo -u postgres psql`), RECOVER_DOCKER (แทน `docker`), RECOVER_SLEEP_STEP (default 30), RECOVER_SKIP_IMAGE_CHECK=1
 set -uo pipefail
 ENVNAME="${1:?pro|staging}"; IMAGE="${2:?image id}"; ONESHOT="${3:?abs path oneshot.mjs}"; MAX_WAIT="${4:-900}"
@@ -43,7 +45,8 @@ give_up() { # $1=exit code $2=reason — cleanup/report อยู่นอก de
 trap 'give_up 6 "interrupted"' INT TERM
 
 if [ "${RECOVER_SKIP_IMAGE_CHECK:-0}" != "1" ]; then
-  rem=$(remaining); timeout -k 2 "$rem" $DOCKER image inspect "$IMAGE" >/dev/null 2>&1; rc=$?
+  rem=$(remaining); [ "$rem" -gt 0 ] || give_up 6 "deadline reached before image inspect"   # timeout 0 = ปิด timeout → ต้องกันก่อน
+  timeout -k 2 "$rem" $DOCKER image inspect "$IMAGE" >/dev/null 2>&1; rc=$?
   is_timeout "$rc" && give_up 6 "deadline reached while inspecting image"
   [ "$rc" -eq 0 ] || { echo "image not found: $IMAGE"; exit 1; }
 fi
@@ -67,7 +70,11 @@ while :; do
   rem=$(remaining); [ "$rem" -gt 0 ] || break   # หมดเวลาแบบรอบจบปกติ → exit 5 (6 สงวนให้คำสั่งค้างระหว่างรัน)
   n=$(count_pending); rc=$?
   case $rc in 0) ;; 3) give_up 3 "cannot determine pending count (DB query failed) — not zero";; 6) give_up 6 "deadline reached while counting";; esac
-  [ "$n" = "0" ] && { echo "[$(date -u +%H:%M:%SZ)] round=$round pending_notify=0"; echo "DONE: pending_notify=0"; exit 0; } # จบทันที ไม่ถาม query อื่น
+  if [ "$n" = "0" ]; then # จบทันที ไม่ถาม query อื่น · สำเร็จต่อเมื่อไม่มี container ค้างด้วย
+    echo "[$(date -u +%H:%M:%SZ)] round=$round pending_notify=0"
+    if [ -n "$LEFTOVER" ]; then echo "STOP: pending_notify=0 but one-shot container(s) NOT removed — เก็บมือก่อนย้อน maintenance:$LEFTOVER"; echo "LEFTOVER containers (not removed):$LEFTOVER"; exit 7; fi
+    echo "DONE: pending_notify=0 (no leftover containers)"; exit 0
+  fi
   y=$(young_pending); yrc=$?; [ "$yrc" -eq 6 ] && give_up 6 "deadline reached while querying row ages"
   echo "[$(date -u +%H:%M:%SZ)] round=$round pending_notify=$n young(<2min)=$y remaining=$(remaining)s"
   rem=$(remaining); [ "$rem" -gt 0 ] || break
