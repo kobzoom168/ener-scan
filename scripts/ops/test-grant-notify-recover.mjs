@@ -22,7 +22,7 @@ echo "psql: $Q" >> "${dir}/log.txt"
 mode=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1])).mode)' "$S")
 case "$Q" in
   *"left(payment_id"*) echo "deadbeef granted 2026-10-15 00:00:00+00 outbound=none"; exit 0;;
-  *"granted_at >= now()"*) node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1])).young)' "$S"; exit 0;;
+  *"granted_at >= now()"*) [ "$mode" = "younghang" ] && sleep 4; node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1])).young)' "$S"; exit 0;;
   *"count(*)"*)
     [ "$mode" = "dbfail" ] && { echo "ERROR:  relation does not exist" >&2; exit 1; }
     [ "$mode" = "dbhang" ] && { sleep 100; exit 0; }
@@ -33,8 +33,8 @@ echo "unexpected query" >&2; exit 2`);
   writeFileSync(join(dir, "docker"), `#!/bin/bash
 S="${dir}/state.json"; echo "docker: $*" >> "${dir}/log.txt"
 case "$1" in
-  image) exit 0;;
-  rm) echo "rm: $3" >> "${dir}/log.txt"; exit 0;;
+  image) ic=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1])).imagecheck||"ok")' "$S"); [ "$ic" = "hang" ] && sleep 100; exit 0;;
+  rm) echo "rm: $3" >> "${dir}/log.txt"; rf=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1])).rmfail||"")' "$S"); [ "$rf" = "1" ] && exit 1; exit 0;;
   run)
     os=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1])).oneshot)' "$S")
     [ "$os" = "hang" ] && { sleep 100; exit 0; }
@@ -109,5 +109,25 @@ const pass = (name) => { results.push(name); console.log("PASS " + name); };
   const d = setup({ old: 1 });
   assert.equal(run(d, "abc").code, 1); assert.equal(spawnSync("bash", [SCRIPT, "pro", "img", "/nonexistent.mjs", "5"], { encoding: "utf8", env: { ...process.env, RECOVER_SKIP_IMAGE_CHECK: "1" } }).status, 1);
   pass("I bad max-wait / missing one-shot → exit 1"); rmSync(d, { recursive: true, force: true });
+}
+{ // J: docker image inspect ค้าง → deadline เริ่มก่อน inspect → exit 6 เร็ว (ไม่ข้ามด้วย SKIP)
+  const d = setup({ old: 3, imagecheck: "hang" }); const r = run(d, 1, { RECOVER_SKIP_IMAGE_CHECK: "0" });
+  assert.equal(r.code, 6, r.out); assert.ok(r.seconds < 8, `took ${r.seconds}s`); assert.match(r.out, /deadline reached while inspecting image/); assert.equal(r.runs, 0);
+  pass(`J image inspect hangs → deadline (started before inspect) → exit 6 in ${r.seconds.toFixed(1)}s`); rmSync(d, { recursive: true, force: true });
+}
+{ // K: count=0 แต่ query อายุแถวช้า 4 วิ, max-wait 1 → ต้องจบทันทีไม่เรียก query อายุ → exit 0 เร็ว
+  const d = setup({ old: 0, mode: "younghang" }); const r = run(d, 1);
+  assert.equal(r.code, 0, r.out); assert.ok(r.seconds < 2.5, `took ${r.seconds}s`); assert.doesNotMatch(r.log, /granted_at >= now\(\)/, "young query must not run when count=0");
+  pass(`K count=0 → DONE immediately without row-age query (${r.seconds.toFixed(1)}s)`); rmSync(d, { recursive: true, force: true });
+}
+{ // K2: count>0 และ query อายุแถวช้า 4 วิ, max-wait 1 → query ใช้เวลาที่เหลือ → exit 6 ไม่ใช่ DONE
+  const d = setup({ old: 3, mode: "younghang" }); const r = run(d, 1);
+  assert.equal(r.code, 6, r.out); assert.ok(r.seconds < 8, `took ${r.seconds}s`); assert.match(r.out, /deadline reached while querying row ages/); assert.equal(r.runs, 0);
+  pass(`K2 slow row-age query bounded by remaining time → exit 6 in ${r.seconds.toFixed(1)}s`); rmSync(d, { recursive: true, force: true });
+}
+{ // L: docker ค้าง + rm ล้ม → ต้องรายงานชื่อ container ค้าง ไม่อ้างว่าเก็บแล้ว
+  const d = setup({ old: 3, oneshot: "hang", rmfail: "1" }); const r = run(d, 2, { RECOVER_GRACE: "3" });
+  assert.equal(r.code, 6, r.out); assert.match(r.out, /NOT removed/); assert.match(r.out, /LEFTOVER containers \(not removed\): grant-oneshot-\d+-\d+-r1/); assert.doesNotMatch(r.out, /removed one-shot container/);
+  pass("L rm fails → reports leftover container name, never claims removed"); rmSync(d, { recursive: true, force: true });
 }
 console.log(`\nPASS grant-notify-recover: ${results.length} scenarios (fake psql/docker only; no real DB, Docker, staging or Pro touched)`);
