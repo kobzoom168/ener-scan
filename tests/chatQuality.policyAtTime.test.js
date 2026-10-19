@@ -294,3 +294,14 @@ test("static: sweep อ่าน status (anon) + audit ผ่าน client จ�
   const det = readFileSync("src/services/chatQualityDeterministic.util.js", "utf8");
   assert.doesNotMatch(det, /supabase|fetch\(|process\.env/, "deterministic util ไม่แตะ DB/เน็ต/env");
 });
+
+test("static: replay แบบไม่ส่ง (dryRun) — คืนรายงานก่อนเขียน app_settings/ส่ง Telegram · ไม่ใช้ redis dedupe/ชั่วโมง · สคริปต์ ops ใช้ dryRun เท่านั้น", () => {
+  const src = readFileSync("src/services/chatQualityDailyReport.service.js", "utf8");
+  const body = src.slice(src.indexOf("export async function runChatQualityDailySweep"));
+  const iDry = body.indexOf("if (dryRun) {\n    // replay แบบไม่ส่ง"); const iStore = body.indexOf('setAppSetting("chat_quality_last_report"'); const iSend = body.indexOf("await sendTelegramText(report)");
+  assert.ok(iDry > 0 && iStore > iDry && iSend > iStore, "dryRun ต้อง return ก่อน setAppSetting และ sendTelegramText");
+  assert.match(body, /if \(!dryRun\) \{\n    const first = await tryDedupeOnce/); assert.match(body, /if \(!dryRun && bangkokHour\(now\) !== REPORT_HOUR_BKK\)/); assert.match(body, /if \(!dryRun && !isTelegramConfigured\(\)\)/);
+  const sc = readFileSync("scripts/ops/chat-quality-replay.mjs", "utf8");
+  assert.match(sc, /runChatQualityDailySweep\(new Date\(\), \{ dryRun: true, reportDateKey: dateKey \}\)/);
+  assert.ok(!/sendTelegramText|setAppSetting|\.insert\(|\.update\(/.test(sc), "สคริปต์ replay อ่านอย่างเดียว");
+});

@@ -84,3 +84,29 @@
 - **แก้:** sweeper จำ `progress[id] = { delivered, remainingText }` ทุกกรณีที่ finish ล้ม · รอบถัดไป: delivered → finish(ok) ไม่ส่ง · partial → ส่งเฉพาะ `remainingText` (มีหัว "(ต่อ — ส่วน x-y …)" ตรงกับ `p_text` ที่พยายามบันทึก) · finish สำเร็จ → ลบความจำ (`recovered`, `resumedFromPartial` ใน log)
 - **ทางกู้ (ถ้อยคำใหม่):** โปรเซส restart = ความจำหาย → แถว sending ถูก claim ใหม่หลัง 10 นาทีและส่งตาม text ใน DB = **at-least-once อาจส่งซ้ำ** (ไม่รับประกันจำนวนครั้ง) — ระบุใน log `ADMIN_ALERT_OUTBOX_FINISH_FAILED.recovery` และ docstring
 - **regression:** `adminAlert.behavior` ลำดับ fetch = A,B,B (ไม่ส่ง A ซ้ำ) · กู้แล้ว finish ok → sent/recovered=1 · partial ซ้ำตอนกู้ (B ล้มอีก + finish ล้ม) → ยังจำเฉพาะ B · log ต้องมีคำว่า at-least-once · 10/10 · DB test 068 PASS · gate ✅
+
+## 8. Runbook ขั้น staging (Codex GO ทางเทคนิค 19 ต.ค. 2026 บน `3cde8c0` + replay tool ที่ SHA นี้) — **รอกบเคาะห้อง + อนุมัติก่อน ไม่ทำเอง**
+**ก่อนเริ่ม (กบ):** (1) เลือกห้อง: (ก) แชตส่วนตัว "Kob" ผ่าน @Eneraibot เดิม = ค่าเดียวกับ `TELEGRAM_CHAT_ID` · (ข) กลุ่มใหม่ เชิญ @Eneraibot แล้วส่ง chat id (ตัวเลข ไม่ต้องส่ง token) · (2) อนุมัติขั้น 1–6 ด้านล่างสำหรับ **staging เท่านั้น**
+
+ไฟล์จาก ops worktree ที่ SHA นี้ (ตรวจ sha256 ก่อนใช้ ไม่ตรง = หยุด):
+| ไฟล์ | sha256 |
+|---|---|
+| `sql/068_admin_alert_outbox.sql` | `fc455f3825bed8e5f966e480708ab485a8698e62107a5926b9ca0ffcf7a0367b` |
+| `scripts/ops/gen-restricted-jwt.mjs` | `78d5d9628b855b4d7c014b8c65f616ad258dc42361430e1431e6533a9ec42a12` |
+| `scripts/ops/deploy-pinned.sh` | `01e8037834971d6e27190b60646f54e8712dfdb9bb25ce47c47c4c9227c1b3a9` |
+| `scripts/ops/preflight-three-tasks-migrations.sql` | `127189e7bb7c400f9a26eb0bef341adaf7f5224d4de1d61ede4c262488a9ee51` |
+| `scripts/ops/migration-function-md5.reference.txt` | `5c6e0a845909cd425952a279020111b30e98673980438c3dc7573fea6a748797` |
+| `scripts/ops/chat-quality-replay.mjs` | `bd6b607cbe8528ac7cd1fb7c33f7d2d1f5a0cf5b8ca2861fe6a518e1557e4305` |
+
+1. **ops worktree:** `git clone --no-checkout /root/ener-scan-mirror.git /root/ener-ops-<sha7> && git -C /root/ener-ops-<sha7> checkout --detach <sha40>` → ตรวจ rev-parse + sha256 ตาราง
+2. **backup + preflight (read-only):** `pg_dump` ตาราง `admin_alert_outbox` ยังไม่มี → backup เฉพาะ `.env` staging (600) · รัน preflight บน `ener_scan_staging` ผ่าน stdin (แถว 068 ก่อน apply: table/RPC = f ตามคาด, แถวอื่น t)
+3. **apply 068** ผ่าน stdin บน `ener_scan_staging` · รัน preflight ซ้ำ: 068 5 แถว = t (table, 3 RPCs, web_anon ไม่มีสิทธิ์, role writer EXECUTE 3, dedupe index) · md5 ฟังก์ชัน 3 ตัวตรง reference (`verify-migration-versions.sh`)
+4. **env staging:** `gen-restricted-jwt.mjs /root/ener-scan-staging/.env ADMIN_ALERT_DB_KEY admin_alert_writer --dry-run` → รันจริง (พิมพ์แค่ role/exp/fingerprint) · เพิ่ม `ADMIN_ALERT_TELEGRAM_CHAT_ID=<ตามกบเคาะ>` (ไม่ตั้ง `ADMIN_ALERT_TELEGRAM_BOT_TOKEN` = ใช้ `TELEGRAM_BOT_TOKEN` เดิม) · ห้ามพิมพ์ค่าใน log/แชต
+5. **deploy staging แบบตรึง:** `deploy-pinned.sh staging <sha40> --frozen-ref origin/pro/three-tasks-<sha7>` (recreate ครบ web + worker-scan + worker-maintenance เพื่อให้ทุกตัวได้ env ใหม่; **drain worker-scan ก่อน** ตามบทเรียน 15 ต.ค.) · rollback = deploy-pinned กลับ `eedec5b` (068 คงไว้ additive)
+6. **พิสูจน์ (หลักฐานส่ง Codex):**
+   - DLQ: staging มีแถว dead เดิม → รอบ maintenance ถัดไป log `DLQ_ALERT_SENT channel=telegram` 1 ครั้ง → ข้อความ `[staging][dlq][high]` ถึงห้องที่เลือก → รอบต่อไป `DLQ_ALERT_SKIPPED same_state_already_alerted` (6 ชม.) · **ไม่มี** `pushMessage` ถึง `ADMIN_LINE_USER_ID` ใน log web/worker (grep) · LINE กบไม่ได้รับ DLQ
+   - สลิป: ส่งสลิปทดสอบจาก Test UID กบ บน staging → แจ้ง pending_verify ยังเข้า LINE แอดมินเหมือนเดิม (L5 ไม่แตะ) · ลูกค้าได้ข้อความ LINE ตามเดิม
+   - outbox: `SELECT status,count(*) FROM admin_alert_outbox GROUP BY 1` = ว่าง (ส่งตรงสำเร็จ) · จำลองส่งล้ม **ไม่ทำบน staging จริง** (ใช้ unit/DB test) · สิทธิ์: `has_table_privilege('web_anon',…)`=f ทั้ง 3, `has_function_privilege('web_anon', rpc)`=f ทั้ง 3, writer = t ทั้ง 3
+   - replay รายงานแชตแบบไม่ส่ง: `docker run --rm --env-file /root/ener-scan-staging/.env --network <net> -v /root/ener-ops-<sha7>/scripts/ops/chat-quality-replay.mjs:/app/ops-replay.mjs:ro <image-id> node /app/ops-replay.mjs 2026-10-16` และ `2026-10-19` → ตรวจบรรทัด `CHAT_QUALITY_REPLAY auditState=complete` + POLICY: 16 ต.ค. = ฟรีรายวัน (ประวัติ staging อาจต่างจาก Pro — ถ้าไม่มี audit ก่อนช่วงนั้นต้องขึ้น **unknown ไม่ฟันธง**) · 19 ต.ค. = ตามโหมด staging จริง · ไม่มี Telegram ออก (log ไม่มี `CHAT_QUALITY_DAILY_REPORT`) · ไม่มีข้อความถึงลูกค้า
+7. ส่งหลักฐานทั้งหมด (log ที่ mask uid, ผล SQL, ภาพ Telegram) ให้ Codex → ขออนุมัติ Pro แยก (apply 068 + `ADMIN_ALERT_DB_KEY` + chat id + deploy-pinned + recreate ทุก container)
+**ยังไม่ถือว่า "ย้ายแจ้งเตือนครบ"** จนกว่างานนอกแอป 4 เรื่อง (legacy stack ADMIN_LINE_USER_ID · monitor-proxy OTP · ener-ai standup LINE group · Hermes job ซ้ำ) จะมีข้อยุติจากกบ

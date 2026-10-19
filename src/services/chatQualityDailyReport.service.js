@@ -340,21 +340,29 @@ function buildReportText({ dateKey, convCount, okCount, problemCases, analyzeFai
  * @param {Date} [now]
  * @returns {Promise<{ skipped?: string, sent?: boolean, convCount?: number, problems?: number }>}
  */
-export async function runChatQualityDailySweep(now = new Date()) {
+/**
+ * @param {Date} [now]
+ * @param {{ dryRun?: boolean, reportDateKey?: string }} [opts] — dryRun (ops replay, Codex 19 ต.ค. ขั้น staging ข้อ 3): วิเคราะห์วันที่กำหนด
+ *   แล้วคืนข้อความรายงาน **ไม่ส่ง Telegram ไม่เขียน app_settings ไม่ใช้ redis dedupe ไม่เช็กชั่วโมง** (ยังเรียก Gemini เพื่อวิเคราะห์ตามปกติ)
+ */
+export async function runChatQualityDailySweep(now = new Date(), opts = {}) {
+  const dryRun = opts.dryRun === true;
   if (
-    String(process.env.CHAT_QUALITY_REPORT_ENABLED ?? "true").trim().toLowerCase() === "false"
+    String(process.env.CHAT_QUALITY_REPORT_ENABLED ?? "true").trim().toLowerCase() === "false" && !dryRun
   ) {
     return { skipped: "disabled" };
   }
-  if (!isTelegramConfigured()) return { skipped: "telegram_not_configured" };
-  if (bangkokHour(now) !== REPORT_HOUR_BKK) return { skipped: "not_report_hour" };
+  if (!dryRun && !isTelegramConfigured()) return { skipped: "telegram_not_configured" };
+  if (!dryRun && bangkokHour(now) !== REPORT_HOUR_BKK) return { skipped: "not_report_hour" };
 
   const dateKey = bangkokDateKey(now);
-  const first = await tryDedupeOnce(`scan_v2:chat_quality_report:${dateKey}`, 40 * 3600);
-  if (!first) return { skipped: "already_sent_today" };
+  if (!dryRun) {
+    const first = await tryDedupeOnce(`scan_v2:chat_quality_report:${dateKey}`, 40 * 3600);
+    if (!first) return { skipped: "already_sent_today" };
+  }
 
-  // กบ 21 ก.ค.: ดึงเต็มวันปฏิทินของเมื่อวาน 00:00-23:59 เวลาไทย (ไม่ใช่ 24 ชม ย้อนจากตอนรัน)
-  const reportDateKey = bangkokDateKey(new Date(now.getTime() - 24 * 3600 * 1000));
+  // กบ 21 ก.ค.: ดึงเต็มวันปฏิทินของเมื่อวาน 00:00-23:59 เวลาไทย (ไม่ใช่ 24 ชม ย้อนจากตอนรัน) · dryRun ระบุวันเองได้
+  const reportDateKey = dryRun && /^\d{4}-\d{2}-\d{2}$/.test(String(opts.reportDateKey || "")) ? String(opts.reportDateKey) : bangkokDateKey(new Date(now.getTime() - 24 * 3600 * 1000));
   const dayRange = getBangkokDayUtcRangeExclusiveEnd(reportDateKey);
   let { data: rows, error } = await supabase
     .from("line_conversation_messages")
@@ -458,6 +466,10 @@ export async function runChatQualityDailySweep(now = new Date()) {
     truncatedUsers,
     policySummary: policy.summary,
   });
+  if (dryRun) {
+    // replay แบบไม่ส่ง: คืนรายงาน + นโยบายที่ใช้ ให้ ops ตรวจ (ช่วงประวัติไม่ครบต้องขึ้น unknown)
+    return { dryRun: true, reportDateKey, report, policy, convCount: targetIds.length, okCount, problems: problemCases.length, analyzeFailed };
+  }
   // เก็บฉบับล่าสุดให้ Hermes Agent ดึงผ่าน /internal/chat-quality/latest (best-effort)
   try {
     await setAppSetting("chat_quality_last_report", {
