@@ -99,6 +99,14 @@ State-based judgement (flow-role 26 ส.ค. — ห้ามตัดสิน�
 - [paywall_deferred_report_pending] / [payment_pick_package_menu] after the customer replied to a paywall = NORMAL flow
 Do NOT flag: normal polite replies, the bot declining to answer authenticity/price (that is correct), short answers, system paywall cards, image messages you cannot see, in-persona master roleplay as described above.
 
+POLICY-AT-TIME RULES (Codex 19 ต.ค. 2026 — นโยบายสิทธิ์ฟรีเปลี่ยนได้ตามกำหนดการ; STATE header มีบรรทัด POLICY และ USER):
+- Judge every free-quota statement by the policy IN EFFECT AT THE TIME OF THE REPLY (POLICY line / its time split) — never by today's policy. Under "ฟรีรายวัน", promising "พรุ่งนี้มีฟรี/ฟรีวันนี้/รีเซ็ตหลังเที่ยงคืน" is CORRECT (also verify the USER line: the quota must really be exhausted before the bot says so).
+- After the policy changed to "ฟรีเฉพาะบัญชีใหม่" or "ปิดสิทธิ์ฟรี", any promise of daily free / tomorrow / reset = "ข้อมูลสิทธิ์ผิด" (severity high) — BUT "บัญชีใหม่ที่เข้าเกณฑ์ทดลองรวม 2 ครั้ง" remains correct; never conclude that no free of any kind exists.
+- Separate "asks about OLD results / compare items already scanned" from "asks for a NEW scan": an exhausted scan quota is NEVER a reason to block or deflect the owner's old results. Answering such a question with a paywall/"หมดสิทธิ์"/price = "ตอบไม่ตรงคำถาม (ผลเก่า)" (high). If the bot lacks data it must say what is missing — no guessed scores, no selling.
+- Bot lines tagged [template] are system templates (pre_scan_ack, object-info gate, paywall cards, feature intros like synergy/คลัง): do NOT flag them as AI-reveal/off-persona/selling by wording alone; only flag a template if its FACT contradicts STATE/USER (e.g. wrong count, promise with no job). Words like "คลัง", "ส่งให้อาจารย์", "เดี๋ยวผมส่งให้อาจารย์ดู" are in-persona feature/admin wording, NOT AI disclosure.
+- "ส่งให้อาจารย์แล้ว/ส่งต่อแล้ว" must be checked against STATE jobs: a handoff with no job/ack/answer afterwards = "รับปากส่งต่อแล้วเงียบ"; with a job that completed = normal.
+- If the customer directly asks whether this is AI/บอท and the bot answers truthfully and briefly, that is NOT an error (do not flag honesty); flag only unprompted self-references to being a system/bot or impersonation claims.
+
 Two false-positive traps to avoid (กบ 22 ก.ค. — both happened):
 1. NUMBERS FROM REAL REPORTS: you cannot see the scan reports, but the bot can. If the conversation shows a scan completed earlier (customer sent a photo and got a result), numbers the bot quotes (คะแนน/เปอร์เซ็นต์/ด้านเด่น) usually come from that real report — do NOT flag them. Only flag invented numbers when it is clear no report exists yet (e.g. customer just sent the photo, bot said "รอสักครู่", then suddenly quotes results before any delivery).
 2. SYSTEM PAYWALL TEXT: messages listing package prices right after the customer runs out of free quota (pattern: "ใช้สิทธิ์สแกนฟรีครบแล้ว" + prices 29/49/399) are automated system templates the owner designed — correct behavior, never flag as "เสนอขายเอง".
@@ -120,10 +128,11 @@ function speakerLabel(r) {
   return "บอท";
 }
 
-function buildTranscript(rows, stateHeader = "") {
+export function buildTranscript(rows, stateHeader = "", classify = null) {
   const lines = rows.map((r) => {
     const rt = r.role === "bot" ? String(r.metadata_json?.replyType || "").trim() : "";
-    return `[${bangkokHm(r.created_at)}] ${speakerLabel(r)}${rt ? ` [${rt}]` : ""}: ${String(r.text || "").slice(0, 500)}`;
+    const src = r.role === "bot" && classify ? classify(r) : null; // template | ai | unknown (Codex 19 ต.ค.: แยกแหล่งก่อนให้คะแนน)
+    return `[${bangkokHm(r.created_at)}] ${speakerLabel(r)}${rt ? ` [${rt}]` : ""}${src ? ` [${src}]` : ""}: ${String(r.text || "").slice(0, 500)}`;
   });
   let out = (stateHeader ? `${stateHeader}\n` : "") + lines.join("\n");
   if (out.length > MAX_TRANSCRIPT_CHARS_PER_USER) {
@@ -133,9 +142,45 @@ function buildTranscript(rows, stateHeader = "") {
   return out;
 }
 
+const POLICY_LABEL = { daily: "ฟรีรายวัน (ทุกบัญชี)", new_customer: "ไม่มีฟรีรายวัน — ฟรีเฉพาะบัญชีใหม่ที่เข้าเกณฑ์ ทดลองรวม 2 ครั้ง", none: "ปิดสิทธิ์ฟรีทุกบัญชี (แพ็ก/โบนัสใช้ได้)" };
+const thaiHm = (iso) => bangkokHm(iso);
+
+/**
+ * นโยบายฟรี "ณ เวลาที่ตอบ" ของวันที่ตรวจ (Codex 19 ต.ค. 2026) — จาก free_policy_status (mode ปัจจุบัน, last_applied, schedule)
+ * คืน windows [{fromIso,toIso,mode}] ครอบวัน + สรุปไทย · ห้ามนำกติกาวันนี้ไปตัดสินข้อความวันก่อนเปลี่ยน
+ * @param {object|null} status ผล RPC free_policy_status(null)
+ * @param {{ startIso: string, endIso: string }} dayRange
+ */
+export function resolvePolicyWindowsForDay(status, dayRange) {
+  const start = Date.parse(dayRange.startIso), end = Date.parse(dayRange.endIso);
+  const cur = status && ["daily", "new_customer", "none"].includes(status.mode) ? status.mode : null;
+  if (!cur) return { windows: [], summary: "POLICY: (อ่านนโยบายไม่ได้ — ห้ามตัดสินเรื่องสิทธิ์ฟรีจากข้อความ)" };
+  // เหตุการณ์เปลี่ยนโหมดล่าสุดที่พิสูจน์ได้: schedule ที่ applied หรือ pending-แต่ถึงเวลาแล้ว
+  const ev = [];
+  const la = status.last_applied;
+  if (la && la.effective_at && ["daily", "new_customer", "none"].includes(la.target_mode)) ev.push({ at: Date.parse(la.effective_at), from: la.applied_from_mode || null, to: la.target_mode });
+  const sc = status.schedule;
+  if (sc && sc.status === "pending" && sc.effective_at && Date.parse(sc.effective_at) <= Date.now() && ["daily", "new_customer", "none"].includes(sc.target_mode)) ev.push({ at: Date.parse(sc.effective_at), from: status.stored_mode || null, to: sc.target_mode });
+  ev.sort((a, b) => b.at - a.at);
+  const last = ev[0] || null;
+  const iso = (ms) => new Date(ms).toISOString();
+  if (last && last.at > start && last.at < end) {
+    const before = last.from || "unknown";
+    return { windows: [{ fromIso: iso(start), toIso: iso(last.at), mode: before }, { fromIso: iso(last.at), toIso: iso(end), mode: last.to }],
+      summary: `POLICY (ณ วันนั้น): ก่อน ${thaiHm(iso(last.at))} น. = ${POLICY_LABEL[before] || before} · ตั้งแต่ ${thaiHm(iso(last.at))} น. = ${POLICY_LABEL[last.to]} — ตัดสินข้อความตามเวลาที่ตอบ`, changedAtIso: iso(last.at) };
+  }
+  if (last && last.at >= end) {
+    const before = last.from || "unknown";
+    return { windows: [{ fromIso: iso(start), toIso: iso(end), mode: before }],
+      summary: `POLICY (ณ วันนั้น): ${POLICY_LABEL[before] || before} (นโยบายเปลี่ยนเป็น ${POLICY_LABEL[last.to]} ภายหลัง ตั้งแต่ ${new Date(last.at).toLocaleString("th-TH", { timeZone: "Asia/Bangkok", dateStyle: "medium", timeStyle: "short" })} — ห้ามใช้กติกาใหม่ตัดสินวันนี้)` };
+  }
+  return { windows: [{ fromIso: iso(start), toIso: iso(end), mode: cur }], summary: `POLICY (ณ วันนั้น): ${POLICY_LABEL[cur]}${cur !== "daily" ? " — คำสัญญาฟรีรายวัน/พรุ่งนี้/รีเซ็ต = ข้อมูลสิทธิ์ผิด แต่ 'บัญชีใหม่ที่เข้าเกณฑ์ทดลองรวม 2 ครั้ง' ถูกต้อง" : ""}` };
+}
+
 /**
  * STATE header ให้ evaluator (flow-role 26 ส.ค.): job status/delivery timing + payment state ของวันนั้น
- * — ห้ามให้ LLM เดา object_info_gate / pending_verify จากข้อความอย่างเดียว
+ * + POLICY ณ วันนั้น + USER (ลูกค้าใหม่/เก่า, ทดลองใช้ไป, แพ็ก/โบนัส) — Codex 19 ต.ค. 2026
+ * — ห้ามให้ LLM เดา object_info_gate / pending_verify / สิทธิ์ฟรี จากข้อความอย่างเดียว
  */
 export async function buildStateHeader(lineUserId, dayRange, deps = {}) {
   const db = deps.supabase || supabase;
@@ -147,8 +192,21 @@ export async function buildStateHeader(lineUserId, dayRange, deps = {}) {
   ]);
   const j = (jobs || []).map((x) => `${bangkokHm(x.created_at)} job ${String(x.id).slice(0, 8)} ${x.status} (upd ${bangkokHm(x.updated_at)})`);
   const p = (pays || []).map((x) => `${bangkokHm(x.created_at)} payment ${x.status}${x.slip_verify_status ? `/${x.slip_verify_status}` : ""} (upd ${bangkokHm(x.updated_at)})`);
-  if (!j.length && !p.length) return "STATE: (no scan job / payment today)";
-  return `STATE:\n${[...j, ...p].join("\n")}`;
+  const extra = [];
+  const pol = deps.policy ?? null; // { windows, summary } จาก resolvePolicyWindowsForDay (คำนวณครั้งเดียวต่อรอบ)
+  if (pol?.summary) extra.push(pol.summary);
+  try {
+    const { data: tr } = await db.rpc("new_customer_trial_status", { p_line_user_id: lineUserId });
+    const { data: u } = await db.from("app_users").select("created_at,paid_until,paid_remaining_scans,bonus_scans").eq("line_user_id", lineUserId).maybeSingle();
+    if (u) {
+      const cutoff = tr?.eligible_since ? Date.parse(tr.eligible_since) : NaN;
+      const isNew = Number.isFinite(cutoff) && Date.parse(u.created_at) >= cutoff;
+      const paidActive = u.paid_until && Date.parse(u.paid_until) > Date.now() && Number(u.paid_remaining_scans) > 0;
+      extra.push(`USER: บัญชีเริ่มใช้ ${new Date(u.created_at).toLocaleDateString("th-TH", { timeZone: "Asia/Bangkok" })} (${Number.isFinite(cutoff) ? (isNew ? "ลูกค้าใหม่ที่เข้าเกณฑ์ทดลอง" : "ลูกค้าเก่า ไม่เข้าเกณฑ์ทดลอง") : "ยังไม่มี cutoff"}) · ทดลองใช้ไป ${Number(tr?.used) || 0}/2 · แพ็ก ${paidActive ? `เหลือ ${u.paid_remaining_scans} ครั้ง` : "ไม่มี/หมดอายุ"} · โบนัส ${Number(u.bonus_scans) || 0} — สิทธิ์รายคนยึดจากบรรทัดนี้ ห้ามเดา`);
+    }
+  } catch { /* ไม่มีข้อมูล = ไม่ใส่บรรทัด USER */ }
+  if (!j.length && !p.length && !extra.length) return "STATE: (no scan job / payment today)";
+  return `STATE:\n${[...extra, ...(j.length || p.length ? [...j, ...p] : ["(no scan job / payment today)"])].join("\n")}`;
 }
 
 function safeParseJson(raw) {
@@ -185,9 +243,10 @@ async function analyzeConversation(transcript) {
 /**
  * ประกอบรายงานไทยแบบ copy ส่งต่อได้ทั้งก้อน
  */
-function buildReportText({ dateKey, convCount, okCount, problemCases, analyzeFailed, truncatedUsers }) {
+function buildReportText({ dateKey, convCount, okCount, problemCases, analyzeFailed, truncatedUsers, policySummary = "" }) {
   const head = [
     `📋 ตรวจแชทของวันที่ ${dateKey} (00:00-23:59 เวลาไทย)`,
+    ...(policySummary ? [policySummary] : []),
     `บทสนทนา ${convCount} ราย · ปกติ ${okCount} · มีประเด็น ${problemCases.length}${analyzeFailed ? ` · ตรวจไม่ได้ ${analyzeFailed}` : ""}`,
   ];
   if (!problemCases.length) {
@@ -261,9 +320,12 @@ export async function runChatQualityDailySweep(now = new Date()) {
   }
   // ต้องมีข้อความลูกค้าอย่างน้อย 1 (บอท push ฝ่ายเดียว เช่น แจ้งเตือน ไม่ต้องตรวจ)
   // จัดลำดับความสำคัญแทน 60 คนแรกตามเวลา (11 ส.ค.): ด่า/เงิน/คุยเยอะ มาก่อน
-  const { prioritizeUsers, runDeterministicChecks } = await import(
+  const { prioritizeUsers, runDeterministicChecks, classifyBotSource } = await import(
     "./chatQualityDeterministic.util.js"
   );
+  // นโยบายฟรี ณ วันนั้น (ครั้งเดียวต่อรอบ): อ่านไม่ได้ = ไม่ตัดสินเรื่องสิทธิ์ฟรี
+  let policy = { windows: [], summary: "" };
+  try { const { data: ps } = await supabase.rpc("free_policy_status", { p_line_user_id: null }); policy = resolvePolicyWindowsForDay(ps, dayRange); } catch { policy = resolvePolicyWindowsForDay(null, dayRange); }
   const userIds = prioritizeUsers(byUser);
   const truncatedUsers = userIds.length > MAX_USERS_ANALYZED;
   const targetIds = userIds.slice(0, MAX_USERS_ANALYZED);
@@ -275,13 +337,13 @@ export async function runChatQualityDailySweep(now = new Date()) {
     const convRows = byUser.get(uid);
     // deterministic ก่อน (โค้ดจับแม่นกว่า LLM): อาจารย์+คำเงิน / ข้อความวนซ้ำ / handoff ค้าง
     try {
-      for (const f of runDeterministicChecks(convRows).slice(0, 5)) {
+      for (const f of runDeterministicChecks(convRows, { policyWindows: policy.windows }).slice(0, 5)) {
         problemCases.push({ userId: uid, ...f, contextSummary: "" });
       }
     } catch { /* deterministic พังไม่ขวาง LLM */ }
     try {
-      const stateHeader = await buildStateHeader(uid, dayRange).catch(() => "");
-      const verdict = await analyzeConversation(buildTranscript(convRows, stateHeader));
+      const stateHeader = await buildStateHeader(uid, dayRange, { policy }).catch(() => policy.summary || "");
+      const verdict = await analyzeConversation(buildTranscript(convRows, stateHeader, classifyBotSource));
       if (!verdict) {
         analyzeFailed += 1;
         continue;
@@ -323,6 +385,7 @@ export async function runChatQualityDailySweep(now = new Date()) {
     problemCases,
     analyzeFailed,
     truncatedUsers,
+    policySummary: policy.summary,
   });
   // เก็บฉบับล่าสุดให้ Hermes Agent ดึงผ่าน /internal/chat-quality/latest (best-effort)
   try {

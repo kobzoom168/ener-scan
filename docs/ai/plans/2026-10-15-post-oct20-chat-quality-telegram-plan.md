@@ -143,3 +143,20 @@
 3. ตัวตรวจคุณภาพ: ควรแยก "ข้อความ template/ระบบส่งตามเหตุการณ์" ออกจาก "คำตอบ LLM" ก่อนให้คะแนน (เคสนี้ให้ "รุนแรง" กับ template) และตรวจตัวเลขเทียบ DB ก่อนสรุปว่าเผย AI/ขาย — เพิ่มเป็นเคส regression ของ detector (§5)
 
 ไม่ได้ทำ: ไม่แก้ prompt/template/detector จากรายงานนี้ · ไม่ส่งข้อความหาลูกค้า
+
+## §10 ปรับเกณฑ์ตรวจ `ener_chat_quality` ตามนโยบาย ณ เวลาที่ตอบ (Codex 19 ต.ค. 2026 · 6 ข้อ) — patch เสร็จ ยังไม่ deploy
+
+**ขอบเขต:** แก้เฉพาะตัวตรวจ (`chatQualityDeterministic.util.js`, `chatQualityDailyReport.service.js`) + regression · **ไม่แก้นโยบาย ไม่แก้ยอดสิทธิ์/ข้อความถึงลูกค้า** (static test ยืนยัน service อ่านอย่างเดียว)
+
+| ข้อ Codex | ที่ทำ |
+|---|---|
+| 1 ตรวจโหมด Pro read-only | ทำแล้ว 19 ต.ค. 08:08 ไทย (§15 rollout doc): `new_customer` cutoff 19 ต.ค. 00:00 |
+| 2 ตัดสินย้อนหลังด้วยนโยบาย ณ เวลาที่ตอบ | `resolvePolicyWindowsForDay(free_policy_status, dayRange)` → windows `[{from,to,mode}]` จาก `last_applied.effective_at`/`applied_from_mode` (หรือ schedule pending ที่ถึงเวลาแล้ว) · วันที่เปลี่ยนกลางช่วงได้ 2 window · อ่าน status ไม่ได้ = ไม่ตัดสินเรื่องสิทธิ์ · บรรทัด `POLICY (ณ วันนั้น): …` ขึ้นหัวรายงาน + STATE header · prompt: "judge by policy IN EFFECT AT THE TIME OF THE REPLY — never by today's policy" |
+| 3 หลังเปลี่ยนโหมด สัญญาฟรีรายวัน/พรุ่งนี้/รีเซ็ต = ข้อมูลสิทธิ์ผิด · ยอมรับบัญชีใหม่ 2 ครั้ง | `detectDailyPromiseAgainstPolicy` (high) เฉพาะ window ที่ mode ≠ daily · `hasDailyFreePromise` ไม่นับประโยคปฏิเสธ ("ไม่มีฟรีรายวันแล้ว") · "ทดลองฟรี 2 ครั้ง" ไม่โดน · บรรทัด `USER:` ในหัวรายงาน (ลูกค้าใหม่/เก่าเทียบ cutoff, ทดลองใช้ไป x/2, แพ็ก, โบนัส จาก RPC `new_customer_trial_status` + `app_users`) |
+| 4 แยก "ถามผลเก่า/เปรียบเทียบ" จาก "ขอสแกนใหม่" | `detectOldResultAnsweredWithPaywall` (high, ไม่ขึ้นกับนโยบาย): ลูกค้าถาม `OLD_RESULT_QUESTION_RE` แล้วคำตอบบอทแรกภายใน 3 นาทีเป็น paywall (replyType หรือข้อความ) · prompt: โควต้าหมด "NEVER a reason to block or deflect the owner's old results" / ขาดข้อมูลให้บอกว่าขาดอะไร / no guessed scores, no selling |
+| 5 เลิกจัด "คลัง/ส่งให้อาจารย์" เป็นเผย AI อัตโนมัติ | `classifyBotSource(row)` → `[template]`/`[ai]`/`[unknown]` ติดทุกบรรทัดบอทใน transcript · prompt: template ตัดสินเฉพาะ FACT ขัด STATE/USER · "คลัง/ส่งให้อาจารย์/เดี๋ยวผมส่งให้อาจารย์ดู" = in-persona · "ส่งให้อาจารย์แล้ว" ต้องเทียบ STATE jobs · ลูกค้าถามตรงว่าเป็น AI แล้วตอบจริงสั้น ๆ = ไม่ใช่ error |
+| 6 regression สามเคส + ก่อน/หลังเวลามีผล | `tests/chatQuality.policyAtTime.test.js` 10 เคส: เคส 1 (07:12 ถามของที่ส่งไป → paywall "พรุ่งนี้ยังมีฟรี": 16 ต.ค. จับเฉพาะ `old_result_paywall`; ย้ายไป 19 ต.ค. จับเพิ่ม `daily_promise_policy_mismatch`) · เคส 2 (07:44 template "เดี๋ยวผมส่งให้อาจารย์ดู" + job จริง → ไม่จับ; 07:48 "รูปก่อนหน้านี้" → paywall จับ) · เคส 3 (prompt: คลัง/Synergy template ไม่ใช่เผย AI) · คร่อมเวลา 2026-10-18T17:00Z ก่อน=ปล่อย หลัง=จับ · schedule pending ถึงเวลา · status null · ขอสแกนใหม่→paywall ไม่จับ · ตอบจากรายงานเดิม ไม่จับ · STATE header ลูกค้าเก่า/ใหม่ · static read-only |
+
+**ผลทดสอบ:** `chatQuality.policyAtTime` 10/10 · `chatQualityDeterministic.util` 9/9 · `flowRole.behavior` ผ่าน (rubric เดิมคงอยู่) · gate `scripts/test-baseline-check.sh` ✅ ไม่มี fail ใหม่
+**ไม่ได้ทำ:** replay แถวจริง 16 ต.ค. จาก Pro ด้วยโค้ดใหม่ (permission อ่าน prod ถูกปฏิเสธในรอบนี้) — เคสในเทสต์สร้างจากข้อเท็จจริงที่อ่านจาก DB เมื่อ 19 ต.ค. เช้า (replyType/เวลา/ลำดับจริง) · รายงานรายวันรอบถัดไปบน staging/Pro หลัง deploy จะเป็นหลักฐานสด
+**Deploy:** ยังไม่ · รอ Codex ตรวจ SHA แล้วขออนุมัติแยก (ไม่ต้องมี migration ใหม่; ใช้ RPC `free_policy_status`/`new_customer_trial_status` ที่มีบน Pro แล้ว)
