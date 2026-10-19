@@ -204,10 +204,10 @@ function fireMismatchAlert(entry, banned, deps) {
       if (!(await tryDedupeOnce(key, 3600))) return;
       let sent = false;
       try {
-        const { sendTelegramText } = await import("../telegramNotify.service.js");
+        const { sendAdminAlert: sendTelegramText, maskUid } = await import("../adminAlerts/adminAlert.service.js");
         const res = await Promise.race([
           sendTelegramText(
-            `[CRITICAL] แบน/ปลดแบนยังไม่ลงตัว: ${entry.uid}\nสั่ง ${entry.reason} (คาด ${entry.targetState}) แต่ DB เป็น ${banned ? "banned" : "unbanned"}\nระบบจะ retry ต่อไม่มีหมดอายุ — ตรวจด้วยคำสั่ง งานแบนค้าง`,
+            `[CRITICAL] แบน/ปลดแบนยังไม่ลงตัว: ${maskUid(entry.uid)}\nสั่ง ${entry.reason} (คาด ${entry.targetState}) แต่ DB เป็น ${banned ? "banned" : "unbanned"}\nระบบจะ retry ต่อไม่มีหมดอายุ — ตรวจด้วยคำสั่ง งานแบนค้าง`,
           ),
           new Promise((r) => setTimeout(r, 5000)),
         ]);

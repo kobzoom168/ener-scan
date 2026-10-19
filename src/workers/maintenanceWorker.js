@@ -242,6 +242,13 @@ async function runOnce() {
   await sweepStaleScanProcessing();
   await sweepBonusReleases();
   await sweepFreePolicySchedule();
+  // 19 ต.ค. 2026: ส่งแจ้งเตือนแอดมินที่ค้างใน outbox (Telegram เท่านั้น ไม่มี fallback LINE)
+  try {
+    const { sweepAdminAlertOutbox } = await import("../services/adminAlerts/adminAlert.service.js");
+    await sweepAdminAlertOutbox();
+  } catch (e) {
+    console.error(JSON.stringify({ event: "ADMIN_ALERT_OUTBOX_SWEEP_ERROR", message: String(e?.message || e).slice(0, 140) }));
+  }
   // P0-G: ตามหัก paid quota ที่ค้าง (ledger pending / job delivered ที่ ledger หาย) — sql/055
   try {
     const { sweepQuotaLedger } = await import("../services/scanV2/quotaLedger.util.js");

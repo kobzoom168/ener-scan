@@ -1,4 +1,4 @@
-# md5(prosrc) อ้างอิงของฟังก์ชัน migration ชุด three-tasks (057/061/062/063/064/065/066/067)
+# md5(prosrc) อ้างอิงของฟังก์ชัน migration ชุด three-tasks (057/061/062/063/064/065/066/067/068)
 # ที่มา: staging DB ener_scan_staging 30 ก.ย. 2026 หลัง apply ไฟล์ใน repo ตามลำดับ + integration tests ผ่าน
 # free_policy_* + new_customer_trial_status + guard_new_customer_trial_job + set_new_customer_trial_policy + free_policy_lock + guard_free_policy_settings = นิยาม 067 รอบ 3 (14 ต.ค. 2026 Codex: guard owner-check SECURITY INVOKER + เวลาหลังล็อก clock_timestamp; apply 057→064→065→066→067 ลง DB ใช้แล้วทิ้ง; ฟังก์ชันอื่น md5 ไม่เปลี่ยน) · telegram_settings_* = นิยาม 066 (2 ต.ค. 2026, apply 057→064→065→066 ลง DB ใช้แล้วทิ้ง) · new_customer_trial_used = นิยาม 065 (1 ต.ค. 2026, จากการ apply 057→064→065 ลง DB ใช้แล้วทิ้ง) · 057/064: ตรงกับผลจากการ apply ไฟล์ commit ลง DB ใช้แล้วทิ้ง (ตรวจ 26 ก.ย.) · ใช้กับ scripts/ops/verify-migration-versions.sh
 approve_payment_and_grant 07362f4b541c1a7da38e508a557f9757
@@ -32,3 +32,5 @@ free_policy_stored_mode 468056730e1bc7483129b0268f2647d5
 set_free_policy_mode 61df47a5a58f86f0734e09aef88d133b
 free_policy_lock eb13d21f1101b13f56103141f2b8284f
 guard_free_policy_settings 04def842bcd2819e512d19f233b9864a
+admin_alert_outbox_claim 8f244aeadef62d8091311f98b2ff5850
+admin_alert_outbox_finish 1d7622996df7bb8fb4462eab0a45e493

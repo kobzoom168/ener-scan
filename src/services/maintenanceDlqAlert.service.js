@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
-import line from "@line/bot-sdk";
 import { env } from "../config/env.js";
+import { sendAdminAlert as defaultSendAdminAlert } from "./adminAlerts/adminAlert.service.js";
 
 /**
  * DLQ Alert (maintenance): แจ้งแอดมินเมื่อมี outbound dead/failed — แก้ 14 ต.ค. 2026 (Codex):
@@ -8,6 +8,7 @@ import { env } from "../config/env.js";
  *  - สถานะเดิมที่ **ส่งสำเร็จแล้ว** แจ้งซ้ำไม่เกิน 1 ครั้ง/RESEND_SEC (6 ชม.) — marker ตั้ง **หลังส่งสำเร็จเท่านั้น** (ส่งล้ม = รอบถัดไปลองใหม่)
  *  - กันส่งพร้อมกันระยะสั้นด้วย lock แยก (LOCK_SEC < รอบ maintenance 60 วิ) ไม่ใช่ marker 6 ชม.
  *  - key แยก environment + ปลายทางแอดมิน · Redis ใช้ไม่ได้ = fail-open แจ้งทุกรอบเหมือนเดิม
+ *  - 19 ต.ค. 2026 (กบ/Codex): ส่ง Telegram ผ่าน adminAlert แทน LINE แอดมิน (ไม่มี fallback LINE) · marker ตั้งเมื่อส่งสำเร็จหรือเข้า outbox แล้ว
  *  - ไม่แตะ status/threshold ไม่ปิด alert · ข้อความระบุ environment และ "ฐานข้อมูลของระบบ" (ไม่ใช่ Supabase)
  */
 export const DLQ_ALERT_RESEND_SEC = 6 * 3600;
@@ -52,16 +53,14 @@ async function defaultRedis() {
 
 /**
  * @param {{ outDead?: number|null, outFailed?: number|null, items?: Array<{id:string, updated_at?:string|null}>, itemsError?: string|null }} counts
- * @param {{ env?: object, lineClient?: { pushMessage: Function }, redis?: { isAvailable: Function, getValue: Function, setValueWithTtl: Function, tryDedupeOnce: Function } }} [deps]
+ * @param {{ env?: object, sendAdminAlert?: Function, redis?: { isAvailable: Function, getValue: Function, setValueWithTtl: Function, tryDedupeOnce: Function } }} [deps]
  * @returns {Promise<{ sent: boolean, skipped?: string, signature?: string, error?: string }>}
  */
 export async function maybeSendDlqAlert(counts, deps = {}) {
   const e = deps.env ? { ...env, ...deps.env } : env;
-  const adminId = String(e.ADMIN_LINE_USER_ID || "").trim();
   const threshold = Number(e.CANARY_DLQ_DEAD_ALERT_THRESHOLD) || 1;
   const dead = counts.outDead ?? 0;
   const failed = counts.outFailed ?? 0;
-  if (!adminId) return { sent: false, skipped: "no_admin" };
   if (dead < threshold) return { sent: false, skipped: "below_threshold" };
 
   const envLabel = dlqEnvLabel(e);
@@ -69,7 +68,8 @@ export async function maybeSendDlqAlert(counts, deps = {}) {
   const itemsError = counts.itemsError ? String(counts.itemsError).slice(0, 120) : null;
   const signature = itemsError ? null : dlqSignature(counts);
   // key ปลายทางแอดมิน = hash ของ ID เต็ม (คนละคนที่ prefix เหมือนกันต้องไม่ชน) · log ย่อ 8 ตัวตามเดิม
-  const adminHash = crypto.createHash("sha256").update(adminId).digest("hex").slice(0, 16);
+  // 19 ต.ค. 2026: ปลายทาง = Telegram (adminAlert) · key = hash ของ chat id ที่ตั้ง (ไม่มี id เต็ม)
+  const adminHash = crypto.createHash("sha256").update(String(e.ADMIN_ALERT_TELEGRAM_CHAT_ID || "unconfigured")).digest("hex").slice(0, 16);
   const scope = `${envLabel}:${adminHash}`;
   const sentKey = `dlq_alert:sent:${scope}`;
   const lockKey = `dlq_alert:lock:${scope}:${signature ?? "partial"}`;
@@ -96,15 +96,17 @@ export async function maybeSendDlqAlert(counts, deps = {}) {
   if (itemsError) console.error(JSON.stringify({ event: "DLQ_ALERT_ITEMS_UNAVAILABLE", env: envLabel, reason: itemsError, note: "แจ้งตาม count ที่อ่านได้ ไม่ตั้ง marker ระยะยาว" }));
 
   const text = buildDlqAlertText({ envLabel, dead, failed, items: Array.isArray(counts.items) ? counts.items : [], itemsError });
-  const client = deps.lineClient ?? new line.Client({ channelAccessToken: e.CHANNEL_ACCESS_TOKEN, channelSecret: e.CHANNEL_SECRET });
+  const sendAlert = deps.sendAdminAlert ?? defaultSendAdminAlert;
+  let r;
   try {
-    await client.pushMessage(adminId, { type: "text", text });
-  } catch (err) {
-    // ส่งล้ม: ไม่ตั้ง marker → รอบถัดไปลองใหม่ (lock หมดอายุใน LOCK_SEC)
-    console.error("[DLQ_ALERT] push failed:", err?.message);
-    return { sent: false, error: String(err?.message || err).slice(0, 120), signature };
+    r = await sendAlert({ category: "dlq", severity: "high", text, dedupeKey: signature ? `dlq:${signature}` : null, dedupeSec: 0 }, { env: e });
+  } catch (err) { r = { ok: false, queued: false, reason: String(err?.message || err).slice(0, 120) }; }
+  if (!r?.ok && !r?.queued) {
+    // ส่งไม่ได้และเข้า outbox ไม่ได้: ไม่ตั้ง marker → รอบถัดไปลองใหม่ (lock หมดอายุใน LOCK_SEC)
+    console.error("[DLQ_ALERT] alert failed (not queued):", r?.reason);
+    return { sent: false, error: String(r?.reason || "alert_failed").slice(0, 120), signature };
   }
   if (redisOk && signature) { try { await redis.setValueWithTtl(sentKey, signature, DLQ_ALERT_RESEND_SEC); } catch { /* marker ตั้งไม่ได้ = รอบหน้าแจ้งซ้ำ (ปลอดภัยด้านไม่เงียบ) */ } }
-  console.log(JSON.stringify({ event: "DLQ_ALERT_SENT", env: envLabel, adminIdPrefix: adminId.slice(0, 8), outDead: dead, outFailed: failed, signature, itemsComplete: !itemsError, dedupe: !redisOk ? "fail-open" : signature ? "redis" : "none(items_unavailable)" }));
+  console.log(JSON.stringify({ event: "DLQ_ALERT_SENT", env: envLabel, channel: "telegram", queued: r.queued === true, outDead: dead, outFailed: failed, signature, itemsComplete: !itemsError, dedupe: !redisOk ? "fail-open" : signature ? "redis" : "none(items_unavailable)" }));
   return { sent: true, signature, itemsComplete: !itemsError };
 }

@@ -50,10 +50,18 @@ export function chunkTelegramText(text) {
  * @param {string} text plain text (ไม่ใช้ markdown — กัน escape พังกับข้อความลูกค้า)
  * @returns {Promise<{ ok: boolean, reason?: string, parts?: number }>}
  */
+function envLabel() {
+  const appEnv = String(process.env.APP_ENV || "").trim().toLowerCase();
+  if (appEnv) return appEnv;
+  try { const h = new URL(String(process.env.APP_BASE_URL || "")).hostname; if (h) return h; } catch { /* ignore */ }
+  return "unknown";
+}
 export async function sendTelegramText(text) {
   const cfg = readTelegramConfig();
   if (!cfg) return { ok: false, reason: "not_configured" };
-  const parts = chunkTelegramText(text);
+  // 19 ต.ค. 2026 (Codex): ทุกข้อความแอดมินต้องระบุ environment — Pro/staging ใช้ห้องเดียวกัน
+  const labeled = `[${envLabel()}] ${String(text || "").trim()}`;
+  const parts = chunkTelegramText(labeled);
   if (!parts.length) return { ok: false, reason: "empty" };
 
   for (let i = 0; i < parts.length; i++) {

@@ -482,7 +482,7 @@ test("alert lease: สำเร็จ → sent marker เต็ม TTL · lease 
   assert.equal(sent2, 0, "sent marker ต้องกันส่งซ้ำ");
 });
 
-test("channel isolation: Telegram ค้าง → timeout เอง + LINE alert ยังเดิน (ไม่โดนขวาง)", async () => {
+test("channel isolation (19 ต.ค. 2026: ไม่มีช่อง LINE แอดมินแล้ว): Telegram ค้าง → timeout เอง · LINE ไม่ถูกเรียกแม้ส่ง lineClient มา", async () => {
   const kv = new Map();
   let linePushed = 0;
   let seq2 = 0;
@@ -502,10 +502,10 @@ test("channel isolation: Telegram ค้าง → timeout เอง + LINE aler
       { type: "y", userId: "U8", dedupeSec: 3600, telegramText: "t", lineText: "l", lineClient: { pushMessage: async () => { linePushed += 1; } } },
       deps,
     );
-    assert.equal(linePushed, 1, "LINE ต้องส่งแม้ Telegram ค้าง");
+    assert.equal(linePushed, 0, "ช่อง LINE แอดมินถูกถอดแล้ว — ห้ามส่ง LINE แม้ผู้เรียกส่ง lineClient มา");
     assert.ok(Date.now() - t0 < 2000, "Telegram ค้างต้องโดน timeout ไม่ลากทั้งฟังก์ชัน");
     assert.equal(kv.has("alert:y:tg:U8"), false, "TG fail ห้ามตั้ง sent marker (lease หลุด รอบหน้าลองใหม่)");
-    assert.equal(kv.get("alert:y:line:U8"), "1");
+    assert.equal(kv.has("alert:y:line:U8"), false, "ไม่มี marker ของช่อง LINE อีก");
   } finally {
     if (prevAdmin === undefined) delete process.env.ADMIN_LINE_USER_ID; else process.env.ADMIN_LINE_USER_ID = prevAdmin;
   }

@@ -71,11 +71,13 @@ export async function sendCustomerAlert(p, deps = {}) {
   const acquireLease = deps.acquireLease || ((key, ttlMs) => acquireShortLock(key, ttlMs));
   const releaseLease = deps.releaseLease || ((key, token) => releaseShortLock(key, token));
   const renewLease = deps.renewLease || ((key, token, ttlMs) => renewShortLock(key, token, ttlMs));
+  // 19 ต.ค. 2026: Telegram เท่านั้น (adminAlert ใส่ env label + outbox) — ไม่มีช่อง LINE แอดมินอีก
   const sendTg =
     deps.sendTelegramText ||
     (async (t) => {
-      const { sendTelegramText } = await import("../telegramNotify.service.js");
-      return sendTelegramText(t);
+      const { sendAdminAlert } = await import("../adminAlerts/adminAlert.service.js");
+      const r = await sendAdminAlert({ category: "customer", severity: "med", text: t });
+      return { ok: r.ok === true || r.queued === true };
     });
   const uidPrefix = String(p.userId).slice(0, 8);
 
@@ -158,19 +160,8 @@ export async function sendCustomerAlert(p, deps = {}) {
       },
     }),
   ];
-  if (p.lineText && p.lineClient) {
-    channels.push(
-      sendViaChannel({
-        channel: "line",
-        doSend: async () => {
-          const adminUid = String(process.env.ADMIN_LINE_USER_ID || "").trim();
-          if (!adminUid) return false; // admin id หาย = delivery failure (lease หลุด รอบหน้าลองใหม่)
-          await p.lineClient.pushMessage(adminUid, { type: "text", text: p.lineText });
-          return true;
-        },
-      }),
-    );
-  }
+  // ช่อง LINE แอดมินถูกถอดแล้ว (กบ 19 ต.ค. 2026) — p.lineText/p.lineClient ถูกละเว้น
+  void p.lineText; void p.lineClient;
   await Promise.allSettled(channels);
 }
 

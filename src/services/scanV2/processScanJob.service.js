@@ -603,18 +603,10 @@ async function processScanJobInner(workerId, jobRow) {
     let rejText = null;
     if (rejAttempt >= 5) {
       rejText = ESCALATION_TEXT;
-      const adminId = String(process.env.ADMIN_LINE_USER_ID || "").trim();
-      if (adminId) {
-        await insertOutboundMessage({
-          line_user_id: adminId,
-          kind: "pre_scan_ack",
-          priority: OUTBOUND_PRIORITY.pre_scan_ack,
-          payload_json: {
-            text: `⚠️ ลูกค้า ${String(lineUserId).slice(0, 10)}… รูปโดนปัด ${rejAttempt} ครั้งติด (${rejReason})
-อาจารย์บอกเขาว่าจะรับไปดูเอง — เข้าไปช่วยเช็คใน OA หน่อย`,
-          },
-          status: "queued",
-        }).catch(() => {});
+      // 19 ต.ค. 2026: แจ้งแอดมินทาง Telegram (adminAlert) — เลิกยืมคิว outbound ของลูกค้าส่ง LINE แอดมิน
+      {
+        const { notifyAdminRejectionStreak } = await import("./smartRejection.service.js");
+        await notifyAdminRejectionStreak(null, lineUserId, rejAttempt, rejReason).catch(() => {});
       }
     } else {
       // วัดความมืดจริงจากรูป (mean luminance < 60/255 = มืด) — พลาด = ไม่ใช้ hint

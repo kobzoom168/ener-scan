@@ -42,12 +42,13 @@ export const ESCALATION_TEXT =
  * @param {*} client LINE client
  */
 export async function notifyAdminRejectionStreak(client, lineUserId, attempt, reason) {
+  void client; // 19 ต.ค. 2026: แจ้งแอดมินทาง Telegram (adminAlert) เท่านั้น — ไม่ใช้ LINE แล้ว
   try {
-    const adminId = String(process.env.ADMIN_LINE_USER_ID || "").trim();
-    if (!adminId || !client) return;
-    await client.pushMessage(adminId, {
-      type: "text",
-      text: `⚠️ ลูกค้า ${String(lineUserId).slice(0, 10)}… รูปโดนปัด ${attempt} ครั้งติด (${String(reason).slice(0, 40)})\nอาจารย์บอกเขาว่าจะรับไปดูเอง — เข้าไปช่วยเช็คใน OA หน่อย`,
+    const { sendAdminAlert, maskUid } = await import("../adminAlerts/adminAlert.service.js");
+    await sendAdminAlert({
+      category: "customer_stuck", severity: "med",
+      dedupeKey: `rejection:${String(lineUserId)}:${attempt}`, dedupeSec: 3600,
+      text: `⚠️ ลูกค้า ${maskUid(lineUserId)} รูปโดนปัด ${attempt} ครั้งติด (${String(reason).slice(0, 40)})\nอาจารย์บอกเขาว่าจะรับไปดูเอง — เข้าไปช่วยเช็คใน OA หน่อย`,
     });
   } catch {
     /* best-effort */

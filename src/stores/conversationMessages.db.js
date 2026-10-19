@@ -16,18 +16,14 @@ async function maybeAlertAjarnMoneyBreach(uid, body) {
     if (!AJARN_MONEY_RE.test(body)) return;
     const { tryDedupeOnce } = await import("../redis/scanV2Redis.js");
     if (!(await tryDedupeOnce(`chatq:money_alert:${uid}`, 3600))) return;
-    const { sendTelegramText, isTelegramConfigured } = await import(
-      "../services/telegramNotify.service.js"
-    );
-    if (!isTelegramConfigured()) return;
-    await sendTelegramText(
+    const { sendAdminAlert, maskUid } = await import("../services/adminAlerts/adminAlert.service.js");
+    await sendAdminAlert({ category: "critical", severity: "high", text:
       [
         "🔴 CRITICAL: เสียงอาจารย์หลุดคำการเงิน (แจ้งทันที)",
-        `user: ${uid}`,
+        `user: ${maskUid(uid)}`,
         `ข้อความ: "${body.slice(0, 300)}"`,
         "กติกา persona: เรื่องเงินต้องเป็นเสียงแอดมินเท่านั้น",
-      ].join("\n"),
-    );
+      ].join("\n") });
     console.log(
       JSON.stringify({ event: "CHAT_QUALITY_MONEY_BREACH_ALERT", lineUserIdPrefix: uid.slice(0, 8) }),
     );
