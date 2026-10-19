@@ -1,7 +1,7 @@
 // Probe เส้นแจ้งสลิป pending_verify บน **staging เท่านั้น** (Codex 19 ต.ค. 2026: เคสควบคุม ไม่โอนเงินจริง ไม่กดอนุมัติ)
 //  - เรียกฟังก์ชันจริง maybeNotifyAdminSlipPendingVerify ด้วย LINE client จริงของ staging → LINE แอดมิน (ADMIN_LINE_USER_ID) ได้ข้อความ "[ชำระเงิน] มีสลิปรอตรวจ"
 //    · paymentId สังเคราะห์ (ไม่มีแถว payments, ไม่มีสิทธิ์ใดเปลี่ยน) · ปิดช่อง Telegram approval ในโปรเซสนี้ (ไม่สร้างปุ่มอนุมัติให้ payment ปลอม)
-//    · staging ไม่ได้ตั้ง ADMIN_PAYMENT_SLIP_NOTIFY → เปิดเฉพาะใน env override ของ probe (ไม่แก้ .env)
+//    · ADMIN_PAYMENT_SLIP_NOTIFY ไม่ตั้ง = ค่าเริ่มต้น true (env.js; ปิดเฉพาะ false/0/no) → probe ใช้ env จริง ไม่ override (Codex 19 ต.ค.: การไม่มี flag ไม่ได้แปลว่าปิด)
 //  - ส่งข้อความลูกค้า replyType slip_manual_review (ถ้อยคำเดียวกับ webhook) ผ่าน gateway push ไปยัง Test UID ที่ระบุ (บัญชีทดสอบของกบ) → พิสูจน์ LINE ลูกค้ายังทำงาน
 //  - guard: ต้องเป็น staging (APP_BASE_URL host test.my-ener.uk หรือ APP_ENV=staging) + --confirm-staging + UID รูปแบบถูก · ไม่พิมพ์ token/UID เต็ม
 //  ใช้: docker run --rm --env-file /root/ener-scan-staging/.env --network <net> -v <path>/staging-slip-pending-verify-probe.mjs:/app/ops-probe.mjs:ro <image> node /app/ops-probe.mjs <TEST_UID> --confirm-staging
@@ -21,7 +21,6 @@ let tgCalled = false;
 await maybeNotifyAdminSlipPendingVerify({
   client, lineUserId: uid, paymentId, paymentRef: "SYNTH-PROBE", packageKey: null, slipUrl: null,
   reasons: ["synthetic_probe_no_payment_row"],
-  env: { ADMIN_PAYMENT_SLIP_NOTIFY: "1" }, // staging ไม่ตั้งค่า → เปิดเฉพาะโปรเซสนี้
   telegram: { notifyTelegramSlipPendingVerify: async () => { tgCalled = true; return { skipped: "synthetic_probe" }; } },
 });
 const r = await sendNonScanPushMessage({
