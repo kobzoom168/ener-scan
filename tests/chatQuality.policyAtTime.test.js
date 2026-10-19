@@ -304,4 +304,9 @@ test("static: replay แบบไม่ส่ง (dryRun) — คืนราย
   const sc = readFileSync("scripts/ops/chat-quality-replay.mjs", "utf8");
   assert.match(sc, /runChatQualityDailySweep\(new Date\(\), \{ dryRun: true, reportDateKey: dateKey \}\)/);
   assert.ok(!/sendTelegramText|setAppSetting|\.insert\(|\.update\(/.test(sc), "สคริปต์ replay อ่านอย่างเดียว");
+  assert.match(sc, /replace\(\/U\[0-9a-f\]\{32\}\/g, \(m\) => `\$\{m\.slice\(0, 8\)\}…`\)/, "Codex: buildReportText ใส่ uid เต็มในเคสมีปัญหา → replay ต้อง mask ก่อนพิมพ์");
+  assert.match(sc, /ไม่ใช่ทดสอบ offline/);
+  const probe = readFileSync("scripts/ops/staging-slip-pending-verify-probe.mjs", "utf8");
+  assert.match(probe, /not_staging/); assert.match(probe, /--confirm-staging/); assert.match(probe, /notifyTelegramSlipPendingVerify: async \(\) =>/, "probe ต้องไม่สร้างปุ่มอนุมัติ Telegram ให้ payment ปลอม");
+  assert.ok(!/from\("payments"\)|\.insert\(/.test(probe), "probe ไม่สร้างแถว payment");
 });

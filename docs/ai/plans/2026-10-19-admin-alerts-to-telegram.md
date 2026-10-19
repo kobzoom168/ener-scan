@@ -111,7 +111,7 @@
 7. ส่งหลักฐานทั้งหมด (log ที่ mask uid, ผล SQL, ภาพ Telegram) ให้ Codex → ขออนุมัติ Pro แยก (apply 068 + `ADMIN_ALERT_DB_KEY` + chat id + deploy-pinned + recreate ทุก container)
 **ยังไม่ถือว่า "ย้ายแจ้งเตือนครบ"** จนกว่างานนอกแอป 4 เรื่อง (legacy stack ADMIN_LINE_USER_ID · monitor-proxy OTP · ener-ai standup LINE group · Hermes job ซ้ำ) จะมีข้อยุติจากกบ
 
-## 9. ผลขั้น staging (19 ต.ค. 2026 14:30–14:55 ไทย) — กบเคาะห้อง (ก) + อนุมัติขั้น 1–6 · **Pro ยังไม่แตะ**
+## 9. ผลขั้น staging (19 ต.ค. 2026 14:30–14:55 ไทย) — กบเคาะห้อง (ก) + อนุมัติขั้น 1–6 · **สถานะ: deploy staging แล้ว รอปิดหลักฐาน (ไม่ใช่ผ่านครบ)** · Pro ยังไม่แตะ
 | ขั้น | ผล | หลักฐาน |
 |---|---|---|
 | 1 ops worktree | `/root/ener-ops-c102b71` HEAD = `c102b71715518ed0ada7cc8294c0bc44308ea0fb` · sha256 6 ไฟล์ตรงตาราง §8 ทั้งหมด | ผล `sha256sum` บน server เทียบตาราง |
@@ -121,7 +121,7 @@
 | 5 deploy | `DRY_RUN=1` ผ่าน (origin fetch frozen ref ได้) → `deploy-pinned.sh staging c102b71… --frozen-ref origin/pro/three-tasks-c102b71` สำเร็จ BLUE healthy, recreate web/worker-scan/worker-maintenance/worker-delivery (ไม่มี job ค้างก่อน recreate) · HEAD หลัง deploy = c102b71 dirty=none · images ใหม่: web `91e45639…` worker-scan `38af7ae2…` worker-maintenance `0663b4c0…` worker-delivery `0016718a…` · ทั้ง 3 คอนเทนเนอร์ที่ส่ง alert เห็น `ADMIN_ALERT_DB_KEY`/`ADMIN_ALERT_TELEGRAM_CHAT_ID` (ชื่อตัวแปร) | log deploy |
 | 6a DLQ → Telegram | `07:47:08Z ADMIN_ALERT_SENT env=test.my-ener.uk category=dlq parts=1` + `DLQ_ALERT_SENT channel=telegram queued=false outDead=1 dedupe=redis` **1 ครั้ง** → รอบถัดไป `07:48:08Z DLQ_ALERT_SKIPPED same_state_already_alerted` · log 4 คอนเทนเนอร์ไม่มี `pushMessage(admin|ADMIN_LINE_USER_ID|admin_push` = 0 · **รอกบยืนยันภาพข้อความ `[test.my-ener.uk][dlq][high]` ในแชต Kob** | docker logs -t |
 | 6b outbox/สิทธิ์ | outbox `empty` (ส่งตรงสำเร็จ ไม่มีแถว) · web_anon select/insert/update = f · web_anon EXECUTE RPC = 0/3 · writer EXECUTE 3/3 + table insert = f · authenticator เป็นสมาชิก writer = t | SQL |
-| 6c replay ไม่ส่ง | `chat-quality-replay.mjs` ใน image worker-maintenance ใหม่: 2026-10-16 และ 2026-10-19 → `auditState=complete` (อ่าน audit ได้แต่ staging ไม่มีประวัติ) → POLICY = **ไม่ทราบ — งดตัดสิน** (ไม่ฟันธง) convCount 0 · 2026-09-26 (วันที่มีแชตจริง 17 แถว) → วิเคราะห์ 1 บทสนทนา ปกติ 1 ปัญหา 0 POLICY unknown · log ไม่มี `CHAT_QUALITY_DAILY_REPORT` = ไม่มี Telegram ออก · ไม่มีข้อความถึงลูกค้า | output replay (uid mask) |
+| 6c replay ไม่ส่ง (**ไม่ใช่ offline**: ยังเรียก Gemini = ส่งข้อมูลแชตให้ผู้ให้บริการและมีค่าใช้จ่าย; ไม่ส่ง Telegram/LINE ไม่เขียนรายงาน/dedupe · output ที่แชร์ต้อง mask uid — รายงานต้นฉบับใส่ uid เต็มในเคสมีปัญหา; เคสที่รันไม่มีปัญหาจึงยังไม่ได้ทดสอบจุดนี้ → สคริปต์ mask แล้วใน commit ถัดไป) | `chat-quality-replay.mjs` ใน image worker-maintenance ใหม่: 2026-10-16 และ 2026-10-19 → `auditState=complete` (อ่าน audit ได้แต่ staging ไม่มีประวัติ) → POLICY = **ไม่ทราบ — งดตัดสิน** (ไม่ฟันธง) convCount 0 · 2026-09-26 (วันที่มีแชตจริง 17 แถว) → วิเคราะห์ 1 บทสนทนา ปกติ 1 ปัญหา 0 POLICY unknown · log ไม่มี `CHAT_QUALITY_DAILY_REPORT` = ไม่มี Telegram ออก · ไม่มีข้อความถึงลูกค้า | output replay (uid mask) |
 | 6d สลิป/LINE ลูกค้า | โค้ด L5 `adminPaymentSlipNotify` ไม่แตะ (static test) · **รอกบส่งสลิปทดสอบจาก Test UID บน staging OA** เพื่อดู log แจ้ง pending_verify เข้า LINE แอดมินตามเดิม + ลูกค้าได้ข้อความ LINE | รอ |
 
 **ค้างก่อนขอ Pro:** (1) กบยืนยันภาพ Telegram · (2) สลิปทดสอบ staging · (3) Codex ดู diff `3cde8c0..c102b71` (replay tool + runbook) · (4) งานนอกแอป 4 เรื่องยังไม่มีข้อยุติ → ยังไม่นับว่า "ย้ายครบ"
