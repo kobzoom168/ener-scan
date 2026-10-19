@@ -1,3 +1,4 @@
+import { isLlmReplyType } from "./chatQuality/botSource.util.js";
 import {
   detectSingleReportLink,
   buildReportLinkAutoFlex,
@@ -148,14 +149,16 @@ function recordSent(userId, dedupeKey, bodyText, inboundMessageId = null) {
 }
 
 
-/** persona 2 ชั้น (11 ส.ค. 2026): flow/บริการ = เสียงแอดมิน · consult LLM = ปนได้สองเสียง */
-function speakerMetaFor(replyType, speakerRoleOverride = null) {
+/** persona 2 ชั้น (11 ส.ค. 2026): flow/บริการ = เสียงแอดมิน · consult LLM = ปนได้สองเสียง
+ *  source (19 ต.ค. 2026 Codex ข้อ 7): "llm" เมื่อข้อความมาจากโมเดลจริง (replyType ในรายชื่อ LLM หรือ textSource="llm" จาก conv surface) · อื่น = "flow" */
+function speakerMetaFor(replyType, speakerRoleOverride = null, textSource = null) {
   const rt = String(replyType || "");
+  const source = textSource === "llm" || isLlmReplyType(rt) ? "llm" : "flow";
   // override จาก role router (persona hardening 12 ส.ค.): consult ถูก resolve เป็น
   // admin/ajarn/mixed ก่อนส่งแล้ว — ไม่ต้องเดาจาก replyType อีก
   const sp = String(speakerRoleOverride || "").trim();
-  if (sp) return { speakerRole: sp, replyType: rt, source: "flow" };
-  return { speakerRole: /consult/i.test(rt) ? "consult" : "admin", replyType: rt, source: "flow" };
+  if (sp) return { speakerRole: sp, replyType: rt, source };
+  return { speakerRole: /consult/i.test(rt) ? "consult" : "admin", replyType: rt, source };
 }
 
 function logGateway(payload) {
@@ -232,6 +235,7 @@ export async function sendNonScanReplyWithOptionalConvSurface(opts) {
   const sendRes = await sendNonScanReply({
     ...base,
     text,
+    textSource: usedAi ? "llm" : base.textSource ?? null, // ประทับแหล่งที่มาจริงลง metadata (chat quality)
   });
 
   if (convSurface) {
@@ -263,6 +267,8 @@ export async function sendNonScanReply(opts) {
     scanOfferMeta,
     /** @type {string|null|undefined} — เสียงผู้พูดจริงจาก role router (admin/ajarn/mixed) */
     speakerRoleOverride = null,
+    /** @type {"llm"|null|undefined} — ข้อความถูก rephrase/สร้างด้วยโมเดล (conv surface) → metadata.source="llm" */
+    textSource = null,
     turnPerf = undefined,
     /** @type {{ type: "sticker", packageId: string, stickerId: string } | null | undefined} */
     trailingStickerMessage = null,
@@ -411,7 +417,7 @@ export async function sendNonScanReply(opts) {
           await replyFlex(client, replyToken, flexToSend);
         }
         recordSent(uid, dedupeKey, body, inboundMessageId);
-        void insertLineConversationMessage(uid, "bot", body, speakerMetaFor(rt, speakerRoleOverride));
+        void insertLineConversationMessage(uid, "bot", body, speakerMetaFor(rt, speakerRoleOverride, textSource));
         if (scanOfferMeta && typeof scanOfferMeta === "object") {
           console.log(
             JSON.stringify({
@@ -484,7 +490,7 @@ export async function sendNonScanReply(opts) {
         await replyText(client, replyToken, body, quickReply);
       }
       recordSent(uid, dedupeKey, body, inboundMessageId);
-      void insertLineConversationMessage(uid, "bot", body, speakerMetaFor(rt, speakerRoleOverride));
+      void insertLineConversationMessage(uid, "bot", body, speakerMetaFor(rt, speakerRoleOverride, textSource));
       if (scanOfferMeta && typeof scanOfferMeta === "object") {
         console.log(
           JSON.stringify({

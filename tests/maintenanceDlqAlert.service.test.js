@@ -42,3 +42,22 @@ test("maybeSendDlqAlert: adminAlert throw หรือคืน not queued → �
   const r2 = await maybeSendDlqAlert({ outDead: 1, outFailed: 0 }, { env: baseEnv, redis: redisOff, sendAdminAlert: s2.sendAdminAlert });
   assert.equal(r2.sent, false); assert.match(r2.error, /lost/);
 });
+
+// Codex รอบ 2 ข้อ 1: เส้นจริง (ไม่ mock sendAdminAlert, ไม่ฉีด Telegram env ผ่าน deps.env) — ค่าตั้งใน process.env ต้องถูกอ่าน
+test("เส้นจริง: Telegram ตั้งใน process.env · deps.env = config env (ไม่มีตัวแปร Telegram) → ส่งถึง Telegram จริง (fetch fake) ไม่ใช่ not_configured", async () => {
+  const saved = { ...process.env };
+  const calls = [];
+  const fetchFake = async (url, init) => { calls.push({ url: String(url).replace(/bot[^/]+/, "bot<token>"), body: JSON.parse(init.body) }); return { ok: true, status: 200, json: async () => ({ ok: true }) }; };
+  try {
+    process.env.ADMIN_ALERT_TELEGRAM_CHAT_ID = "-1001000000000009";
+    process.env.TELEGRAM_BOT_TOKEN = "123456:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+    const r = await maybeSendDlqAlert({ outDead: 1, outFailed: 0, items: [{ id: "a1", updated_at: "2026-10-19T00:00:00Z" }] }, { env: { APP_ENV: "staging", CANARY_DLQ_DEAD_ALERT_THRESHOLD: 1, TELEGRAM_BOT_TOKEN: undefined }, redis: redisOff, fetch: fetchFake, alertRedis: { getValue: async () => null, setValueWithTtl: async () => {} }, db: { rpc: async () => ({ error: { message: "must not enqueue on success" } }) } });
+    assert.equal(r.sent, true, JSON.stringify(r)); assert.equal(calls.length, 1);
+    assert.equal(calls[0].body.chat_id, "-1001000000000009"); assert.match(calls[0].body.text, /^\[staging\]\[dlq\]\[high\]\n\[DLQ Alert\]\[staging\] outbound_messages\.dead = 1/);
+    // ไม่ตั้งใน process.env และไม่มีใน deps.env → not_configured (ไม่ยิง)
+    delete process.env.ADMIN_ALERT_TELEGRAM_CHAT_ID;
+    const oe = console.error; console.error = () => {};
+    let r2; try { r2 = await maybeSendDlqAlert({ outDead: 1, outFailed: 0, items: [{ id: "a2", updated_at: "2026-10-19T00:00:00Z" }] }, { env: { APP_ENV: "staging", CANARY_DLQ_DEAD_ALERT_THRESHOLD: 1 }, redis: redisOff, fetch: fetchFake }); } finally { console.error = oe; }
+    assert.equal(r2.sent, false); assert.match(r2.error, /not_configured/); assert.equal(calls.length, 1);
+  } finally { for (const k of ["ADMIN_ALERT_TELEGRAM_CHAT_ID", "TELEGRAM_BOT_TOKEN"]) { if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k]; } }
+});

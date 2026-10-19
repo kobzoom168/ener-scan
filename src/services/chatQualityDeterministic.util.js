@@ -141,18 +141,12 @@ export const OLD_RESULT_QUESTION_RE =
 export const PAYWALL_REPLY_TYPE_RE = /paywall|free_quota_exhausted|quota_exhausted|single_offer|offer_intro|existing_no_rights/i;
 export const PAYWALL_TEXT_RE = /(สิทธิ์ฟรี.{0,12}(ครบ|หมด)|ใช้สิทธิ์.{0,12}ครบ|เปิดสิทธิ์เพิ่ม|เปิดเพิ่มได้\s*\d+\s*บาท|เติมสิทธิ์เพื่อสแกน|\d+\s*บาท.{0,20}(ครั้ง|สแกน))/;
 /** คำสัญญาฟรีรายวัน (ใช้ได้เฉพาะเมื่อนโยบาย ณ เวลานั้นเป็น daily) — ไม่รวม "ทดลองฟรี 2 ครั้ง"/บัญชีใหม่ */
-export const DAILY_FREE_PROMISE_RE = /(พรุ่งนี้.{0,24}ฟรี|ฟรี.{0,12}พรุ่งนี้|ฟรีวันนี้|ฟรีรายวัน|ฟรีวันละ|วันละ\s*\d+\s*(ครั้ง|ชิ้น)|หลังเที่ยงคืน|รีเซ็ต.{0,10}(ฟรี|สิทธิ์)|สิทธิ์ฟรี.{0,10}(วันนี้|ของวัน))/;
+export const DAILY_FREE_PROMISE_RE = /(พรุ่งนี้.{0,24}ฟรี|ฟรี.{0,12}พรุ่งนี้|ฟรีวันนี้|ฟรีรายวัน|ฟรีวันละ|ฟรี.{0,10}วันละ|วันละ.{0,10}ฟรี|หลังเที่ยงคืน|รีเซ็ต.{0,10}(ฟรี|สิทธิ์)|สิทธิ์ฟรี.{0,10}(วันนี้|ของวัน))/;
+/** ลูกค้าขอสแกนใหม่/ถามราคา — ไม่ใช่คำถามถึงผลเก่า แม้มีคำว่า "เปรียบเทียบ" (Codex รอบ 2 ข้อ 6) */
+export const NEW_SCAN_OR_PRICE_RE = /(รูปใหม่|ส่งใหม่|ส่งเพิ่ม|สแกนใหม่|สแกนเพิ่ม|สแกนอีก|ชิ้นใหม่|อีกชิ้น|ขอสแกน|เท่าไหร่|เท่าไร|กี่บาท|ราคา|ค่าครู|เปิดสิทธิ์|ซื้อ|แพ็ก)/;
 
-const AI_REPLY_TYPE_RE = /^(gemini_|consult|chat_|llm_|persona_|front_)/;
-/** แหล่งข้อความบอท: template (deterministic/worker) · ai (LLM) · unknown (ไม่มี metadata) */
-export function classifyBotSource(row) {
-  if (row?.role !== "bot") return null;
-  const m = row.metadata_json || {};
-  const rt = String(m.replyType || "");
-  if (AI_REPLY_TYPE_RE.test(rt) || String(m.speakerRole || "") === "consult") return "ai";
-  if (rt || String(m.source || "") === "worker" || String(m.source || "") === "flow") return "template";
-  return "unknown";
-}
+import { classifyBotSource } from "./chatQuality/botSource.util.js";
+export { classifyBotSource, isLlmReplyType, isDeterministicReplyType, LLM_REPLY_TYPES } from "./chatQuality/botSource.util.js";
 
 /** โหมดนโยบาย ณ เวลา iso จาก windows [{fromIso,toIso,mode}] (ไม่มี window ครอบ = null) */
 export function policyModeAt(iso, windows = []) {
@@ -169,7 +163,8 @@ export function detectOldResultAnsweredWithPaywall(rows, { windowMin = 3 } = {})
   const out = [];
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i];
-    if (r.role !== "user" || !OLD_RESULT_QUESTION_RE.test(String(r.text || ""))) continue;
+    const ut = String(r.text || "");
+    if (r.role !== "user" || !OLD_RESULT_QUESTION_RE.test(ut) || NEW_SCAN_OR_PRICE_RE.test(ut)) continue; // ขอสแกนใหม่/ถามราคา = ไม่ใช่ถามผลเก่า
     const t0 = Date.parse(r.created_at);
     for (let j = i + 1; j < rows.length; j++) {
       const b = rows[j];
@@ -191,15 +186,18 @@ export function detectOldResultAnsweredWithPaywall(rows, { windowMin = 3 } = {})
  * ข้อมูลสิทธิ์ผิดตามนโยบาย ณ เวลาที่ตอบ: บอทสัญญาฟรีรายวัน/พรุ่งนี้/รีเซ็ต ขณะที่โหมดเวลานั้นไม่ใช่ daily
  * (ก่อนเปลี่ยนโหมด = ปกติ ไม่จับ · หลังเปลี่ยน = จับ severity high · "ทดลองฟรี 2 ครั้ง" ไม่ถูกจับ)
  */
-const NEGATION_BEFORE_RE = /(ไม่มี|ไม่ได้|ไม่ใช่|เลิก|ยกเลิก|งด|ปิด|หมดแล้ว|ไม่.{0,6}แล้ว)\s*$/;
-/** มีคำสัญญาฟรีรายวันจริง (ไม่นับประโยคปฏิเสธ เช่น "ไม่มีฟรีรายวันแล้ว", "ยกเลิกฟรีวันนี้") */
+/** ปฏิเสธ/ยกเลิก ภายในหน้าต่างรอบคำที่จับได้ (ก่อน 16 ตัวอักษร + ตัวคำ) */
+const NEGATION_IN_WINDOW_RE = /(ไม่มี|ไม่ได้|ไม่ใช่|ไม่.{0,8}(รีเซ็ต|ฟรี|แล้ว|ให้|นับ)|เลิก|ยกเลิก|งด|ปิดไป|ปิดแล้ว|หมดแล้ว|หมดไป|สิ้นสุด|ยุติ)/;
+/** บริบทที่ไม่ใช่ "ฟรีรายวัน": แพ็ก/สิทธิ์ที่ซื้อ/ทดลองบัญชีใหม่ */
+const NON_DAILY_CONTEXT_RE = /(แพ็ก|แพ็กเกจ|ทดลอง|บัญชีใหม่|ลูกค้าใหม่|สิทธิ์ที่(ซื้อ|เปิด|เติม)|เปิดสิทธิ์แล้ว|โบนัส)/;
+/** มีคำสัญญาฟรีรายวันจริง — ไม่นับประโยคปฏิเสธ ("พรุ่งนี้ไม่มีฟรีรายวันแล้ว", "สิทธิ์ทดลองไม่รีเซ็ตหลังเที่ยงคืน") หรือบริบทแพ็ก/ทดลอง */
 export function hasDailyFreePromise(text) {
   const txt = String(text || "");
   const re = new RegExp(DAILY_FREE_PROMISE_RE.source, "g");
   let m;
   while ((m = re.exec(txt))) {
-    const before = txt.slice(Math.max(0, m.index - 14), m.index);
-    if (!NEGATION_BEFORE_RE.test(before)) return true;
+    const win = txt.slice(Math.max(0, m.index - 16), m.index + m[0].length + 12); // ก่อน 16 + คำ + หลัง 12 ("ฟรีรายวันสิ้นสุดแล้ว")
+    if (!NEGATION_IN_WINDOW_RE.test(win) && !NON_DAILY_CONTEXT_RE.test(win)) return true;
     if (!m[0].length) re.lastIndex++;
   }
   return false;
@@ -212,7 +210,7 @@ export function detectDailyPromiseAgainstPolicy(rows, windows = []) {
     const txt = String(r.text || "");
     if (!hasDailyFreePromise(txt)) continue;
     const mode = policyModeAt(r.created_at, windows);
-    if (!mode || mode === "daily") continue;
+    if (mode !== "new_customer" && mode !== "none") continue; // daily/unknown/ไม่มี window = งดตัดสิน (Codex รอบ 2 ข้อ 5)
     out.push({ kind: "daily_promise_policy_mismatch", time: hm(r.created_at), quote: txt.slice(0, 200), severity: "high", source: classifyBotSource(r),
       problem: `ข้อมูลสิทธิ์ผิด: สัญญาฟรีรายวัน/พรุ่งนี้/รีเซ็ต ทั้งที่นโยบาย ณ เวลานั้นเป็น ${mode === "new_customer" ? "ฟรีเฉพาะบัญชีใหม่ที่เข้าเกณฑ์ทดลองรวม 2 ครั้ง (ไม่มีฟรีรายวัน)" : "ปิดสิทธิ์ฟรี"}` });
   }
@@ -220,7 +218,8 @@ export function detectDailyPromiseAgainstPolicy(rows, windows = []) {
 }
 
 /** @param {Array} rows @param {{ policyWindows?: Array<{fromIso:string,toIso:string,mode:string}> }} [ctx] */
-export function runDeterministicChecks(rows, ctx = {}) {
+export function runDeterministicChecks(rowsIn, ctx = {}) {
+  const rows = (rowsIn || []).filter((r) => classifyBotSource(r) !== "human"); // ข้อความแอดมินคนจริงไม่ใช่ผลงานบอท
   return [
     ...detectAjarnMoneyBreach(rows),
     ...detectRepeatedBotMessages(rows),

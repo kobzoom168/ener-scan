@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { env } from "../config/env.js";
-import { sendAdminAlert as defaultSendAdminAlert } from "./adminAlerts/adminAlert.service.js";
+import { sendAdminAlert as defaultSendAdminAlert, resolveAdminAlertEnv } from "./adminAlerts/adminAlert.service.js";
 
 /**
  * DLQ Alert (maintenance): แจ้งแอดมินเมื่อมี outbound dead/failed — แก้ 14 ต.ค. 2026 (Codex):
@@ -53,11 +53,12 @@ async function defaultRedis() {
 
 /**
  * @param {{ outDead?: number|null, outFailed?: number|null, items?: Array<{id:string, updated_at?:string|null}>, itemsError?: string|null }} counts
- * @param {{ env?: object, sendAdminAlert?: Function, redis?: { isAvailable: Function, getValue: Function, setValueWithTtl: Function, tryDedupeOnce: Function } }} [deps]
+ * @param {{ env?: object, sendAdminAlert?: Function, redis?: { isAvailable: Function, getValue: Function, setValueWithTtl: Function, tryDedupeOnce: Function }, fetch?: Function, db?: object, alertRedis?: object }} [deps]
+ *   env ที่ใช้ตัดสิน = process.env ทับด้วย config env (APP_ENV ฯลฯ) ทับด้วย deps.env — ตัวแปร Telegram/DB key อ่านจาก process.env ได้เสมอ (Codex รอบ 2 ข้อ 1)
  * @returns {Promise<{ sent: boolean, skipped?: string, signature?: string, error?: string }>}
  */
 export async function maybeSendDlqAlert(counts, deps = {}) {
-  const e = deps.env ? { ...env, ...deps.env } : env;
+  const e = resolveAdminAlertEnv(deps.env, resolveAdminAlertEnv(env));
   const threshold = Number(e.CANARY_DLQ_DEAD_ALERT_THRESHOLD) || 1;
   const dead = counts.outDead ?? 0;
   const failed = counts.outFailed ?? 0;
@@ -99,7 +100,7 @@ export async function maybeSendDlqAlert(counts, deps = {}) {
   const sendAlert = deps.sendAdminAlert ?? defaultSendAdminAlert;
   let r;
   try {
-    r = await sendAlert({ category: "dlq", severity: "high", text, dedupeKey: signature ? `dlq:${signature}` : null, dedupeSec: 0 }, { env: e });
+    r = await sendAlert({ category: "dlq", severity: "high", text, dedupeKey: signature ? `dlq:${signature}` : null, dedupeSec: 0 }, { env: e, fetch: deps.fetch, db: deps.db, redis: deps.alertRedis });
   } catch (err) { r = { ok: false, queued: false, reason: String(err?.message || err).slice(0, 120) }; }
   if (!r?.ok && !r?.queued) {
     // ส่งไม่ได้และเข้า outbox ไม่ได้: ไม่ตั้ง marker → รอบถัดไปลองใหม่ (lock หมดอายุใน LOCK_SEC)
