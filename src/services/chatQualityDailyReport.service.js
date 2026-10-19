@@ -83,7 +83,7 @@ STATE-BASED JUDGEMENT (flow-role 26 ส.ค. — ห้ามตัดสิน�
 - [object_info_gate_ask] after [pre_scan_ack]/[scan_in_flight_wait] is NORMAL when a scan job of that time has status delivered/delivery_queued (report computed then held for owner info) and a [scan_result] follows — not "ถามซ้ำ/ผลไม่มา"
 - [pending_verify_block_scan] saying สลิปกำลังตรวจ while payment status is manual_review/pending is a status notice, NOT "ทวงสลิป"
 - [paywall_deferred_report_pending] / [payment_pick_package_menu] after the customer replied to a paywall = NORMAL flow
-- FREE-QUOTA STATEMENTS are judged by the POLICY line = the policy IN EFFECT AT THE TIME OF THE REPLY (the line may split the day at a change time) — never by today's policy and never by rules you assume. Under "ฟรีรายวัน", promising "พรุ่งนี้มีฟรี/ฟรีวันนี้/รีเซ็ตหลังเที่ยงคืน" is CORRECT. Under "ฟรีเฉพาะบัญชีใหม่" or "ปิดสิทธิ์ฟรี", any promise of daily free / tomorrow / reset = "ข้อมูลสิทธิ์ผิด" (severity high) — BUT "บัญชีใหม่ที่เข้าเกณฑ์ทดลองรวม 2 ครั้ง" remains correct; never conclude that no free of any kind exists. If POLICY says "ไม่ทราบ" for that time, do not judge free-quota statements at all. The USER line proves account age/new-customer eligibility and counts up to that day only — it does NOT prove remaining quota; do not flag "quota not really exhausted" from it.
+- FREE-QUOTA STATEMENTS are judged by the POLICY line = the policy IN EFFECT AT THE TIME OF THE REPLY (the line may split the day at a change time) — never by today's policy and never by rules you assume. Under "ฟรีรายวัน", promising "พรุ่งนี้มีฟรี/ฟรีวันนี้/รีเซ็ตหลังเที่ยงคืน" is CORRECT. Under "ฟรีเฉพาะบัญชีใหม่", any promise of daily free / tomorrow / reset = "ข้อมูลสิทธิ์ผิด" (severity high) — BUT "บัญชีใหม่ที่เข้าเกณฑ์ทดลองรวม 2 ครั้ง" remains correct there; do not conclude that no free of any kind exists. Under "ปิดสิทธิ์ฟรีทุกบัญชี", EVERY free promise is wrong — daily, tomorrow, reset AND the new-account trial — only packs/bonus remain valid. If POLICY says "ไม่ทราบ" for that time, do not judge free-quota statements at all. The USER line proves account age/new-customer eligibility, free scan jobs created and payments verified up to that day only — it does NOT prove remaining quota; do not flag "quota not really exhausted" from it.
 - OLD RESULTS vs NEW SCAN: separate "asks about OLD results / compare items already scanned" from "asks for a NEW scan or a price". An exhausted scan quota is NEVER a reason to block or deflect the owner's old results. Answering an old-result question with a paywall/"หมดสิทธิ์"/price = "ตอบไม่ตรงคำถาม (ผลเก่า)" (high) even if the line is a [template]. If the bot lacks data it must say what is missing — no guessed scores, no selling. A paywall after a request for a NEW scan or a price question is normal.
 Do NOT flag: normal polite replies, the bot declining to answer authenticity/price (that is correct), short answers, system paywall cards after a new-scan request, image messages you cannot see, in-persona roleplay as described above.
 
@@ -138,69 +138,101 @@ export function buildTranscript(rows, stateHeader = "", classify = null) {
   return out;
 }
 
-const POLICY_LABEL = { daily: "ฟรีรายวัน (ทุกบัญชี)", new_customer: "ไม่มีฟรีรายวัน — ฟรีเฉพาะบัญชีใหม่ที่เข้าเกณฑ์ ทดลองรวม 2 ครั้ง", none: "ปิดสิทธิ์ฟรีทุกบัญชี (แพ็ก/โบนัสใช้ได้)", unknown: "ไม่ทราบ (พิสูจน์จากประวัติไม่ได้ — งดตัดสินเรื่องสิทธิ์ฟรี)" };
+const POLICY_LABEL = { daily: "ฟรีรายวัน (ทุกบัญชี)", new_customer: "ไม่มีฟรีรายวัน — ฟรีเฉพาะบัญชีใหม่ที่เข้าเกณฑ์ ทดลองรวม 2 ครั้ง", none: "ปิดสิทธิ์ฟรีทุกบัญชี (ไม่มีทั้งฟรีรายวันและทดลองบัญชีใหม่; แพ็ก/โบนัสใช้ได้)", unknown: "ไม่ทราบ (พิสูจน์จากประวัติไม่ได้ — งดตัดสินเรื่องสิทธิ์ฟรี)" };
+/** คำแนะนำท้าย POLICY แยกตามโหมด (Codex รอบ 3 ข้อ 4: ข้อยกเว้นทดลอง 2 ครั้งใช้กับ new_customer เท่านั้น) */
+const POLICY_HINT = {
+  new_customer: " — คำสัญญาฟรีรายวัน/พรุ่งนี้/รีเซ็ต = ข้อมูลสิทธิ์ผิด แต่ 'บัญชีใหม่ที่เข้าเกณฑ์ทดลองรวม 2 ครั้ง' ถูกต้อง",
+  none: " — คำสัญญาฟรีทุกแบบ (รายวัน/พรุ่งนี้/รีเซ็ต/ทดลองบัญชีใหม่) = ข้อมูลสิทธิ์ผิด · แพ็ก/โบนัสยังใช้ได้",
+};
 const MODES = ["daily", "new_customer", "none"];
 const thaiDt = (ms) => new Date(ms).toLocaleString("th-TH", { timeZone: "Asia/Bangkok", dateStyle: "medium", timeStyle: "short" });
+export const POLICY_AUDIT_LIMIT = 200;
 
 /**
- * เส้นเวลานโยบายฟรีจาก "ประวัติที่พิสูจน์ได้" (Codex รอบ 2 ข้อ 5):
- *  - changes: free_policy_audit action=mode_set (from→to ณ at; ถ้าตรง schedule ที่ applied ใช้ effective_at จริง) + last_applied + schedule ที่ถึงเวลาแล้วแต่ยังไม่ apply
+ * เส้นเวลานโยบายฟรีจาก "ประวัติที่พิสูจน์ได้" (Codex รอบ 2–3):
+ *  - auditState: "complete" (อ่านครบตั้งแต่ติดตั้ง 067) · "truncated" (ได้เฉพาะ POLICY_AUDIT_LIMIT แถวล่าสุด → รู้ตั้งแต่แถวเก่าสุดที่มี) · "unavailable" (อ่านไม่ได้ → รู้เฉพาะโหมดปัจจุบัน ณ now)
+ *  - changes: audit mode_set (from→to) · เวลาเปลี่ยน = effective_at ของกำหนดการนั้น ๆ (จาก schedule_set detail / last_applied) ไม่ใช่เวลาที่ worker บันทึก — ครอบ "ทุก" กำหนดการ ไม่ใช่แค่ล่าสุด
+ *    + last_applied/pending ที่ถึงเวลาแล้ว (กรณี audit ไม่มี)
  *  - observations: จุดที่รู้โหมดแน่ (schedule_set/mode_noop บันทึก from_mode = โหมดขณะนั้น · status ปัจจุบัน = โหมด ณ now)
- *  โหมด ณ เวลา t: การเปลี่ยนล่าสุดก่อน t → to · ไม่มี → observation ล่าสุดก่อน t (ไม่มีการเปลี่ยนคั่น) · ไม่มีอีก → "unknown" (ไม่อนุมานย้อนหลังก่อนมีประวัติ)
- * @param {{ status?: object|null, audit?: Array<object>, now?: number }} p
+ *  โหมด ณ เวลา t = จุดล่าสุด (change หรือ observation) ก่อน t · ก่อน knownFrom = unknown · observation ที่ขัดกับ change ก่อนหน้า = ประวัติไม่ครบ → unknown ระหว่างนั้น · ไม่ต่อโหมดเก่าข้ามช่องว่าง
+ * @param {{ status?: object|null, audit?: Array<object>|null, auditState?: "complete"|"truncated"|"unavailable", now?: number }} p
  */
-export function buildPolicyTimeline({ status = null, audit = [], now = Date.now() } = {}) {
+export function buildPolicyTimeline({ status = null, audit = null, auditState = undefined, now = Date.now() } = {}) {
+  const rows = Array.isArray(audit) ? audit.filter((a) => Number.isFinite(Date.parse(a?.at))) : null;
+  const state = auditState || (!rows ? "unavailable" : rows.length >= POLICY_AUDIT_LIMIT ? "truncated" : "complete");
   const changes = []; const observations = [];
-  for (const a of Array.isArray(audit) ? audit : []) {
-    const at = Date.parse(a?.at); if (!Number.isFinite(at)) continue;
-    if (a.action === "mode_set" && MODES.includes(a.to_mode)) changes.push({ at, from: MODES.includes(a.from_mode) ? a.from_mode : null, to: a.to_mode, scheduleId: a.schedule_id ?? null, src: "audit" });
-    else if ((a.action === "schedule_set" || a.action === "mode_noop") && MODES.includes(a.from_mode)) observations.push({ at, mode: a.from_mode, src: "audit" });
+  // เวลามีผลจริงของทุกกำหนดการ: schedule_set.detail.effective_at (+ last_applied/pending ของ status)
+  const effectiveBySchedule = new Map();
+  for (const a of rows || []) if (a.action === "schedule_set" && a.schedule_id != null && Number.isFinite(Date.parse(a.detail?.effective_at))) effectiveBySchedule.set(String(a.schedule_id), Date.parse(a.detail.effective_at));
+  const la = status?.last_applied;
+  if (la?.id != null && Number.isFinite(Date.parse(la.effective_at))) effectiveBySchedule.set(String(la.id), Date.parse(la.effective_at));
+  for (const a of rows || []) {
+    const at = Date.parse(a.at);
+    if (a.action === "mode_set" && MODES.includes(a.to_mode)) {
+      const eff = a.schedule_id != null ? effectiveBySchedule.get(String(a.schedule_id)) : undefined;
+      changes.push({ at: Number.isFinite(eff) ? eff : at, from: MODES.includes(a.from_mode) ? a.from_mode : null, to: a.to_mode, scheduleId: a.schedule_id ?? null, src: Number.isFinite(eff) ? "audit+effective_at" : "audit" });
+    } else if ((a.action === "schedule_set" || a.action === "mode_noop") && MODES.includes(a.from_mode)) observations.push({ at, mode: a.from_mode, src: "audit" });
   }
   if (status && typeof status === "object") {
-    const la = status.last_applied;
-    if (la?.effective_at && MODES.includes(la.target_mode)) {
-      const at = Date.parse(la.effective_at);
-      const ex = la.id != null ? changes.find((c) => c.scheduleId != null && String(c.scheduleId) === String(la.id)) : null;
-      if (ex) ex.at = at; else changes.push({ at, from: MODES.includes(la.applied_from_mode) ? la.applied_from_mode : null, to: la.target_mode, scheduleId: la.id ?? null, src: "last_applied" });
+    if (la?.effective_at && MODES.includes(la.target_mode) && !changes.some((c) => c.scheduleId != null && String(c.scheduleId) === String(la.id))) {
+      changes.push({ at: Date.parse(la.effective_at), from: MODES.includes(la.applied_from_mode) ? la.applied_from_mode : null, to: la.target_mode, scheduleId: la.id ?? null, src: "last_applied" });
     }
     const sc = status.schedule;
     if (sc?.status === "pending" && sc.effective_at && Date.parse(sc.effective_at) <= now && MODES.includes(sc.target_mode)) changes.push({ at: Date.parse(sc.effective_at), from: MODES.includes(status.stored_mode) ? status.stored_mode : null, to: sc.target_mode, scheduleId: sc.id ?? null, src: "due_pending" });
     if (MODES.includes(status.mode)) observations.push({ at: now, mode: status.mode, src: "status_now" });
   }
   changes.sort((a, b) => a.at - b.at); observations.sort((a, b) => a.at - b.at);
-  return { changes, observations, now };
+  // ช่วงที่พิสูจน์ได้เริ่มเมื่อไร: complete = แถวแรกของประวัติ · truncated = แถวเก่าสุดที่ได้มา · unavailable = ไม่มี (รู้เฉพาะ now)
+  const oldest = rows && rows.length ? Math.min(...rows.map((a) => Date.parse(a.at))) : null;
+  const knownFrom = state === "unavailable" || oldest == null ? Number.POSITIVE_INFINITY : oldest;
+  return { changes, observations, now, auditState: state, knownFrom };
 }
 export function policyModeAtTime(timeline, t) {
   const ms = typeof t === "number" ? t : Date.parse(String(t || ""));
   if (!Number.isFinite(ms) || !timeline) return "unknown";
-  for (let i = (timeline.changes || []).length - 1; i >= 0; i--) if (timeline.changes[i].at <= ms) return timeline.changes[i].to;
-  for (let i = (timeline.observations || []).length - 1; i >= 0; i--) if (timeline.observations[i].at <= ms) return timeline.observations[i].mode;
-  return "unknown";
+  const statusObs = (timeline.observations || []).find((o) => o.src === "status_now");
+  if (statusObs && ms >= timeline.now) return statusObs.mode; // ปัจจุบันรู้แน่จาก status
+  if (ms < (timeline.knownFrom ?? Number.POSITIVE_INFINITY)) return "unknown"; // ก่อนช่วงที่มีประวัติ (หรืออ่านประวัติไม่ได้) = ไม่อนุมาน
+  const pts = [...(timeline.changes || []).map((c) => ({ at: c.at, mode: c.to, kind: "change" })), ...(timeline.observations || []).map((o) => ({ at: o.at, mode: o.mode, kind: "obs" }))].sort((a, b) => a.at - b.at || (a.kind === "obs" ? 1 : -1));
+  let last = null; for (const p of pts) { if (p.at <= ms) last = p; else break; }
+  if (!last) return "unknown";
+  // observation ใหม่กว่า change แต่โหมดไม่ตรง = มีการเปลี่ยนที่ไม่อยู่ในประวัติ → ช่วงนั้นไม่ทราบ
+  const lastChange = [...(timeline.changes || [])].reverse().find((c) => c.at <= ms);
+  if (last.kind === "obs" && lastChange && lastChange.to !== last.mode) return "unknown";
+  // change ล่าสุดก่อน t แต่ status ปัจจุบันไม่ตรง (และไม่มี change หลังจากนั้น) = มีการเปลี่ยนที่หายจากประวัติ → ไม่ทราบ
+  if (last.kind === "change" && statusObs && !(timeline.changes || []).some((c) => c.at > last.at && c.at <= timeline.now) && statusObs.mode !== last.mode) return "unknown";
+  return last.mode;
 }
 /**
- * ช่วงเวลา-โหมดของวันที่ตรวจ จาก timeline (รับ status เดี่ยวได้ = timeline ไม่มี audit) · ช่วงที่พิสูจน์ไม่ได้ = "unknown" (งดตัดสิน)
- * @returns {{ windows: Array<{fromIso:string,toIso:string,mode:string}>, summary: string, changedAtIso?: string }}
+ * ช่วงเวลา-โหมดของวันที่ตรวจ จาก timeline (รับ status เดี่ยวได้ = ไม่มีประวัติ → unknown ยกเว้นตั้งแต่ now) · ช่วงที่พิสูจน์ไม่ได้ = "unknown" (งดตัดสิน)
+ * @returns {{ windows: Array<{fromIso:string,toIso:string,mode:string}>, summary: string, changedAtIso?: string, auditState: string }}
  */
 export function resolvePolicyWindowsForDay(timelineOrStatus, dayRange) {
   const tl = timelineOrStatus && Array.isArray(timelineOrStatus.changes) ? timelineOrStatus : buildPolicyTimeline({ status: timelineOrStatus });
   const start = Date.parse(dayRange.startIso), end = Date.parse(dayRange.endIso);
   const iso = (ms) => new Date(ms).toISOString();
-  const cuts = tl.changes.filter((c) => c.at > start && c.at < end);
-  const windows = []; let from = start; let mode = policyModeAtTime(tl, start);
-  for (const c of cuts) { windows.push({ fromIso: iso(from), toIso: iso(c.at), mode }); from = c.at; mode = c.to; }
-  windows.push({ fromIso: iso(from), toIso: iso(end), mode });
+  const cutSet = new Set(tl.changes.filter((c) => c.at > start && c.at < end).map((c) => c.at));
+  if (Number.isFinite(tl.knownFrom) && tl.knownFrom > start && tl.knownFrom < end) cutSet.add(tl.knownFrom);
+  const cuts = [...cutSet].sort((a, b) => a - b);
+  const raw = []; let from = start;
+  for (const c of cuts) { raw.push({ from, to: c, mode: policyModeAtTime(tl, from) }); from = c; }
+  raw.push({ from, to: end, mode: policyModeAtTime(tl, from) });
+  const windows = []; for (const w of raw) { const prev = windows[windows.length - 1]; if (prev && prev.mode === w.mode) prev.toIso = iso(w.to); else windows.push({ fromIso: iso(w.from), toIso: iso(w.to), mode: w.mode }); }
   const label = (m) => POLICY_LABEL[m] || POLICY_LABEL.unknown;
   const unknown = windows.some((w) => w.mode === "unknown");
   let summary;
   if (windows.length === 1) {
     const m = windows[0].mode;
     const later = tl.changes.find((c) => c.at >= end);
-    summary = `POLICY (ณ วันนั้น): ${label(m)}${later ? ` (นโยบายเปลี่ยนเป็น ${label(later.to)} ภายหลัง ตั้งแต่ ${thaiDt(later.at)} — ห้ามใช้กติกาใหม่ตัดสินวันนี้)` : ""}${m === "new_customer" || m === "none" ? " — คำสัญญาฟรีรายวัน/พรุ่งนี้/รีเซ็ต = ข้อมูลสิทธิ์ผิด แต่ 'บัญชีใหม่ที่เข้าเกณฑ์ทดลองรวม 2 ครั้ง' ถูกต้อง" : ""}`;
+    summary = `POLICY (ณ วันนั้น): ${label(m)}${later && m !== "unknown" ? ` (นโยบายเปลี่ยนเป็น ${label(later.to)} ภายหลัง ตั้งแต่ ${thaiDt(later.at)} — ห้ามใช้กติกาใหม่ตัดสินวันนี้)` : ""}${POLICY_HINT[m] || ""}`;
   } else {
-    summary = `POLICY (ณ วันนั้น): ${windows.map((w, i) => `${i === 0 ? "ก่อน" : "ตั้งแต่"} ${bangkokHm(i === 0 ? w.toIso : w.fromIso)} น. = ${label(w.mode)}`).join(" · ")} — ตัดสินข้อความตามเวลาที่ตอบ`;
+    summary = `POLICY (ณ วันนั้น): ${windows.map((w, i) => `${i === 0 ? "ก่อน" : "ตั้งแต่"} ${bangkokHm(i === 0 ? w.toIso : w.fromIso)} น. = ${label(w.mode)}${POLICY_HINT[w.mode] || ""}`).join(" · ")} — ตัดสินข้อความตามเวลาที่ตอบ`;
   }
+  if (tl.auditState === "unavailable") summary += " · (อ่านประวัตินโยบายไม่ได้ — พิสูจน์ได้เฉพาะโหมดปัจจุบัน)";
+  else if (tl.auditState === "truncated") summary += " · (ประวัติที่ได้มาไม่ครบ — ก่อน " + thaiDt(tl.knownFrom) + " ไม่ทราบ)";
   if (unknown) summary += " · ช่วงที่ไม่ทราบ: ห้ามตัดสินเรื่องสิทธิ์ฟรีจากข้อความ";
-  return { windows, summary, ...(cuts.length ? { changedAtIso: iso(cuts[0].at) } : {}) };
+  const firstChangeCut = cuts.find((c) => cutSet.has(c) && tl.changes.some((x) => x.at === c));
+  return { windows, summary, auditState: tl.auditState, ...(firstChangeCut != null ? { changedAtIso: iso(firstChangeCut) } : {}) };
 }
 
 /**
@@ -228,14 +260,14 @@ export async function buildStateHeader(lineUserId, dayRange, deps = {}) {
       db.from("app_users").select("created_at").eq("line_user_id", lineUserId).maybeSingle(),
       db.rpc("new_customer_trial_status", { p_line_user_id: lineUserId }),
       db.from("scan_jobs").select("id").eq("line_user_id", lineUserId).eq("access_source", "free").lt("created_at", dayRange.endIso).limit(50),
-      db.from("payments").select("id").eq("line_user_id", lineUserId).eq("status", "paid").lt("created_at", dayRange.endIso).limit(50),
+      db.from("payments").select("id").eq("line_user_id", lineUserId).eq("status", "paid").lt("verified_at", dayRange.endIso).limit(50), // verified_at = เวลาอนุมัติจริง (sql/063) · NULL ไม่นับ
     ]);
     if (u?.created_at) {
       const cutoff = tr?.eligible_since ? Date.parse(tr.eligible_since) : NaN;
       const createdMs = Date.parse(u.created_at);
       const isNew = Number.isFinite(cutoff) && createdMs >= cutoff;
       const n = (arr) => (Array.isArray(arr) ? (arr.length >= 50 ? "50+" : String(arr.length)) : "?");
-      extra.push(`USER (ณ สิ้นวันนั้น): บัญชีเริ่มใช้ ${new Date(createdMs).toLocaleDateString("th-TH", { timeZone: "Asia/Bangkok" })} (${Number.isFinite(cutoff) ? (isNew ? "เข้าเกณฑ์บัญชีใหม่ตาม cutoff" : "ลูกค้าเก่า ไม่เข้าเกณฑ์บัญชีใหม่") : "ไม่มี cutoff"}; เกณฑ์นี้มีผลเฉพาะช่วงที่ POLICY เป็นฟรีเฉพาะบัญชีใหม่) · job สแกนฟรีที่สร้างก่อนสิ้นวัน ${n(freeJobs)} · การชำระสำเร็จก่อนสิ้นวัน ${n(paidPays)} — ยอดสิทธิ์คงเหลือ ณ เวลาตอบพิสูจน์ไม่ได้ ห้ามฟันธงว่า "สิทธิ์ยังไม่หมด/หมดแล้ว" จากบรรทัดนี้`);
+      extra.push(`USER (ณ สิ้นวันนั้น): บัญชีเริ่มใช้ ${new Date(createdMs).toLocaleDateString("th-TH", { timeZone: "Asia/Bangkok" })} (${Number.isFinite(cutoff) ? (isNew ? "เข้าเกณฑ์บัญชีใหม่ตาม cutoff" : "ลูกค้าเก่า ไม่เข้าเกณฑ์บัญชีใหม่") : "ไม่มี cutoff"}; เกณฑ์นี้มีผลเฉพาะช่วงที่ POLICY เป็นฟรีเฉพาะบัญชีใหม่) · job สแกนฟรีที่สร้างก่อนสิ้นวัน ${n(freeJobs)} · การชำระที่ตรวจผ่านก่อนสิ้นวัน (verified_at) ${n(paidPays)} — ยอดสิทธิ์คงเหลือ ณ เวลาตอบพิสูจน์ไม่ได้ ห้ามฟันธงว่า "สิทธิ์ยังไม่หมด/หมดแล้ว" จากบรรทัดนี้`);
     }
   } catch { /* ไม่มีข้อมูล = ไม่ใส่บรรทัด USER */ }
   if (!j.length && !p.length && !extra.length) return "STATE: (no scan job / payment today)";
@@ -360,9 +392,9 @@ export async function runChatQualityDailySweep(now = new Date()) {
   let policy = { windows: [], summary: "" };
   try {
     const { data: ps } = await supabase.rpc("free_policy_status", { p_line_user_id: null });
-    let audit = [];
-    try { const { freePolicyDbClient } = await import("./freePolicy.store.js"); const { data: au } = await freePolicyDbClient().rpc("free_policy_audit_recent", { p_limit: 200 }); audit = Array.isArray(au) ? au : []; }
-    catch (e) { console.log(JSON.stringify({ event: "CHAT_QUALITY_POLICY_AUDIT_UNAVAILABLE", reason: String(e?.code || e?.message || e).slice(0, 80) })); }
+    let audit = null; // null = อ่านไม่ได้ (unavailable) · array = อ่านได้ (ครบ/ตัดที่ POLICY_AUDIT_LIMIT)
+    try { const { freePolicyDbClient } = await import("./freePolicy.store.js"); const { data: au, error } = await freePolicyDbClient().rpc("free_policy_audit_recent", { p_limit: POLICY_AUDIT_LIMIT }); if (error) throw error; audit = Array.isArray(au) ? au : []; }
+    catch (e) { console.log(JSON.stringify({ event: "CHAT_QUALITY_POLICY_AUDIT_UNAVAILABLE", reason: String(e?.code || e?.message || e).slice(0, 80), note: "ช่วงก่อนปัจจุบัน = unknown งดตัดสินเรื่องสิทธิ์ฟรี" })); }
     policy = resolvePolicyWindowsForDay(buildPolicyTimeline({ status: ps, audit, now: Date.now() }), dayRange);
   } catch { policy = resolvePolicyWindowsForDay(buildPolicyTimeline({}), dayRange); }
   const userIds = prioritizeUsers(byUser);

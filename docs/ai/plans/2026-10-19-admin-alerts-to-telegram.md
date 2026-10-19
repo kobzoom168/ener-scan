@@ -78,3 +78,9 @@
 
 **ผลทดสอบรอบ 2:** `adminAlert.behavior` 10/10 · `maintenanceDlqAlert.service` 6/6 · `dlqAlert.dedupe` 11/11 · `banSystem` ผ่าน · DB test 068 PASS (container แยก) · gate ✅ ไม่มี fail ใหม่
 **Ops เพิ่มก่อน deploy (ทุก env):** `node scripts/ops/gen-restricted-jwt.mjs <env-file> ADMIN_ALERT_DB_KEY admin_alert_writer` (หลัง apply 068 เพื่อให้ role มีอยู่; JWT ไม่ผูกกับ DB จึงสร้างก่อนได้) → recreate **ทุก** container ที่ส่ง alert (web, worker-scan, worker-maintenance) · ยังรอกบเคาะห้อง `ADMIN_ALERT_TELEGRAM_CHAT_ID`
+
+## 7. Codex รอบ 3 (19 ต.ค. 2026) — ข้อ 3 partial + finish ล้ม · บน `96e177c` → SHA ใหม่ (ดู git log) · ยังไม่ deploy
+- **ปัญหา:** ก้อน A สำเร็จ → B ล้ม → finish ล้ม 3 ครั้ง → claim ใหม่ ส่งลำดับ A,B,A,B (จำเฉพาะกรณีส่งครบ)
+- **แก้:** sweeper จำ `progress[id] = { delivered, remainingText }` ทุกกรณีที่ finish ล้ม · รอบถัดไป: delivered → finish(ok) ไม่ส่ง · partial → ส่งเฉพาะ `remainingText` (มีหัว "(ต่อ — ส่วน x-y …)" ตรงกับ `p_text` ที่พยายามบันทึก) · finish สำเร็จ → ลบความจำ (`recovered`, `resumedFromPartial` ใน log)
+- **ทางกู้ (ถ้อยคำใหม่):** โปรเซส restart = ความจำหาย → แถว sending ถูก claim ใหม่หลัง 10 นาทีและส่งตาม text ใน DB = **at-least-once อาจส่งซ้ำ** (ไม่รับประกันจำนวนครั้ง) — ระบุใน log `ADMIN_ALERT_OUTBOX_FINISH_FAILED.recovery` และ docstring
+- **regression:** `adminAlert.behavior` ลำดับ fetch = A,B,B (ไม่ส่ง A ซ้ำ) · กู้แล้ว finish ok → sent/recovered=1 · partial ซ้ำตอนกู้ (B ล้มอีก + finish ล้ม) → ยังจำเฉพาะ B · log ต้องมีคำว่า at-least-once · 10/10 · DB test 068 PASS · gate ✅

@@ -148,12 +148,32 @@ test("ข้อ 3 Telegram รับแล้วแต่ finish ล้ม (retr
   assert.deepEqual([s.claimed, s.sent, s.sentUnrecorded, s.finishFailed], [1, 0, 1, 0]);
   assert.equal(db.finishes.length, 3, "finish ถูกลองซ้ำ 3 ครั้ง");
   assert.ok(!logs.some((l) => l.includes("ADMIN_ALERT_OUTBOX_SENT")), "ห้ามรายงาน SENT เมื่อบันทึกผลไม่ได้");
-  assert.ok(errs.some((l) => l.includes("ADMIN_ALERT_OUTBOX_FINISH_FAILED") && l.includes('"id":9') && l.includes('"telegramDelivered":true') && l.includes("recovery")));
+  assert.ok(errs.some((l) => l.includes("ADMIN_ALERT_OUTBOX_FINISH_FAILED") && l.includes('"id":9') && l.includes('"telegramDelivered":true') && l.includes("at-least-once")), "ทางกู้ต้องระบุ at-least-once ไม่อ้างว่าซ้ำได้ครั้งเดียว");
   assert.deepEqual(A._sentUnrecordedIds(), [9]);
   // รอบถัดไป: DB กลับมา claim id 9 ได้อีก (sending ค้าง) → ไม่ยิง Telegram ซ้ำ แค่ finish(ok)
   const db2 = dbFake({ claimRows: [{ id: 9, category: "dlq", text: "t" }] }); const f2 = fetchFake([200]);
   const s2 = await A.sweepAdminAlertOutbox({ env: ENV, db: db2, fetch: f2 });
   assert.equal(f2.calls.length, 0, "ไม่ส่งซ้ำ"); assert.equal(s2.sent, 1); assert.equal(s2.recovered, 1); assert.equal(db2.finishes[0].p_ok, true); assert.deepEqual(A._sentUnrecordedIds(), []);
+  // Codex รอบ 3 ข้อ 3: A สำเร็จ → B ล้ม → finish ล้ม 3 ครั้ง → claim ใหม่ → ต้องส่งเฉพาะ B (ลำดับ A,B,B ไม่ใช่ A,B,A,B)
+  A._resetAdminAlertSweepState();
+  const twoPart = "A".repeat(3900) + "\n" + "B".repeat(100);
+  const dbP = dbFake({ claimRows: [{ id: 11, category: "ops", text: twoPart }], finishError: { message: "db down" } });
+  const fP = fetchFake([200, 500]);
+  const oeP = console.error; console.error = () => {};
+  let sP; try { sP = await A.sweepAdminAlertOutbox({ env: ENV, db: dbP, fetch: fP }); } finally { console.error = oeP; }
+  assert.deepEqual([sP.finishFailed, sP.sentUnrecorded], [1, 0]); assert.equal(dbP.finishes.length, 3); assert.match(dbP.finishes[0].p_text, /ส่วน 2-2[^\n]*\n+B{100}$/);
+  assert.deepEqual(Object.keys(A._sweepProgress()), ["11"]); assert.equal(A._sweepProgress()[11].delivered, false); assert.match(A._sweepProgress()[11].remainingText, /B{100}$/); assert.ok(!A._sweepProgress()[11].remainingText.includes("AAAA"));
+  const dbP2 = dbFake({ claimRows: [{ id: 11, category: "ops", text: twoPart }] }); const fP2 = fetchFake([200]);
+  const sP2 = await A.sweepAdminAlertOutbox({ env: ENV, db: dbP2, fetch: fP2 });
+  const seq = [...fP.calls, ...fP2.calls].map((c) => c.body.text.slice(-1));
+  assert.deepEqual(seq, ["A", "B", "B"], "ไม่ส่ง A ซ้ำ"); assert.match(fP2.calls[0].body.text, /^\(ต่อ — ส่วน 2-2/, "ส่วนต่อมีหัวบอกว่าเป็นส่วนต่อ (ตรงกับ text ใน DB)");
+  assert.ok(!fP2.calls[0].body.text.includes("AAAA") && fP2.calls[0].body.text.endsWith("B".repeat(100)));
+  assert.equal(sP2.sent, 1); assert.equal(sP2.recovered, 1); assert.equal(dbP2.finishes[0].p_ok, true); assert.deepEqual(Object.keys(A._sweepProgress()), []);
+  // partial อีกครั้งตอนกู้ (B ล้มอีก + finish ล้ม) → progress ยังเป็น B เท่านั้น
+  A._resetAdminAlertSweepState();
+  const dbP3 = dbFake({ claimRows: [{ id: 12, category: "ops", text: twoPart }], finishError: { message: "db down" } });
+  const oe4 = console.error; console.error = () => {};
+  try { await A.sweepAdminAlertOutbox({ env: ENV, db: dbP3, fetch: fetchFake([200, 500]) }); const dbP4 = dbFake({ claimRows: [{ id: 12, category: "ops", text: twoPart }], finishError: { message: "db down" } }); const f4 = fetchFake([500]); await A.sweepAdminAlertOutbox({ env: ENV, db: dbP4, fetch: f4 }); assert.equal(f4.calls.length, 1); assert.ok(f4.calls[0].body.text.endsWith("B".repeat(100)) && !f4.calls[0].body.text.includes("AAAA")); assert.match(dbP4.finishes[0].p_text, /B{100}$/); assert.match(A._sweepProgress()[12].remainingText, /B{100}$/); } finally { console.error = oe4; }
   // ส่งล้ม + finish ล้ม → finishFailed (แถวคง sending → claim ใหม่หลัง 10 นาที)
   const db3 = dbFake({ claimRows: [{ id: 10, category: "dlq", text: "t" }], finishError: { message: "db down" } });
   const oe3 = console.error; console.error = () => {};

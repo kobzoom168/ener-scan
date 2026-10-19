@@ -33,11 +33,11 @@ const statusAfter = { mode: "new_customer", stored_mode: "new_customer", schedul
   last_applied: { id: 1, status: "applied", target_mode: "new_customer", applied_from_mode: "daily", effective_at: EFFECTIVE, announced_at: "2026-10-15T06:40:00Z" } };
 // ประวัติจริง (รูปแบบ free_policy_audit): 15 ต.ค. 13:4x ไทย schedule_set from daily · 19 ต.ค. 00:00:18 ไทย mode_set daily→new_customer via schedule 1
 const auditReal = [
-  { id: 1, at: "2026-10-15T06:45:00Z", action: "schedule_set", from_mode: "daily", to_mode: "new_customer", schedule_id: 1 },
-  { id: 2, at: "2026-10-18T17:00:18Z", action: "mode_set", from_mode: "daily", to_mode: "new_customer", schedule_id: 1 },
+  { id: 1, at: "2026-10-15T06:45:00Z", action: "schedule_set", from_mode: "daily", to_mode: "new_customer", schedule_id: 1, detail: { effective_at: EFFECTIVE } },
+  { id: 2, at: "2026-10-18T17:00:18Z", action: "mode_set", from_mode: "daily", to_mode: "new_customer", schedule_id: 1, detail: { via: "schedule" } },
 ];
 const tlReal = buildPolicyTimeline({ status: statusAfter, audit: auditReal, now: NOW });
-const tlNoAudit = buildPolicyTimeline({ status: statusAfter, audit: [], now: NOW });
+const tlNoAudit = buildPolicyTimeline({ status: statusAfter, audit: null, now: NOW }); // audit อ่านไม่ได้
 const kinds = (f) => f.map((x) => x.kind);
 
 /* ---------- ข้อ 5: นโยบายจากประวัติที่พิสูจน์ได้ · ช่วงไม่ทราบ = unknown งดตัดสิน ---------- */
@@ -46,9 +46,33 @@ test("timeline: เปลี่ยนล่าสุดก่อน t → to · 
   assert.equal(policyModeAtTime(tlReal, "2026-10-18T16:59:59Z"), "daily");
   assert.equal(policyModeAtTime(tlReal, "2026-10-18T17:00:00Z"), "new_customer", "ใช้ effective_at 17:00:00Z ไม่ใช่ at 17:00:18Z ของ worker");
   assert.equal(policyModeAtTime(tlReal, "2026-10-14T05:00:00Z"), "unknown", "ก่อนมีประวัติ = ไม่ทราบ");
-  assert.equal(policyModeAtTime(tlNoAudit, "2026-10-16T00:13:02Z"), "unknown", "ไม่มี audit: ก่อนการเปลี่ยนล่าสุดพิสูจน์ไม่ได้ (ไม่เอา applied_from_mode ไปฟันธงย้อนหลัง)");
-  assert.equal(policyModeAtTime(tlNoAudit, "2026-10-19T05:00:00Z"), "new_customer");
+  assert.equal(tlReal.auditState, "complete"); assert.equal(tlNoAudit.auditState, "unavailable");
+  assert.equal(policyModeAtTime(tlNoAudit, "2026-10-16T00:13:02Z"), "unknown", "audit อ่านไม่ได้: ก่อนปัจจุบันพิสูจน์ไม่ได้ (ไม่เอา applied_from_mode ไปฟันธงย้อนหลัง)");
+  assert.equal(policyModeAtTime(tlNoAudit, "2026-10-19T05:00:00Z"), "unknown", "audit อ่านไม่ได้: แม้หลัง last_applied ก็ไม่ต่อโหมดข้ามช่องว่าง (อาจมี mode_set มือที่ไม่เห็น)");
+  assert.equal(policyModeAtTime(tlNoAudit, NOW), "new_customer", "ปัจจุบันรู้จาก status");
   assert.equal(policyModeAtTime(buildPolicyTimeline({}), "2026-10-19T05:00:00Z"), "unknown");
+  // Codex รอบ 3 (a): audit อ่านไม่ได้ + last_applied=new_customer เก่า + status ปัจจุบัน none → ปัจจุบัน = none ไม่ใช่ new_customer · ก่อนหน้า = unknown
+  const caseA = buildPolicyTimeline({ status: { ...statusAfter, mode: "none", stored_mode: "none" }, audit: null, now: NOW });
+  assert.equal(policyModeAtTime(caseA, NOW), "none"); assert.equal(policyModeAtTime(caseA, NOW + 60_000), "none");
+  assert.equal(policyModeAtTime(caseA, "2026-10-19T05:00:00Z"), "unknown"); assert.equal(policyModeAtTime(caseA, "2026-10-20T01:00:00Z"), "unknown");
+  // audit ครบแต่ status ปัจจุบันไม่ตรงกับ change ล่าสุด (มีการเปลี่ยนที่หายจากประวัติ) → ช่วงหลัง change ถึง now = unknown
+  const incons = buildPolicyTimeline({ status: { ...statusAfter, mode: "none", stored_mode: "none" }, audit: auditReal, now: NOW });
+  assert.equal(policyModeAtTime(incons, "2026-10-19T05:00:00Z"), "unknown"); assert.equal(policyModeAtTime(incons, "2026-10-16T00:13:02Z"), "daily", "ก่อน change ยังพิสูจน์ได้จาก observation"); assert.equal(policyModeAtTime(incons, NOW), "none");
+  // Codex รอบ 3 (b): กำหนดการเก่ามีผล 00:00 worker บันทึก 00:10 และมีกำหนดการใหม่กว่า (last_applied) → ข้อความ 00:05 ต้องได้โหมดใหม่ (ใช้ effective_at ของทุกกำหนดการ)
+  const caseB = buildPolicyTimeline({ now: NOW, status: { mode: "none", stored_mode: "none", schedule: null, last_applied: { id: 2, status: "applied", target_mode: "none", applied_from_mode: "new_customer", effective_at: EFFECTIVE } }, audit: [
+    { at: "2026-08-25T03:00:00Z", action: "schedule_set", from_mode: "daily", to_mode: "new_customer", schedule_id: 1, detail: { effective_at: "2026-09-01T00:00:00Z" } },
+    { at: "2026-09-01T00:10:00Z", action: "mode_set", from_mode: "daily", to_mode: "new_customer", schedule_id: 1 },
+    { at: "2026-10-15T06:45:00Z", action: "schedule_set", from_mode: "new_customer", to_mode: "none", schedule_id: 2, detail: { effective_at: EFFECTIVE } },
+    { at: "2026-10-18T17:00:18Z", action: "mode_set", from_mode: "new_customer", to_mode: "none", schedule_id: 2 },
+  ] });
+  assert.equal(policyModeAtTime(caseB, "2026-09-01T00:05:00Z"), "new_customer", "effective_at 00:00 ของกำหนดการเก่า ไม่ใช่เวลาบันทึก 00:10");
+  assert.equal(policyModeAtTime(caseB, "2026-08-31T23:59:00Z"), "daily"); assert.equal(policyModeAtTime(caseB, "2026-10-18T17:00:05Z"), "none");
+  assert.deepEqual(caseB.changes.map((c) => c.src), ["audit+effective_at", "audit+effective_at"]);
+  // truncated: ได้มาแค่ 200 แถวล่าสุด → ก่อนแถวเก่าสุด = unknown แม้มี from_mode
+  const many = Array.from({ length: 200 }, (_, i) => ({ at: new Date(Date.parse("2026-09-10T00:00:00Z") + i * 3600_000).toISOString(), action: "mode_noop", from_mode: "daily", to_mode: "daily" }));
+  const trunc = buildPolicyTimeline({ status: { mode: "daily", stored_mode: "daily" }, audit: many, now: NOW });
+  assert.equal(trunc.auditState, "truncated"); assert.equal(policyModeAtTime(trunc, "2026-09-09T00:00:00Z"), "unknown"); assert.equal(policyModeAtTime(trunc, "2026-09-15T00:00:00Z"), "daily");
+  assert.match(resolvePolicyWindowsForDay(trunc, { startIso: "2026-09-08T17:00:00Z", endIso: "2026-09-09T17:00:00Z" }).summary, /ประวัติที่ได้มาไม่ครบ/);
   // เปลี่ยนมือหลายรอบ: daily → new_customer (1 ก.ย.) → daily (20 ก.ย.) → none (1 ต.ค.) แล้วปัจจุบัน none
   const multi = buildPolicyTimeline({ status: { mode: "none", stored_mode: "none", schedule: null, last_applied: null }, now: NOW, audit: [
     { at: "2026-08-25T03:00:00Z", action: "schedule_set", from_mode: "daily", to_mode: "new_customer" },
@@ -77,8 +101,18 @@ test("windows ของวัน: 16 ต.ค. = daily (มี audit) / unknown (
   const pend = buildPolicyTimeline({ status: { mode: "new_customer", stored_mode: "daily", last_applied: null, schedule: { id: 1, status: "pending", target_mode: "new_customer", effective_at: EFFECTIVE } }, audit: auditReal.slice(0, 1), now: NOW });
   assert.deepEqual(resolvePolicyWindowsForDay(pend, day19).windows.map((w) => w.mode), ["new_customer"]);
   assert.deepEqual(resolvePolicyWindowsForDay(pend, day18).windows.map((w) => w.mode), ["daily"]);
-  // รับ status เดี่ยว (ไม่มี audit) ได้ — เท่ากับ timeline ไม่มีประวัติ
-  assert.deepEqual(resolvePolicyWindowsForDay(statusAfter, day19).windows.map((w) => w.mode), ["new_customer"]);
+  // รับ status เดี่ยว (ไม่มี audit) ได้ — เท่ากับประวัติอ่านไม่ได้ → unknown + บอกในสรุป
+  const solo = resolvePolicyWindowsForDay(statusAfter, day19);
+  assert.deepEqual(solo.windows.map((w) => w.mode), ["unknown"]); assert.match(solo.summary, /อ่านประวัตินโยบายไม่ได้/); assert.equal(solo.auditState, "unavailable");
+  // Codex รอบ 3 ข้อ 4: โหมด none ต้องไม่บอกว่า "ทดลอง 2 ครั้ง ถูกต้อง"
+  const tlNone = buildPolicyTimeline({ now: NOW, status: { mode: "none", stored_mode: "none", schedule: null, last_applied: null }, audit: [
+    { at: "2026-10-15T06:45:00Z", action: "schedule_set", from_mode: "daily", to_mode: "none", schedule_id: 1, detail: { effective_at: EFFECTIVE } },
+    { at: "2026-10-18T17:00:18Z", action: "mode_set", from_mode: "daily", to_mode: "none", schedule_id: 1 },
+  ] });
+  const pNone = resolvePolicyWindowsForDay(tlNone, day19);
+  assert.deepEqual(pNone.windows.map((w) => w.mode), ["none"]); assert.match(pNone.summary, /ปิดสิทธิ์ฟรีทุกบัญชี/); assert.match(pNone.summary, /ฟรีทุกแบบ \(รายวัน\/พรุ่งนี้\/รีเซ็ต\/ทดลองบัญชีใหม่\) = ข้อมูลสิทธิ์ผิด/);
+  assert.doesNotMatch(pNone.summary, /ถูกต้อง/);
+  assert.match(p19.summary, /ทดลองรวม 2 ครั้ง' ถูกต้อง/);
 });
 
 /* ---------- เคส 1 (16 ต.ค. 07:12–07:13, ลูกค้าเก่ามี 15 รายงาน): ถามของที่ส่งไปแล้ว → paywall "พรุ่งนี้ยังมีฟรี" ---------- */
@@ -114,6 +148,13 @@ test("เคสเดียวกันหลังเปลี่ยนโห�
   assert.equal(g.length, 1); assert.match(g[0].problem, /ปิดสิทธิ์ฟรี/);
   assert.deepEqual(detectDailyPromiseAgainstPolicy(bad, [{ fromIso: day19.startIso, toIso: day19.endIso, mode: "unknown" }]), [], "unknown ไม่ใช่ความผิด (Codex รอบ 2)");
   assert.deepEqual(detectDailyPromiseAgainstPolicy(bad, []), []);
+  // Codex รอบ 3 ข้อ 4: สัญญาทดลองบัญชีใหม่ — ผิดเฉพาะ none · ถูกต้องใต้ new_customer · ประโยคปฏิเสธไม่โดน
+  const trial = [at("2026-10-19T02:00:00Z", "bot", "บัญชีใหม่ทดลองฟรีได้ 2 ครั้งครับ", { replyType: "gemini_front_consult", source: "llm" })];
+  const none = [{ fromIso: day19.startIso, toIso: day19.endIso, mode: "none" }];
+  const t1 = detectDailyPromiseAgainstPolicy(trial, none);
+  assert.equal(t1.length, 1); assert.equal(t1[0].kind, "trial_promise_policy_mismatch"); assert.match(t1[0].problem, /ทดลองฟรีบัญชีใหม่.*ปิดสิทธิ์ฟรีทุกบัญชี/);
+  assert.deepEqual(detectDailyPromiseAgainstPolicy(trial, pol.windows), [], "ใต้ new_customer ทดลอง 2 ครั้งถูกต้อง");
+  assert.deepEqual(detectDailyPromiseAgainstPolicy([at("2026-10-19T02:00:00Z", "bot", "ตอนนี้ไม่มีทดลองฟรีบัญชีใหม่แล้วครับ ใช้แพ็กได้ครับ")], none), []);
 });
 
 /* ---------- ข้อ 6: false positive ใหม่ของ regex ---------- */
@@ -199,6 +240,9 @@ test("prompt: กฎเดียวเรื่องตัวตน (ไม่�
   assert.match(ANALYZER_SYSTEM, /\[human\] = a real human admin typed it → not bot output, never judge it/);
   assert.match(ANALYZER_SYSTEM, /policy IN EFFECT AT THE TIME OF THE REPLY/); assert.match(ANALYZER_SYSTEM, /never by today's policy/);
   assert.match(ANALYZER_SYSTEM, /If POLICY says "ไม่ทราบ" for that time, do not judge free-quota statements at all/);
+  assert.match(ANALYZER_SYSTEM, /Under "ปิดสิทธิ์ฟรีทุกบัญชี", EVERY free promise is wrong — daily, tomorrow, reset AND the new-account trial/);
+  assert.match(ANALYZER_SYSTEM, /remains correct there; do not conclude/);
+  assert.ok(!/or "ปิดสิทธิ์ฟรี", any promise of daily free/.test(ANALYZER_SYSTEM), "ข้อยกเว้นทดลอง 2 ครั้งต้องไม่ผูกกับโหมด none");
   assert.match(ANALYZER_SYSTEM, /does NOT prove remaining quota/);
   assert.match(ANALYZER_SYSTEM, /ข้อมูลสิทธิ์ผิด/); assert.match(ANALYZER_SYSTEM, /บัญชีใหม่ที่เข้าเกณฑ์ทดลองรวม 2 ครั้ง/);
   assert.match(ANALYZER_SYSTEM, /NEVER a reason to block or deflect the owner's old results/); assert.match(ANALYZER_SYSTEM, /ตอบไม่ตรงคำถาม \(ผลเก่า\)/); assert.match(ANALYZER_SYSTEM, /no guessed scores, no selling/);
@@ -211,17 +255,20 @@ test("prompt: กฎเดียวเรื่องตัวตน (ไม่�
 });
 
 test("STATE header: POLICY + USER ณ สิ้นวัน (วันเริ่มบัญชี/เกณฑ์ใหม่/job ฟรีก่อนสิ้นวัน/ชำระก่อนสิ้นวัน) ไม่มียอดแพ็ก-โบนัสปัจจุบัน · ไม่มี RPC ก็ไม่พัง", async () => {
-  const chain = (data, single = null) => { const o = { select: () => o, eq: () => o, gte: () => o, lt: () => o, order: () => o, limit: async () => ({ data }), maybeSingle: async () => ({ data: single }) }; return o; };
+  const ltCalls = [];
+  const chain = (data, single = null, table = "") => { const o = { select: () => o, eq: () => o, gte: () => o, lt: (col) => { ltCalls.push(`${table}.${col}`); return o; }, order: () => o, limit: async () => ({ data }), maybeSingle: async () => ({ data: single }) }; return o; };
   const seen = [];
   const fake = {
     from: (t) => { seen.push(t); return t === "app_users" ? chain(null, { created_at: "2026-03-01T03:00:00Z", paid_until: "2026-09-11T00:00:00Z", paid_remaining_scans: 0, bonus_scans: 3 })
-      : t === "scan_jobs" ? chain([{ id: "j1" }, { id: "j2" }]) : chain([{ id: "p1" }]); },
+      : t === "scan_jobs" ? chain([{ id: "j1" }, { id: "j2" }], null, t) : chain([{ id: "p1" }], null, t); },
     rpc: async (fn) => ({ data: fn === "new_customer_trial_status" ? { enabled: true, eligible_since: EFFECTIVE, used: 0, pending: 0 } : null }),
   };
   const pol = resolvePolicyWindowsForDay(tlReal, day19);
   const h = await buildStateHeader("Uxxxx", day19, { supabase: fake, policy: pol });
   assert.match(h, /^STATE:\nPOLICY \(ณ วันนั้น\): ไม่มีฟรีรายวัน/);
-  assert.match(h, /USER \(ณ สิ้นวันนั้น\): .*ลูกค้าเก่า ไม่เข้าเกณฑ์บัญชีใหม่.*job สแกนฟรีที่สร้างก่อนสิ้นวัน 2 · การชำระสำเร็จก่อนสิ้นวัน 1/);
+  assert.match(h, /USER \(ณ สิ้นวันนั้น\): .*ลูกค้าเก่า ไม่เข้าเกณฑ์บัญชีใหม่.*job สแกนฟรีที่สร้างก่อนสิ้นวัน 2 · การชำระที่ตรวจผ่านก่อนสิ้นวัน \(verified_at\) 1/);
+  // ltCalls: 2 query แรก = job/payment "ของวัน" (created_at ตามเดิม) · query นับก่อนสิ้นวัน: job ใช้ created_at, payment ต้องใช้ verified_at
+  assert.deepEqual(ltCalls, ["scan_jobs.created_at", "payments.created_at", "scan_jobs.created_at", "payments.verified_at"], "Codex รอบ 3 ข้อ 2: การชำระก่อนสิ้นวันกรองด้วย verified_at");
   assert.match(h, /ห้ามฟันธงว่า "สิทธิ์ยังไม่หมด\/หมดแล้ว"/);
   assert.doesNotMatch(h, /โบนัส|แพ็ก เหลือ|หมดอายุ/, "ไม่ใช้ยอดปัจจุบันตัดสินข้อความเก่า");
   const fakeNew = { ...fake, from: (t) => t === "app_users" ? chain(null, { created_at: "2026-10-19T01:00:00Z" }) : chain([]) };
@@ -236,8 +283,10 @@ test("STATE header: POLICY + USER ณ สิ้นวัน (วันเริ�
 test("static: sweep อ่าน status (anon) + audit ผ่าน client จำกัด · timeline → policyWindows → deterministic + classify → transcript · สรุปนโยบายขึ้นหัวรายงาน · อ่านอย่างเดียว", () => {
   const src = readFileSync("src/services/chatQualityDailyReport.service.js", "utf8");
   assert.match(src, /supabase\.rpc\("free_policy_status", \{ p_line_user_id: null \}\)/);
-  assert.match(src, /freePolicyDbClient\(\)\.rpc\("free_policy_audit_recent", \{ p_limit: 200 \}\)/);
+  assert.match(src, /freePolicyDbClient\(\)\.rpc\("free_policy_audit_recent", \{ p_limit: POLICY_AUDIT_LIMIT \}\)/);
   assert.match(src, /resolvePolicyWindowsForDay\(buildPolicyTimeline\(\{ status: ps, audit, now: Date\.now\(\) \}\), dayRange\)/);
+  assert.match(src, /let audit = null;/); assert.match(src, /if \(error\) throw error; audit = Array\.isArray\(au\) \? au : \[\];/, "อ่านล้ม = null (unavailable) · อ่านได้ = array");
+  assert.match(src, /lt\("verified_at", dayRange\.endIso\)/);
   assert.match(src, /runDeterministicChecks\(convRows, \{ policyWindows: policy\.windows \}\)/);
   assert.match(src, /buildTranscript\(convRows, stateHeader, classifyBotSource\)/);
   assert.match(src, /policySummary: policy\.summary/);

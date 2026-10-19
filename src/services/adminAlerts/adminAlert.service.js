@@ -8,8 +8,8 @@
  *    ส่งสำเร็จบางก้อน → outbox เก็บเฉพาะก้อนที่ยังไม่ส่ง (retry ไม่ส่งก้อนสำเร็จซ้ำ)
  *  - ยังไม่ตั้งค่าปลายทาง (chat id/token รูปแบบไม่ถูก) = log ADMIN_ALERT_NOT_CONFIGURED พร้อมข้อความเต็ม ไม่แตะ DB (ไม่ fallback LINE)
  *  - dedupe: marker redis ตั้งเมื่อส่งสำเร็จ หรือเข้า outbox แล้ว · outbox กันแถวซ้ำด้วย dedupe_key
- *  - sweeper: Telegram รับแล้วแต่บันทึกผล (finish) ไม่ได้ = แยกเป็น sentUnrecorded (ไม่ใช่สำเร็จครบ) + จำ id ไว้ในโปรเซส
- *    รอบถัดไปถ้า claim ได้ id เดิม → finish(ok) โดยไม่ส่งซ้ำ · โปรเซส restart = แถวค้าง sending → 10 นาที claim ใหม่ → ส่งซ้ำได้ 1 ครั้ง (ยอมรับ ดีกว่าเงียบ) · log ADMIN_ALERT_OUTBOX_FINISH_FAILED ระบุ id
+ *  - sweeper: finish ไม่ได้ = จำความคืบหน้าในโปรเซส (ส่งครบ → sentUnrecorded ไม่ใช่ sent · ส่งบางก้อน → remainingText) รอบถัดไป claim id เดิมจะไม่ส่งก้อนสำเร็จซ้ำ
+ *    โปรเซส restart = ความจำหาย → claim ใหม่หลัง 10 นาทีส่งตาม text ใน DB = at-least-once อาจส่งซ้ำ (ไม่รับประกันจำนวนครั้ง) · log ADMIN_ALERT_OUTBOX_FINISH_FAILED ระบุ id
  *  - ไม่ใส่ token/secret/key ใน log · uid ลูกค้าในข้อความให้ mask (maskUid)
  */
 import { PostgrestClient } from "@supabase/postgrest-js";
@@ -168,10 +168,15 @@ export async function sendAdminAlert(p, deps = {}) {
   }
 }
 
-/** id ที่ Telegram รับแล้วแต่ finish ไม่สำเร็จ (ในโปรเซสนี้) → รอบหน้า finish(ok) โดยไม่ส่งซ้ำ */
-const sentUnrecorded = new Map();
-export function _resetAdminAlertSweepState() { sentUnrecorded.clear(); }
-export function _sentUnrecordedIds() { return [...sentUnrecorded.keys()]; }
+/**
+ * ความคืบหน้าของแถวที่ finish ไม่สำเร็จ (ในโปรเซสนี้) — Codex รอบ 3 ข้อ 3: จำทั้งกรณีส่งครบ (delivered) และส่งได้บางก้อน (remainingText)
+ *  รอบถัดไป claim id เดิม → delivered: finish(ok) ไม่ส่ง · partial: ส่งเฉพาะ remainingText (ไม่ส่งก้อน A ซ้ำ)
+ *  โปรเซส restart = ความจำหาย → แถว sending ถูก claim ใหม่หลัง 10 นาทีและส่งตาม text ใน DB = **at-least-once อาจส่งซ้ำ** (ไม่รับประกันจำนวนครั้ง)
+ */
+const progress = new Map(); // id → { delivered: boolean, remainingText: string|null, at: number }
+export function _resetAdminAlertSweepState() { progress.clear(); }
+export function _sentUnrecordedIds() { return [...progress.entries()].filter(([, v]) => v.delivered).map(([k]) => k); }
+export function _sweepProgress() { return Object.fromEntries([...progress.entries()].map(([k, v]) => [k, { delivered: v.delivered, remainingText: v.remainingText }])); }
 async function finishWithRetry(db, args, tries = 3) {
   let last = null;
   for (let i = 0; i < tries; i++) {
@@ -196,18 +201,25 @@ export async function sweepAdminAlertOutbox(deps = {}) {
   if (error) { console.error(JSON.stringify({ event: "ADMIN_ALERT_OUTBOX_CLAIM_FAILED", env: envLabel, reason: String(error.message || error).slice(0, 120) })); return { ...summary, error: "claim_failed" }; }
   for (const r of rows || []) {
     summary.claimed += 1;
+    const prog = progress.get(r.id) || null;
+    const textUsed = prog?.remainingText ?? r.text; // ส่งต่อจากส่วนที่เหลือ ถ้ารอบก่อนส่งได้บางก้อนแต่บันทึกผลไม่ได้
     let res;
-    if (sentUnrecorded.has(r.id)) res = { ok: true, parts: 0, recovered: true }; // Telegram รับไปแล้วรอบก่อน — ไม่ส่งซ้ำ แค่บันทึกผล
-    else res = await sendTelegramDirect(cfg, r.text, deps);
-    const fin = await finishWithRetry(db, { p_id: r.id, p_ok: res.ok === true, p_error: res.ok ? null : String(res.reason || "send_failed"), p_retry_after_sec: res.retryAfterSec || null, p_text: !res.ok && Number(res.sentParts) > 0 ? outboxTextFromSendResult(r.text, res) : null });
+    if (prog?.delivered) res = { ok: true, parts: 0, recovered: true }; // Telegram รับครบไปแล้วรอบก่อน — ไม่ส่งซ้ำ แค่บันทึกผล
+    else res = await sendTelegramDirect(cfg, textUsed, deps);
+    const partialText = !res.ok && Number(res.sentParts) > 0 ? outboxTextFromSendResult(textUsed, res) : null;
+    const pText = partialText ?? (!res.ok && prog ? textUsed : null); // ให้ text ใน DB ตรงกับความคืบหน้าจริง
+    const fin = await finishWithRetry(db, { p_id: r.id, p_ok: res.ok === true, p_error: res.ok ? null : String(res.reason || "send_failed"), p_retry_after_sec: res.retryAfterSec || null, p_text: pText });
     if (fin.error) {
       const reason = String(fin.error?.message || fin.error).slice(0, 120);
-      if (res.ok) { sentUnrecorded.set(r.id, Date.now()); summary.sentUnrecorded += 1; console.error(JSON.stringify({ event: "ADMIN_ALERT_OUTBOX_FINISH_FAILED", env: envLabel, id: r.id, category: r.category, telegramDelivered: true, reason, recovery: "แถวคง sending · โปรเซสนี้จำ id ไว้ รอบหน้า claim ได้จะ finish(ok) ไม่ส่งซ้ำ · ถ้าโปรเซส restart แถวจะถูก claim ใหม่หลัง 10 นาทีและส่งซ้ำ 1 ครั้ง" })); }
-      else { summary.finishFailed += 1; console.error(JSON.stringify({ event: "ADMIN_ALERT_OUTBOX_FINISH_FAILED", env: envLabel, id: r.id, category: r.category, telegramDelivered: false, sendReason: res.reason, reason, recovery: "แถวคง sending → claim ใหม่หลัง 10 นาที (ไม่หาย)" })); }
+      progress.set(r.id, { delivered: res.ok === true, remainingText: res.ok ? null : (pText ?? textUsed), at: Date.now() });
+      const recovery = "แถวคง sending · โปรเซสนี้จำความคืบหน้า (ส่งครบ/ส่วนที่เหลือ) รอบหน้า claim ได้จะไม่ส่งก้อนที่สำเร็จแล้วซ้ำ · ถ้าโปรเซส restart แถวจะถูก claim ใหม่หลัง 10 นาทีและส่งตาม text ใน DB = at-least-once อาจส่งซ้ำ";
+      if (res.ok) { summary.sentUnrecorded += 1; console.error(JSON.stringify({ event: "ADMIN_ALERT_OUTBOX_FINISH_FAILED", env: envLabel, id: r.id, category: r.category, telegramDelivered: true, reason, recovery })); }
+      else { summary.finishFailed += 1; console.error(JSON.stringify({ event: "ADMIN_ALERT_OUTBOX_FINISH_FAILED", env: envLabel, id: r.id, category: r.category, telegramDelivered: false, partialSent: Number(res.sentParts) || 0, sendReason: res.reason, reason, recovery })); }
       continue;
     }
+    if (prog) progress.delete(r.id);
     const st = fin.data?.status || (res.ok ? "sent" : "queued");
-    if (st === "sent") { summary.sent += 1; if (res.recovered) { summary.recovered += 1; sentUnrecorded.delete(r.id); } log("ADMIN_ALERT_OUTBOX_SENT", { env: envLabel, id: r.id, category: r.category, attempts: fin.data?.attempts ?? null, recovered: res.recovered === true }); }
+    if (st === "sent") { summary.sent += 1; if (prog) summary.recovered += 1; log("ADMIN_ALERT_OUTBOX_SENT", { env: envLabel, id: r.id, category: r.category, attempts: fin.data?.attempts ?? null, recovered: Boolean(prog), resumedFromPartial: Boolean(prog && !prog.delivered) }); }
     else if (st === "failed") { summary.failed += 1; console.error(JSON.stringify({ event: "ADMIN_ALERT_OUTBOX_FAILED", env: envLabel, id: r.id, category: r.category, attempts: fin.data?.attempts ?? null, reason: res.reason })); }
     else { summary.retry += 1; log("ADMIN_ALERT_OUTBOX_RETRY", { env: envLabel, id: r.id, attempts: fin.data?.attempts ?? null, nextAttemptAt: fin.data?.next_attempt_at ?? null, reason: res.reason, partialSent: Number(res.sentParts) || 0 }); }
   }

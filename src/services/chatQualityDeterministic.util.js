@@ -190,29 +190,38 @@ export function detectOldResultAnsweredWithPaywall(rows, { windowMin = 3 } = {})
 const NEGATION_IN_WINDOW_RE = /(ไม่มี|ไม่ได้|ไม่ใช่|ไม่.{0,8}(รีเซ็ต|ฟรี|แล้ว|ให้|นับ)|เลิก|ยกเลิก|งด|ปิดไป|ปิดแล้ว|หมดแล้ว|หมดไป|สิ้นสุด|ยุติ)/;
 /** บริบทที่ไม่ใช่ "ฟรีรายวัน": แพ็ก/สิทธิ์ที่ซื้อ/ทดลองบัญชีใหม่ */
 const NON_DAILY_CONTEXT_RE = /(แพ็ก|แพ็กเกจ|ทดลอง|บัญชีใหม่|ลูกค้าใหม่|สิทธิ์ที่(ซื้อ|เปิด|เติม)|เปิดสิทธิ์แล้ว|โบนัส)/;
-/** มีคำสัญญาฟรีรายวันจริง — ไม่นับประโยคปฏิเสธ ("พรุ่งนี้ไม่มีฟรีรายวันแล้ว", "สิทธิ์ทดลองไม่รีเซ็ตหลังเที่ยงคืน") หรือบริบทแพ็ก/ทดลอง */
-export function hasDailyFreePromise(text) {
+/** คำสัญญาทดลองฟรีบัญชีใหม่ (ผิดเฉพาะโหมด none — Codex รอบ 3 ข้อ 4) */
+export const TRIAL_PROMISE_RE = /(ทดลอง(ใช้|สแกน)?ฟรี|(บัญชีใหม่|ลูกค้าใหม่).{0,24}ฟรี|ฟรี.{0,16}(บัญชีใหม่|ลูกค้าใหม่)|ฟรี\s*2\s*ครั้ง)/;
+function hasPromise(text, baseRe, excludeContextRe) {
   const txt = String(text || "");
-  const re = new RegExp(DAILY_FREE_PROMISE_RE.source, "g");
+  const re = new RegExp(baseRe.source, "g");
   let m;
   while ((m = re.exec(txt))) {
     const win = txt.slice(Math.max(0, m.index - 16), m.index + m[0].length + 12); // ก่อน 16 + คำ + หลัง 12 ("ฟรีรายวันสิ้นสุดแล้ว")
-    if (!NEGATION_IN_WINDOW_RE.test(win) && !NON_DAILY_CONTEXT_RE.test(win)) return true;
+    if (!NEGATION_IN_WINDOW_RE.test(win) && !(excludeContextRe && excludeContextRe.test(win))) return true;
     if (!m[0].length) re.lastIndex++;
   }
   return false;
 }
+/** มีคำสัญญาฟรีรายวันจริง — ไม่นับประโยคปฏิเสธ ("พรุ่งนี้ไม่มีฟรีรายวันแล้ว", "สิทธิ์ทดลองไม่รีเซ็ตหลังเที่ยงคืน") หรือบริบทแพ็ก/ทดลอง */
+export function hasDailyFreePromise(text) { return hasPromise(text, DAILY_FREE_PROMISE_RE, NON_DAILY_CONTEXT_RE); }
+/** มีคำสัญญาทดลองฟรีบัญชีใหม่ (ไม่นับประโยคปฏิเสธ/แพ็ก/โบนัส) */
+export function hasTrialPromise(text) { return hasPromise(text, TRIAL_PROMISE_RE, /(แพ็ก|แพ็กเกจ|โบนัส)/); }
 
 export function detectDailyPromiseAgainstPolicy(rows, windows = []) {
   const out = [];
   for (const r of rows) {
     if (r.role !== "bot") continue;
     const txt = String(r.text || "");
-    if (!hasDailyFreePromise(txt)) continue;
     const mode = policyModeAt(r.created_at, windows);
     if (mode !== "new_customer" && mode !== "none") continue; // daily/unknown/ไม่มี window = งดตัดสิน (Codex รอบ 2 ข้อ 5)
-    out.push({ kind: "daily_promise_policy_mismatch", time: hm(r.created_at), quote: txt.slice(0, 200), severity: "high", source: classifyBotSource(r),
-      problem: `ข้อมูลสิทธิ์ผิด: สัญญาฟรีรายวัน/พรุ่งนี้/รีเซ็ต ทั้งที่นโยบาย ณ เวลานั้นเป็น ${mode === "new_customer" ? "ฟรีเฉพาะบัญชีใหม่ที่เข้าเกณฑ์ทดลองรวม 2 ครั้ง (ไม่มีฟรีรายวัน)" : "ปิดสิทธิ์ฟรี"}` });
+    const daily = hasDailyFreePromise(txt);
+    const trial = mode === "none" && hasTrialPromise(txt); // ทดลองบัญชีใหม่ผิดเฉพาะโหมด none (new_customer = ถูกต้อง)
+    if (!daily && !trial) continue;
+    out.push({ kind: daily ? "daily_promise_policy_mismatch" : "trial_promise_policy_mismatch", time: hm(r.created_at), quote: txt.slice(0, 200), severity: "high", source: classifyBotSource(r),
+      problem: mode === "new_customer"
+        ? "ข้อมูลสิทธิ์ผิด: สัญญาฟรีรายวัน/พรุ่งนี้/รีเซ็ต ทั้งที่นโยบาย ณ เวลานั้นเป็น ฟรีเฉพาะบัญชีใหม่ที่เข้าเกณฑ์ทดลองรวม 2 ครั้ง (ไม่มีฟรีรายวัน)"
+        : `ข้อมูลสิทธิ์ผิด: สัญญา${daily ? "ฟรีรายวัน/พรุ่งนี้/รีเซ็ต" : "ทดลองฟรีบัญชีใหม่"} ทั้งที่นโยบาย ณ เวลานั้นเป็น ปิดสิทธิ์ฟรีทุกบัญชี (ไม่มีฟรีทุกแบบ แพ็ก/โบนัสเท่านั้น)` });
   }
   return out;
 }
