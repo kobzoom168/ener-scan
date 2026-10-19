@@ -28,5 +28,6 @@ const r = await sendNonScanPushMessage({
   client, userId: uid, replyType: "slip_manual_review", semanticKey: `slip_manual_review_probe_${Date.now()}`,
   text: "รับรูปแล้วครับ ขอเช็กแปปนึง\nถ้าเป็นสลิปโอน เดี๋ยวผมเปิดสิทธิ์แล้วแจ้งกลับในแชตนี้เลยครับ",
 });
+await new Promise((r) => setTimeout(r, 2500)); // ให้ insertLineConversationMessage (fire-and-forget ใน gateway) เขียนเสร็จก่อนจบโปรเซส
 console.log(JSON.stringify({ event: "SLIP_PROBE_DONE", host, adminIdPrefix: String(process.env.ADMIN_LINE_USER_ID).slice(0, 8), customerUidPrefix: uid.slice(0, 8), paymentIdSynthetic: paymentId, telegramApprovalBypassed: tgCalled, customerPush: r && typeof r === "object" ? { ok: r.ok ?? null, suppressed: r.suppressed ?? null } : String(r) }));
 process.exit(0);
