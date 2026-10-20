@@ -169,3 +169,12 @@
 | 4 sweep (F2) | หลังสร้าง F2 รอ ≤2 นาที | payments F2: `reject_notify_pending=false`, queued_at set · log maintenance `REJECT_NOTIFY_SWEEP_QUEUED state=queued` 1 ครั้ง · รอบถัดไป (≥3 รอบ) ไม่มี log ซ้ำ | outbound 1 แถว payload text "สลิปไม่ชัด" ไม่มีข้อความเงินรอดำเนินการ | status sent | กบเห็น 1 ข้อความ (ครั้งเดียว) |
 **ก่อน/หลังทุกเคส:** snapshot app_users (paid_until / paid_remaining_scans / paid_plan_code / bonus_scans / updated_at) + grants count ต้องเท่ากันทุกค่า
 **ปิดงาน:** รายงานผล §13.5 · disable + delete-webhook bot staging (ถ้ากบสั่ง) · fixture คงไว้ · ไม่แตะ Pro
+**ข้อกำกับเพิ่ม (Codex 20 ต.ค. 15:25 ไทย):** ติดคำว่า "ทดสอบ staging — ไม่มีการโอนเงินจริง" ในข้อความ F1/F2 (F1: package_name + note ใน DB → ขึ้นบน caption Telegram · ข้อความ LINE ของ F1 ใช้ label เหตุผลคงที่ "ยอดเงินไม่ตรง" จึงใส่คำกำกับไม่ได้โดยไม่แก้โค้ด — ผู้รับคือบัญชีทดสอบกบเท่านั้น · F2: ใส่ใน p_reason_text ตอนปฏิเสธ → ขึ้นในข้อความ LINE) · บันทึก payment ID จริงและใช้ตรวจทุกขั้น · ผิดบัญชี/ผิดห้อง/สิทธิ์เปลี่ยน = หยุดทันที · ปิด bot + ลบ webhook staging คืนหลังจบ **รวมกรณีล้ม/ยุติกลางทาง** · "เคลียร์งานค้างก่อน rollback" = ตรวจและจัดการให้มีหลักฐาน ไม่ใช่ลบแถว/บังคับ sent/ปิดเรื่องเงินให้ยอดเป็นศูนย์
+### 13.5 บันทึกการทำจริง (กบ "พร้อมแล้ว" 20 ต.ค. 15:03 ไทย = อนุมัติ ก–จ)
+| เวลา (Z) | ขั้น | ผล |
+|---|---|---|
+| 08:03:11 | snapshot ก่อน | app_users `5b03472a` paid_until 2026-08-11 18:35:26Z · paid_remaining 999977 · plan 299baht_unlimited_30d · bonus 0 · status active · updated 2026-10-19 08:01:52Z · free_off 99/2026-07-12 · grants 0 · payments 7 · audit_total 8 · outbound reject_notify total 2 · tokens 1 (ไฟล์ scratchpad stg-acc-snapshot-before.txt) |
+| 08:03:12–16 | ก เปิด bot staging | bot-info `ener_kob_approval_test_bot` id 8780802561 ✓ · enable actor ops:stg-acceptance-20261020 · verify-endpoint 401/401 · set-webhook `https://test.my-ener.uk/telegram/webhook` ok pending 0 · webhook-info ตรง · webhook_set_at 08:03:16Z · หลักฐาน `/root/backup-ops-20261002/staging-reject-20261020-074845/stg-*.json` |
+| 08:03:17 | ข สร้าง F1 | **F1 id `c39c09c8-51c3-42cc-964d-1a3aa824c5aa`** ref PAY-STGRJ1 pending_verify expected 49 slip 20 settlement none pending false · package_name/note มีคำกำกับทดสอบ |
+| 08:03:51 | ค ส่ง Telegram F1 | สคริปต์ `scripts/ops/staging-telegram-reject-acceptance-notify.mjs` (guard staging + ref PAY-STGRJ + pending_verify + uid ตรง) → `ACCEPTANCE_TG_PENDING_SENT ok=true` · ไม่ส่งยอดเข้าไป ให้ service เติมจาก DB |
+| รอ | เคส 1 | รอกบตรวจข้อความในห้อง -5440947116 แล้วกด ไม่อนุมัติ → ยอดเงินไม่ตรง → ยืนยัน |
