@@ -108,7 +108,8 @@ test("store → render: getPaymentsForAdminByStatus (query จริง + client
     assert.equal(page.status, 200);
     assert.equal(b.client.calls.length, 1); assert.match(b.client.calls[0].sel, /settlement_status/); assert.match(b.client.calls[0].sel, /settlement_note/); assert.match(b.client.calls[0].sel, /settlement_by/);
     assert.deepEqual(b.client.calls[0].filters, [["status", "rejected"]]);
-    assert.equal((page.text.match(/data-settlement="money_pending"/g) || []).length, 1, "ป้ายเงินรอดำเนินการ 1 ใบ (แถว PAY-AB51E942)");
+    assert.equal((page.text.match(/data-settlement="money_pending"/g) || []).length, 2, "ป้ายเงินรอดำเนินการ 2 จุดของแถวเดียว: การ์ดมือถือ + ช่องเหตุผลในตารางเดสก์ท็อป (acceptance 20 ต.ค. พบว่าตารางไม่มีป้าย)");
+    assert.match(page.text, /<td style="max-width:100px;font-size:0\.76rem;">ยอดเงินไม่ตรง<span class="settlement-badge" data-settlement="money_pending"/, "ตารางเดสก์ท็อปต้องมีป้ายในช่องเหตุผล");
     assert.match(page.text, /PAY-AB51E942/); assert.match(page.text, /เงินรอดำเนินการ/); assert.match(page.text, /PAY-00000002/);
     assert.doesNotMatch(page.text, /data-settlement="none"/, "แถว none ไม่ต้องแสดงป้าย");
     // พิสูจน์ว่าป้ายมาจาก projection จริง: client ที่ตัดคอลัมน์ settlement ออก (select เดิมรอบ 2) → ไม่มีป้าย

@@ -13,4 +13,5 @@ test("settlementBlockHtml: none = ว่าง · money_pending = ฟอร์�
   const done = settlementBlockHtml(base({ settlement_status: "refunded", settlement_note: "โอนคืน 10 บาท", settlement_by: "admin_dashboard:2026-10-20T05" }), "/admin/payments/c9d2", "csrf-123");
   assert.match(done, /คืนเงินแล้ว/); assert.match(done, /admin_dashboard/); assert.doesNotMatch(done, /<form/);
   assert.equal(settlementBadgeHtml(base({})), ""); assert.match(settlementBadgeHtml(base({ settlement_status: "money_pending" })), /เงินรอดำเนินการ/); assert.doesNotMatch(settlementBadgeHtml(base({ settlement_status: "money_pending" })), /<form/);
+  assert.equal(settlementBadgeHtml(base({}), "inline"), ""); assert.match(settlementBadgeHtml(base({ settlement_status: "money_pending" }), "inline"), /^<span class="settlement-badge" data-settlement="money_pending"[^>]*>⚠ เงินรอดำเนินการ<\/span>$/); assert.match(settlementBadgeHtml(base({ settlement_status: "refunded" }), "inline"), /คืนเงินแล้ว/);
 });

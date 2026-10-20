@@ -242,10 +242,12 @@ export function settlementBlockHtml(p, postBase, csrf = "") {
 }
 
 /** ป้ายสถานะเงินสำหรับการ์ดในหน้ารายการ (ไม่มีฟอร์ม — ฟอร์มอยู่หน้ารายละเอียดพร้อม CSRF) */
-export function settlementBadgeHtml(p) {
+/** ป้ายสถานะเงินสำหรับหน้ารายการ — variant "card" (มือถือ, div.card-row) หรือ "inline" (ตารางเดสก์ท็อป, span ในช่องเหตุผล) · acceptance 20 ต.ค. 2026 พบว่าตารางไม่มีป้าย */
+export function settlementBadgeHtml(p, variant = "card") {
   const st = String(p?.settlement_status || "none");
   if (st === "none") return "";
   const labels = { money_pending: "⚠ เงินรอดำเนินการ", refunded: "คืนเงินแล้ว", topped_up: "โอนเพิ่มครบ", written_off: "ตัดจบ" };
+  if (variant === "inline") return `<span class="settlement-badge" data-settlement="${escapeHtml(st)}" style="display:inline-block;margin-top:3px;padding:1px 6px;border-radius:6px;font-size:0.72rem;font-weight:600;${st === "money_pending" ? "background:#fef3c7;color:#b45309;" : "background:#e5e7eb;color:#374151;"}">${escapeHtml(labels[st] || st)}</span>`;
   return `<div class="card-row settlement" data-settlement="${escapeHtml(st)}"><b>สถานะเงิน</b> ${escapeHtml(labels[st] || st)}</div>`;
 }
 
@@ -746,7 +748,7 @@ function renderListPage({
         <td>${fmtMoney(p)}</td>
         <td>${escapeHtml(p.package_code || "—")}</td>
         <td><span class="${statusBadgeClass(p.status)}">${escapeHtml(p.status)}</span></td>
-        <td style="max-width:100px;font-size:0.76rem;">${reasonShort}</td>
+        <td style="max-width:100px;font-size:0.76rem;">${reasonShort}${settlementBadgeHtml(p, "inline")}</td>
         <td>${fmtDt(p.created_at)}</td>
         <td>${rem}</td>
         <td>${pu}</td>
