@@ -136,13 +136,17 @@ async function buildRuntimeDeps() {
       };
     },
     // ไม่อนุมัติ (20 ต.ค. 2026): atomic ใน DB (sql/069) · paid แล้วไม่แตะ · ไม่แตะสิทธิ์ · เงินที่อาจเข้าแล้ว = settlement money_pending
-    async rejectPayment({ paymentId, actor, reasonCode, reasonText, moneyPending }) {
-      return payments.markPaymentRejected({ paymentId, rejectReason: reasonText, approvedBy: actor, reasonCode, moneyPending });
+    async rejectPayment({ paymentId, actor, channel, reasonCode, reasonText, moneyPending }) {
+      return payments.markPaymentRejected({ paymentId, rejectReason: reasonText, approvedBy: actor, reasonCode, moneyPending, channel: channel || "telegram" });
     },
     async notifyCustomerReject({ lineUserId, paymentId, reasonText, moneyPending }) {
       const { buildPaymentRejectedText } = await import("../utils/webhookText.util.js");
       const text = buildPaymentRejectedText({ reason: reasonText, moneyPending });
       return enqueue.enqueueRejectNotify({ lineUserId, paymentId, text });
+    },
+    async markRejectNotifyQueued(paymentId) {
+      const ops = await import("../stores/paymentOps.store.js");
+      return ops.markRejectNotifyQueued(paymentId);
     },
     // ← approval service เดิม แต่ตอนนี้เป็น transaction เดียว (ดู sql/062)
     // ส่ง expect เข้าไปให้ตรวจ "ยอด/แพ็ก/สถานะ" ณ จุด commit จริง ไม่ใช่ตรวจใน handler แล้วอ่านใหม่

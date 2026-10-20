@@ -521,10 +521,10 @@ export async function handleApprovalCallback(cb, deps = {}) {
       await recordApprovalAudit({ paymentId, channel: "telegram", actor: auth.fromId, action: "reject_confirmed", result: "error", detail: { reason: "not_found" } }, db);
       return { action: "confirm", result: "error", text: "ไม่พบรายการนี้แล้ว" };
     }
-    const moneyPending = shouldFlagMoneyPending(reason, pay);
+    const moneyHint = shouldFlagMoneyPending(reason, pay); // คำใบ้จากผู้กด — DB เป็นผู้ตัดสินจริงจากแถวที่ล็อก
     let out;
     try {
-      out = await deps.rejectPayment({ paymentId, actor: `telegram:${auth.fromId}`, reasonCode: reason.code, reasonText: reason.label, moneyPending });
+      out = await deps.rejectPayment({ paymentId, actor: `telegram:${auth.fromId}`, channel: "telegram", reasonCode: reason.code, reasonText: reason.label, moneyPending: moneyHint });
     } catch (e) {
       await recordApprovalAudit({ paymentId, channel: "telegram", actor: auth.fromId, action: "reject_confirmed", result: "error", detail: { reason: String(e?.message || e).slice(0, 120) } }, db);
       return { action: "confirm", result: "error", text: "ไม่อนุมัติไม่สำเร็จ ระบบบันทึกไม่ผ่าน ยังไม่เปลี่ยนสถานะรายการ" };
@@ -535,20 +535,26 @@ export async function handleApprovalCallback(cb, deps = {}) {
         ? "รายการนี้ถูกอนุมัติไปแล้ว — ไม่เปลี่ยนสถานะ ไม่หักสิทธิ์"
         : `รายการนี้ไม่อยู่ในสถานะรอตรวจแล้ว (ตอนนี้: ${out?.status || "-"})` };
     }
+    const moneyPending = out.settlementStatus === "money_pending"; // ค่าจริงจาก DB (Admin/Telegram ได้ผลเดียวกัน)
+    // งานแจ้งลูกค้าคงทน: DB ตั้ง reject_notify_pending ไว้แล้ว → enqueue (คิว outbound มี retry/dedupe) → mark ว่าเข้าคิวแล้ว · ล้ม = sweep กู้เอง
+    // "เข้าคิวแจ้งแล้ว" ≠ "ส่งถึง LINE แล้ว" — ที่นี่รู้ได้แค่เข้าคิว
+    let notify = { queued: false, reason: "skipped" };
+    if (out.lineUserId && out.notifyPending !== false && typeof deps.notifyCustomerReject === "function") {
+      try {
+        const r = await deps.notifyCustomerReject({ lineUserId: out.lineUserId, paymentId, reasonText: reason.label, moneyPending });
+        notify = { queued: true, deduped: Boolean(r?.deduped) };
+        if (typeof deps.markRejectNotifyQueued === "function") { try { await deps.markRejectNotifyQueued(paymentId); } catch (e) { console.error(JSON.stringify({ event: "TELEGRAM_REJECT_NOTIFY_MARK_FAILED", paymentId, reason: String(e?.message || e).slice(0, 120) })); } }
+      } catch (e) { notify = { queued: false, reason: String(e?.message || e).slice(0, 120) }; console.error(JSON.stringify({ event: "TELEGRAM_REJECT_CUSTOMER_NOTIFY_FAILED", paymentId, reason: notify.reason, recovery: "reject_notify_pending คงอยู่ → maintenance sweep จะเข้าคิวให้ใหม่" })); }
+    }
     if (out.already) {
-      await recordApprovalAudit({ paymentId, channel: "telegram", actor: auth.fromId, action: "reject_confirmed", result: "ok", detail: { already: true } }, db);
-      return { action: "confirm", result: "ok", text: "รายการนี้ถูกปฏิเสธไปแล้วก่อนหน้านี้ — ไม่ส่งข้อความซ้ำ" };
+      await recordApprovalAudit({ paymentId, channel: "telegram", actor: auth.fromId, action: "reject_confirmed", result: "ok", detail: { already: true, notifyQueued: notify.queued } }, db);
+      return { action: "confirm", result: "ok", text: notify.queued ? "รายการนี้ถูกปฏิเสธไปแล้วก่อนหน้านี้ — เข้าคิวแจ้งลูกค้าที่ค้างอยู่ให้แล้ว" : "รายการนี้ถูกปฏิเสธไปแล้วก่อนหน้านี้ — ไม่เปลี่ยนอะไร" };
     }
-    let notify = { ok: false, reason: "skipped" };
-    if (out.lineUserId && typeof deps.notifyCustomerReject === "function") {
-      try { const r = await deps.notifyCustomerReject({ lineUserId: out.lineUserId, paymentId, reasonText: reason.label, moneyPending }); notify = { ok: true, deduped: Boolean(r?.deduped) }; }
-      catch (e) { notify = { ok: false, reason: String(e?.message || e).slice(0, 120) }; console.error(JSON.stringify({ event: "TELEGRAM_REJECT_CUSTOMER_NOTIFY_FAILED", paymentId, reason: notify.reason })); }
-    }
-    await recordApprovalAudit({ paymentId, channel: "telegram", actor: auth.fromId, action: "reject_confirmed", result: "ok", detail: { reasonCode: reason.code, moneyPending, settlementStatus: out.settlementStatus || null, customerNotified: notify.ok === true } }, db);
+    await recordApprovalAudit({ paymentId, channel: "telegram", actor: auth.fromId, action: "reject_confirmed", result: "ok", detail: { reasonCode: reason.code, moneyPending, settlementStatus: out.settlementStatus || null, notifyQueued: notify.queued === true } }, db);
     return { action: "confirm", result: "ok", text: [
       "ไม่อนุมัติแล้ว ไม่เติมสิทธิ์ ไม่หักสิทธิ์เดิม",
-      moneyPending ? `⚠ เงินรอดำเนินการ: ยอดที่อ่านได้ ${out.slipAmount != null ? `${out.slipAmount} บาท` : "-"} — ไปที่หน้า Admin > รายการนี้ เพื่อบันทึกคืนเงิน/โอนเพิ่ม/ตัดจบ` : null,
-      notify.ok ? "แจ้งลูกค้าทาง LINE แล้ว" : "แจ้งลูกค้าไม่สำเร็จ (ระบบจะลองใหม่เอง)",
+      moneyPending ? `⚠ เงินรอดำเนินการ: ยอดที่อ่านได้ ${out.slipAmount != null ? `${out.slipAmount} บาท` : "-"} (ยังไม่พิสูจน์เงินเข้า) — ไปที่หน้า Admin > รายการนี้ เพื่อบันทึกคืนเงิน/โอนเพิ่ม/ตัดจบ` : null,
+      notify.queued ? "เข้าคิวแจ้งลูกค้าทาง LINE แล้ว (ยังไม่ยืนยันว่าส่งถึง)" : "เข้าคิวแจ้งลูกค้าไม่สำเร็จ — ระบบจะลองเข้าคิวใหม่เองภายในไม่กี่นาที (ไม่กระทบสถานะรายการ)",
     ].filter(Boolean).join("\n") };
   }
   return { action: "unknown", result: "denied", text: "ปุ่มนี้ไม่รองรับ" };

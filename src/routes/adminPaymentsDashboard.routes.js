@@ -5,6 +5,7 @@ import express, { Router } from "express";
 
 import { supabase } from "../config/supabase.js";
 import { requireAdminSession } from "../middleware/requireAdmin.js";
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import {
   ensurePaymentRefForPaymentId,
   getPaymentsForAdminByStatus,
@@ -224,18 +225,27 @@ function parseRejectReasonFromBody(body) {
   return sanitizeRejectReason(body?.reject_reason || body?.reason) || null;
 }
 
-/** เงินรอดำเนินการ (sql/069): แยกจากสถานะสิทธิ์ — ปิดได้เฉพาะโดยคน พร้อมหมายเหตุ/หลักฐาน · ไม่แตะสิทธิ์ */
-function settlementBlockHtml(p, postBase) {
+/** เงินรอดำเนินการ (sql/069): แยกจากสถานะสิทธิ์ — ปิดได้เฉพาะโดยคน พร้อมหมายเหตุ/หลักฐาน + CSRF · ไม่แตะสิทธิ์ · export เพื่อเทสต์ render จากแถวรูปแบบ store */
+export function settlementBlockHtml(p, postBase, csrf = "") {
   const st = String(p?.settlement_status || "none");
   const labels = { money_pending: "⚠ เงินรอดำเนินการ (ยังไม่คืน/ยังไม่ตัดจบ)", refunded: "คืนเงินแล้ว", topped_up: "ลูกค้าโอนเพิ่มครบ (บิลใหม่)", written_off: "ตัดจบ ไม่คืน" };
   if (st === "none") return "";
   const note = p.settlement_note ? `<div class="card-row"><b>หมายเหตุเงิน</b> <span style="word-break:break-word;">${escapeHtml(String(p.settlement_note))}</span></div>` : "";
-  if (st !== "money_pending") return `<div class="card-row"><b>สถานะเงิน</b> ${escapeHtml(labels[st] || st)}${p.settlement_by ? ` · โดย ${escapeHtml(String(p.settlement_by))}` : ""}</div>${note}`;
-  return `<div class="card-row"><b>สถานะเงิน</b> <span style="color:#b45309;font-weight:600;">${escapeHtml(labels[st])}</span></div>${note}
-<form method="POST" action="${postBase}/settlement" class="adm-inline-form" onsubmit="return confirm('บันทึกการจัดการเงินของรายการนี้? (ไม่กระทบสิทธิ์ลูกค้า)')" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px;">
+  if (st !== "money_pending") return `<div class="card-row settlement" data-settlement="${escapeHtml(st)}"><b>สถานะเงิน</b> ${escapeHtml(labels[st] || st)}${p.settlement_by ? ` · โดย ${escapeHtml(String(p.settlement_by))}` : ""}</div>${note}`;
+  return `<div class="card-row settlement" data-settlement="money_pending"><b>สถานะเงิน</b> <span style="color:#b45309;font-weight:600;">${escapeHtml(labels[st])}</span></div>${note}
+<form method="POST" action="${postBase}/settlement" class="adm-inline-form settlement-form" onsubmit="return confirm('บันทึกการจัดการเงินของรายการนี้? (ไม่กระทบสิทธิ์ลูกค้า)')" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px;">
+  <input type="hidden" name="csrf" value="${escapeHtml(csrf)}">
   <select name="settlement_status" required><option value="refunded">คืนเงินแล้ว (โอนคืนเองแล้ว)</option><option value="topped_up">ลูกค้าโอนเพิ่มครบ — ไปที่บิลใหม่</option><option value="written_off">ตัดจบ ไม่คืน (ระบุเหตุผล)</option></select>
   <input type="text" name="settlement_note" required minlength="4" maxlength="400" placeholder="หลักฐาน/เลขอ้างอิง/วันที่ (จำเป็น)" style="min-width:260px;">
   <button type="submit" class="btn">บันทึกเรื่องเงิน</button></form>`;
+}
+
+/** ป้ายสถานะเงินสำหรับการ์ดในหน้ารายการ (ไม่มีฟอร์ม — ฟอร์มอยู่หน้ารายละเอียดพร้อม CSRF) */
+export function settlementBadgeHtml(p) {
+  const st = String(p?.settlement_status || "none");
+  if (st === "none") return "";
+  const labels = { money_pending: "⚠ เงินรอดำเนินการ", refunded: "คืนเงินแล้ว", topped_up: "โอนเพิ่มครบ", written_off: "ตัดจบ" };
+  return `<div class="card-row settlement" data-settlement="${escapeHtml(st)}"><b>สถานะเงิน</b> ${escapeHtml(labels[st] || st)}</div>`;
 }
 
 function rejectPresetOptionsHtml() {
@@ -685,8 +695,8 @@ function renderListPage({
       const lineDisp = escapeHtml(abbreviateLineUserId(p.line_user_id));
       const reasonRow =
         String(p.status) === "rejected" && p.reject_reason
-          ? `<div class="card-row"><b>เหตุผล</b> <span style="word-break:break-word;">${escapeHtml(String(p.reject_reason))}</span></div>${settlementBlockHtml(p, `/admin/payments/${encodeURIComponent(String(p.id))}`)}`
-          : settlementBlockHtml(p, `/admin/payments/${encodeURIComponent(String(p.id))}`);
+          ? `<div class="card-row"><b>เหตุผล</b> <span style="word-break:break-word;">${escapeHtml(String(p.reject_reason))}</span></div>${settlementBadgeHtml(p)}`
+          : settlementBadgeHtml(p);
       return `
     <article class="card" data-payment-id="${escapeHtml(p.id)}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;">
@@ -899,6 +909,7 @@ function renderDetailPage({
   scanSummary,
   flash,
   accessSnapshot = null,
+  csrf = "",
 }) {
   const p = payment;
   const au = embeddedAppUser(p);
@@ -984,6 +995,7 @@ function renderDetailPage({
           <div>created_at</div><div>${fmtDt(p.created_at)}</div>
           <div>verified_at</div><div>${fmtDt(p.verified_at)}</div>
           <div>rejected_at</div><div>${fmtDt(p.rejected_at)}</div>
+          <div>settlement</div><div>${settlementBlockHtml(p, `/admin/payments/${encodeURIComponent(String(p.id))}`, csrf)}</div>
           ${rejectReasonKv}
         </div>
       </div>
@@ -1272,6 +1284,7 @@ export default function createAdminPaymentsDashboardRouter(_lineClient) {
       const flash = flashMap[String(req.query?.flash || "")] || "";
 
       const html = renderDetailPage({
+        csrf: (req.session.paymentOpsCsrf ||= randomBytes(24).toString("hex")),
         payment,
         scanSummary,
         flash,
@@ -1545,15 +1558,20 @@ export default function createAdminPaymentsDashboardRouter(_lineClient) {
     },
   );
 
-  // ปิดเรื่องเงินโดยคน (sql/069) — ไม่แตะสิทธิ์ ไม่ลบหลักฐาน · เปลี่ยนได้เฉพาะจาก money_pending
+  // ปิดเรื่องเงินโดยคน (sql/069) — session-only + CSRF · ผ่าน role จำกัด payment_ops_writer · บันทึก audit ใน DB · ไม่แตะสิทธิ์ ไม่ลบหลักฐาน
   router.post("/admin/payments/:id/settlement", requireAdminSession, async (req, res) => {
     const paymentId = String(req.params?.id || "").trim();
     const status = String(req.body?.settlement_status || "").trim();
     const note = String(req.body?.settlement_note || "").trim();
+    const csrf = String(req.body?.csrf || "");
+    const expected = String(req.session?.paymentOpsCsrf || "");
+    if (!expected || csrf.length !== expected.length || !timingSafeEqual(Buffer.from(csrf), Buffer.from(expected))) {
+      if (prefersAdminJson(req)) return res.status(403).json({ ok: false, reason: "csrf" });
+      return res.status(403).send("csrf_invalid");
+    }
     try {
-      const { supabase } = await import("../config/supabase.js");
-      const { data, error } = await supabase.rpc("payment_settlement_resolve", { p_payment_id: paymentId, p_status: status, p_note: note, p_actor: "admin_dashboard" });
-      if (error) throw error;
+      const ops = await import("../stores/paymentOps.store.js");
+      const data = await ops.resolveSettlement({ paymentId, status, note, actor: `admin_dashboard:${String(req.session?.adminLoginAt || "").slice(0, 19) || "session"}` });
       console.log(JSON.stringify({ event: "ADMIN_PAYMENT_SETTLEMENT", paymentId, status, ok: Boolean(data?.ok), reason: data?.reason || null }));
       if (prefersAdminJson(req)) return res.json({ ok: Boolean(data?.ok), reason: data?.reason || null });
       return res.redirect(`/admin/payments/${encodeURIComponent(paymentId)}?settlement=${data?.ok ? "ok" : encodeURIComponent(data?.reason || "failed")}`);
@@ -1580,23 +1598,25 @@ export default function createAdminPaymentsDashboardRouter(_lineClient) {
 
     try {
       const preset = String(req.body?.reject_preset || "").trim();
-      // เงินอาจเข้าแล้ว (sql/069): preset ยอดไม่ตรง/หมดอายุ/อื่น ๆ → คงเรื่องเงินไว้รอดำเนินการ ไม่ปิดไปพร้อมสิทธิ์
-      const { lineUserId, already, slipAmount } = await markPaymentRejected({
+      // sql/069: DB ตัดสิน "เงินรอดำเนินการ" จากแถวที่ล็อก (คำใบ้จาก preset ยอดไม่ตรง/หมดอายุ/อื่น ๆ OR slip_amount>0) — ใช้ค่าที่ DB คืนมาเป็นหลัก
+      const { lineUserId, already, moneyPending: moneyPendingNow, notifyPending } = await markPaymentRejected({
         paymentId,
         rejectReason,
         approvedBy,
         reasonCode: preset || null,
         moneyPending: ["amount", "expired", "other"].includes(preset) || req.body?.money_pending === "1",
+        channel: "web",
       });
-      const moneyPendingNow = ["amount", "expired", "other"].includes(preset) || Number(slipAmount) > 0;
 
-      if (lineUserId && !already) {
+      if (lineUserId && notifyPending) {
         try {
           const rejectEnq = await enqueueRejectNotify({
             lineUserId,
             paymentId,
             text: buildPaymentRejectedText({ reason: rejectReason, moneyPending: moneyPendingNow }),
           });
+          try { const ops = await import("../stores/paymentOps.store.js"); await ops.markRejectNotifyQueued(paymentId); }
+          catch (markErr) { console.error(JSON.stringify({ event: "ADMIN_REJECT_NOTIFY_MARK_FAILED", paymentId, reason: String(markErr?.message || markErr).slice(0, 120) })); }
           console.log(
             JSON.stringify({
               event: "ADMIN_REJECT_NOTIFY_QUEUED",

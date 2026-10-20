@@ -160,7 +160,7 @@ export async function getLatestActivePaymentForAppUser(appUserId) {
   const { data, error } = await supabase
     .from("payments")
     .select(
-      "id,user_id,line_user_id,status,package_code,package_name,expected_amount,amount,created_at,payment_ref"
+      "id,user_id,line_user_id,status,package_code,package_name,expected_amount,amount,created_at,payment_ref,settlement_status,settlement_note,settlement_by"
     )
     .eq("user_id", uid)
     .in("status", ACTIVE_PAYMENT_STATUSES)
@@ -428,7 +428,7 @@ export async function getLatestAwaitingPaymentForLineUserId(lineUserId) {
   const { data, error } = await supabase
     .from("payments")
     .select(
-      "id,user_id,line_user_id,status,package_code,package_name,expected_amount,created_at,payment_ref"
+      "id,user_id,line_user_id,status,package_code,package_name,expected_amount,created_at,payment_ref,settlement_status,settlement_note,settlement_by"
     )
     .eq("line_user_id", lu)
     .in("status", ["awaiting_payment", "pending_verify"])
@@ -481,7 +481,7 @@ export async function getLatestRecentRejectedPaymentForLineUserId(lineUserId) {
   const { data, error } = await supabase
     .from("payments")
     .select(
-      "id,user_id,line_user_id,status,package_code,package_name,expected_amount,created_at,payment_ref,rejected_at,slip_ref"
+      "id,user_id,line_user_id,status,package_code,package_name,expected_amount,created_at,payment_ref,rejected_at,slip_ref,settlement_status,settlement_note,settlement_by"
     )
     .eq("line_user_id", lu)
     .eq("status", "rejected")
@@ -1024,15 +1024,14 @@ export async function markPaymentRejected({
   approvedBy = null,
   reasonCode = null,
   moneyPending = false,
+  channel = "web",
 } = {}) {
   const id = String(paymentId || "").trim();
   if (!id) throw new Error("payments_missing_payment_id");
-  // 20 ต.ค. 2026 (sql/069): ปฏิเสธใน DB แบบ atomic (FOR UPDATE) — กันชนกับ approve ที่กำลังล็อกแถว · paid แล้วไม่แตะ · rejected แล้ว idempotent
-  const { data: res, error } = await supabase.rpc("reject_payment_atomic", {
-    p_payment_id: id, p_actor: approvedBy || "admin", p_reason_code: reasonCode || null,
-    p_reason_text: rejectReason || null, p_money_pending: Boolean(moneyPending),
-  });
-  if (error) throw error;
+  // 20 ต.ค. 2026 (sql/069 รอบ 2): ปฏิเสธใน DB แบบ atomic ผ่าน role จำกัด payment_ops_writer (ไม่ใช้ client anon)
+  // DB ตัดสิน "เงินรอดำเนินการ" จากแถวที่ล็อก (flag ผู้เรียก OR slip_amount>0) · paid แล้วไม่แตะ · rejected แล้ว idempotent
+  const ops = await import("./paymentOps.store.js");
+  const res = await ops.rejectPaymentAtomic({ paymentId: id, actor: approvedBy || "admin", channel, reasonCode, reasonText: rejectReason, moneyPending });
   if (!res?.ok) {
     if (res?.reason === "not_found") throw new Error("payment_not_found");
     if (res?.reason === "already_paid") throw new Error("payment_not_rejectable_in_status_paid");
@@ -1048,5 +1047,10 @@ export async function markPaymentRejected({
       reason: rejectReason != null ? String(rejectReason).slice(0, 200) : "admin_reject",
     });
   }
-  return { ok: true, already: Boolean(res.already), lineUserId: res.lineUserId || null, slipAmount: res.slipAmount ?? null, expectedAmount: res.expectedAmount ?? null, settlementStatus: res.settlementStatus ?? null, status: "rejected" };
+  return {
+    ok: true, already: Boolean(res.already), lineUserId: res.lineUserId || null, status: "rejected",
+    slipAmount: res.slipAmount ?? null, expectedAmount: res.expectedAmount ?? null,
+    settlementStatus: res.settlementStatus ?? null, moneyPending: res.settlementStatus === "money_pending",
+    notifyPending: Boolean(res.notifyPending),
+  };
 }

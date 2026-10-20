@@ -249,6 +249,13 @@ async function runOnce() {
   } catch (e) {
     console.error(JSON.stringify({ event: "ADMIN_ALERT_OUTBOX_SWEEP_ERROR", message: String(e?.message || e).slice(0, 140) }));
   }
+  // 20 ต.ค. 2026 (sql/069): กู้งานแจ้งลูกค้าหลังไม่อนุมัติที่ enqueue ล้ม (คงทนใน DB) — ไม่แตะสถานะบิล/สิทธิ์
+  try {
+    const { sweepRejectNotifyPending } = await import("../services/payments/rejectNotifySweep.service.js");
+    await sweepRejectNotifyPending();
+  } catch (e) {
+    console.error(JSON.stringify({ event: "REJECT_NOTIFY_SWEEP_ERROR", message: String(e?.message || e).slice(0, 140) }));
+  }
   // P0-G: ตามหัก paid quota ที่ค้าง (ledger pending / job delivered ที่ ledger หาย) — sql/055
   try {
     const { sweepQuotaLedger } = await import("../services/scanV2/quotaLedger.util.js");
