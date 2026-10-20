@@ -1,0 +1,29 @@
+# เปิดใช้งานอนุมัติสลิปผ่าน Telegram บน Pro — runbook (กบอนุมัติ 20 ต.ค. 2026 ผ่าน Codex)
+
+## 1. สถานะ Pro ก่อนเริ่ม (read-only 20 ต.ค. 09:30 ไทย)
+- โค้ด: Pro = `c102b71` มี route `/admin/telegram-approval`, `/telegram/webhook`, service `telegramSlipApproval` + `telegramConfig.store` ครบ → **ไม่ต้อง deploy โค้ดใหม่**
+- DB Pro: 061 (`telegram_approval_tokens`) + 066 (`telegram_approval_settings`, RPC `telegram_settings_*`) apply แล้ว (preflight 19 ต.ค. ทุกแถว t) · role `telegram_config_admin` มี · **ยังไม่มีแถว settings** · pending_verify ตอนนี้ 0
+- env Pro: **ไม่มี** `TELEGRAM_CONFIG_KEY` และ `TELEGRAM_CONFIG_DB_KEY` (authority = db แต่ store ไม่ ready → ฟีเจอร์ปิด) · ไม่มีตัวแปร env-authority (`TELEGRAM_SLIP_APPROVAL_ENABLED` ฯลฯ) = ถูกต้อง ใช้ DB เป็นผู้คุม
+- `POST https://scan.my-ener.uk/telegram/webhook` = **404** (ปิดอยู่) · staging = 404 (ปิดหลังทดสอบ 14 ต.ค.)
+- staging มีค่าทดสอบ: bot `@ener_kob_approval_test_bot` ห้อง `-5440947116` ผู้อนุมัติ Kob `7486743496` — **ห้ามนำมาใช้บน Pro** (bot หนึ่งตัวตั้ง webhook ได้ URL เดียว ใช้ร่วมจะชนกับ staging; Codex ห้ามใช้ค่าทดสอบ)
+- แจ้งสลิปรอตรวจทาง LINE แอดมิน (`maybeNotifyAdminSlipPendingVerify`, default เปิด) **คงไว้** จนกบสั่งปิดแยก
+
+## 2. สิ่งที่กบต้องให้/ยืนยัน (ห้ามอนุมาน)
+1. **Bot สำหรับ Pro**: แนะนำสร้างใหม่ที่ @BotFather (เช่น `@ener_approval_bot`) — ไม่ใช้ @Eneraibot (bot alert/รายงาน; โค้ดไม่ fallback ไป bot นี้) และไม่ใช้ bot ทดสอบ staging · **token กรอกเองที่หน้า Admin Pro** `https://scan.my-ener.uk/admin/telegram-approval` (เข้ารหัสด้วย TELEGRAM_CONFIG_KEY) — ไม่ส่ง token ในแชต
+2. **ห้อง**: กลุ่มใหม่ (เช่น "Ener Approvals Pro") เชิญ bot ใหม่เข้า แล้วบอก chat id (ตัวเลขติดลบ) — หรือแชตส่วนตัวกับ bot (chat id = Telegram user id ของกบ) · ห้องต้องไม่ใช่ `-5440947116`
+3. **ผู้อนุมัติ**: รายชื่อ Telegram user id (กบ `7486743496` ใช่ไหม + คนที่ 2 ถ้ามี) — คนอื่นในห้องกดจะได้ "ไม่มีสิทธิ์"
+4. **วิธีทดสอบจริง**: ใช้ **Test UID ของกบ** (`Ufe02fff…`) ส่งรูปสลิปเก่า/ไม่ตรงยอดเข้า Pro OA → เข้า pending_verify (auto ไม่ผ่าน) → ข้อความเข้าห้อง Telegram → **กบกดเอง** "อนุมัติรายการนี้" → "ยืนยันอนุมัติ" → กดซ้ำ (ต้อง "ใช้ไม่ได้แล้ว") → ตรวจ: payment paid ครั้งเดียว, grant 1 แถว, สิทธิ์เพิ่มครั้งเดียว, LINE ลูกค้า (Test UID) ได้ข้อความ "เปิดสิทธิ์แล้ว" · **ไม่กดอนุมัติรายการลูกค้าจริงแทนกบ** · ถ้ากบไม่ต้องการให้ Test UID ได้สิทธิ์จริง ให้บอก (ทางเลือก: ทดสอบกับรายการสังเคราะห์ที่ outbound ถูกกักเหมือน staging — ซับซ้อนกว่า ต้องหยุด delivery)
+
+## 3. ขั้นตอน (หลังได้ข้อ 2)
+| # | ขั้น | คำสั่ง/วิธี | ตรวจ |
+|---|---|---|---|
+| 0 | backup | `install -m600 /root/ener-scan-pro/.env /root/backup-ops-20261002/pro-tg-<ts>/.env.pro.bak` · snapshot `telegram_approval_settings` (ไม่มีแถว) | ไฟล์ 600 |
+| 1 | env keys | `TELEGRAM_CONFIG_KEY=$(openssl rand -hex 32)` ต่อท้าย .env (ไม่พิมพ์) · `gen-restricted-jwt.mjs /root/ener-scan-pro/.env TELEGRAM_CONFIG_DB_KEY telegram_config_admin` (fingerprint เท่านั้น) | ชื่อตัวแปรมี · parts=3 role ถูก |
+| 2 | recreate web เท่านั้น | `deploy-pinned.sh pro c102b71… --frozen-ref origin/pro/three-tasks-c102b71 --keep worker-scan,worker-maintenance,worker-delivery` (build จาก cache; ตรวจดิสก์ว่าง ≥ 5G ก่อน) → เฉพาะ `ener-scan` ได้ env ใหม่ · worker ไม่แตะ (ไม่ต้อง drain) | HEAD เดิม · `/health` 200 · `docker exec ener-scan-pro env | grep -oE '^TELEGRAM_CONFIG_(KEY|DB_KEY)='` |
+| 3 | กบกรอกหน้า Admin | `https://scan.my-ener.uk/admin/telegram-approval`: Bot Token (ใหม่) · Chat ID · ผู้อนุมัติ 1–2 คน → บันทึก (หน้านี้ไม่เปิด flag ไม่ setWebhook) | ops `status`: configured=true enabled=false token_set_at · log `ADMIN_TELEGRAM_CFG_SAVED` |
+| 4 | ตรวจ bot | ops `bot-info` (getMe) → username ตรงกับที่กบสร้าง, is_bot | ไม่พิมพ์ token |
+| 5 | เปิด + webhook | ops `enable ops:pro-enable-<date>` → `verify-endpoint https://scan.my-ener.uk/telegram/webhook` ต้อง **401/401** (ไม่ใช่ 404) → ops `set-webhook https://scan.my-ener.uk/telegram/webhook` (secret จาก DB, callback_query, drop pending) → `webhook-info` url ตรง pending 0 last_error ว่าง → `UPDATE telegram_approval_settings SET webhook_set_at=now() WHERE id=1` (psql) | บันทึกเวลาเปิดไทย |
+| 6 | ทดสอบจริงกับกบ (ข้อ 2.4) | ผมดู log `TELEGRAM_*`/audit `record_payment_approval_audit` (approve_requested → approve_confirmed ok) · payments/grants/app_users ของ Test UID ก่อน–หลัง · outbound `approve_notify` → LINE_TRANSPORT_OK · กดซ้ำ = denied/stale | ตารางหลักฐานเวลาไทย |
+| 7 | ผิดปกติ | ops `disable ops:rollback` + `delete-webhook` → webhook 404 · ช่องตรวจมือ (หน้า Admin payments + LINE แจ้ง) ยังอยู่ · รายงานหลักฐาน | — |
+**ไม่ทำ:** ปิดแจ้ง LINE สลิป · แตะนโยบายฟรี/ยอดสิทธิ์ลูกค้า · cleanup อื่น · deploy โค้ดใหม่
+**เครื่องมือ:** `scripts/ops/telegram-approval-ops.mjs` (commit นี้; รันใน image web Pro ด้วย `--env-file` + network Pro; ไม่พิมพ์ token/secret; static test `tests/telegramApprovalOps.static.test.js`)
