@@ -61,3 +61,15 @@
 
 ## 7. ลำดับขออนุมัติที่เสนอ
 1. G (แผนนี้ → patch ener-ai → restart ener-ai เท่านั้น) 2. E (journald 1G/2 เดือน + vacuum, export ช่วง incident ก่อน) 3. F (btmp rotate 6 compress + `logrotate -f` 1 ครั้ง) 4. F2 (fail2ban/PasswordAuthentication) 5. ข้อ 5 (sysstat FS) 6. ข้อ 4 (rollback tag ใน deploy-pinned) 7. ค่อยพิจารณา ollama/image/legacy ด้วยตัวเลขจริง
+
+## 8. Deploy G บน ener-ai (20 ต.ค. 2026) — กบอนุมัติ `da1310778aba3cb4fb917c523f705d222ddba017` (Codex 20 ต.ค. เช้า)
+| ขั้น | ผล (เวลาไทย) |
+|---|---|
+| ตรึง SHA | worktree `/root/ener-ai-g` HEAD = `da1310778aba3cb4fb917c523f705d222ddba017` ✓ |
+| push branch | **ทำไม่ได้**: origin ของ `/root/ener-ai` เป็น `https://github.com/…` ไม่มี credential ในเครื่อง (`could not read Username`) → commit อยู่ใน repo เดียวกันบน server (branch `feat/alert-state-dedupe` local) · **รอกบ push เอง/ตั้ง credential** — ไม่กระทบการ build เพราะ build จาก checkout ในเครื่อง |
+| image rollback | image ที่รันอยู่ก่อน deploy `sha256:6a0c10f2b594…` บันทึกที่ `/root/ener-ai/.last-image-b13567f.txt` + tag `ener-ai-ener-ai:rollback-b13567f` (กัน dangling prune) · **ย้อน:** `docker tag ener-ai-ener-ai:rollback-b13567f ener-ai-ener-ai:latest && docker compose up -d --no-build ener-ai` (+ `git checkout b13567f`) — ไม่ต้อง build |
+| งานค้าง | log ener-ai เงียบ 3 นาทีก่อนหยุด (ไม่มี agent/video job) · เวลา 08:05 ไทย ห่างจาก cron นาที :00/:10/:30 |
+| build + recreate | `git checkout --detach da13107…` ใน `/root/ener-ai` (main checkout เดิม b13567f, untracked backups/ คงอยู่) → `docker compose build ener-ai` → `up -d ener-ai` · **08:05:25–08:10:02 ไทย** · recreate เฉพาะ `ener-ai-ener-ai-1` · ไม่แตะ Pro/staging/legacy/postgres/redis |
+| runtime | image ใหม่ `b1d9ff36b8cc` · sha256 `app/agents/alert_state.py` ในคอนเทนเนอร์ = ใน checkout (`6b9625c26a08617c`) · scheduler ในคอนเทนเนอร์มี `alert_state.check_and_notify` · startup: "Application startup complete" ไม่มี traceback |
+| พิสูจน์ส่ง/ไม่ซ้ำ | (เติมด้านล่างหลังรอบ 08:20 monitor_check / 08:30 health_check) |
+**ข้อจำกัดที่ Codex ระบุ (บันทึก ไม่รับรองส่งครั้งเดียวทุกกรณี):** `_renew()` เรียก `_claim()` ซึ่ง "ยึดใหม่" ได้ถ้า lease ของเราหมดอายุและผู้ถือใหม่ปล่อยไปแล้ว → กรณี A ช้าเกิน TTL, B ยึด-ส่ง-ปล่อย, แล้ว A renew สำเร็จและส่งซ้ำ ยังเป็นไปได้ (A จะใช้ decision เก่า) · ป้องกันเฉพาะส่วน state (ไม่ทับ) · **ตามแก้แยก:** renew ต้องตรวจว่า lease ของเรา "ยังไม่เคยหมดอายุ/ถูกยึดคั่น" (เช่น เก็บ generation/fence ใน claim แล้ว renew เฉพาะ fence เดิม) หรือประเมิน decision ใหม่หลัง renew
