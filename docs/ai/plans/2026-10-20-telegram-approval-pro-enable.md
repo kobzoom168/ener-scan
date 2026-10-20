@@ -193,3 +193,11 @@
 | 4 sweep | pending→false ✓ | ✓ 1 แถว | ✓ | ✓ 15:33 | ผ่าน รวมไม่ส่งซ้ำ ≥5 รอบ |
 **สิทธิ์บัญชีทดสอบ:** เท่าเดิมตลอด (paid_until 2026-08-11 · 999977 · 299baht_unlimited_30d · bonus 0 · grants 0) · updated_at ขยับครั้งเดียวจาก last_active ตอนส่งสลิปจริง · **ข้อเบี่ยง:** โอนจริง 1 บาท (P2) นอกกติกา — คง money_pending รอกบยืนยันจากธนาคาร · **fixture คงไว้:** F1 `c39c09c8…` (refunded) · F2 `69db18bb…` (none) · P2 `232661c9…` (money_pending) · **ค้างก่อน GO Pro:** deploy แก้ป้ายตารางบน staging + ตรวจซ้ำหน้ารายการ · Codex ตรวจ §13.5–13.6
 
+### 13.7 Deploy แพตช์ป้าย `a97ce86` บน staging (Codex GO + กบอนุมัติ 20 ต.ค. 19:28 ไทย: pinned เฉพาะ web · คง workers 3 · ไม่ apply migration · ไม่เปิด bot · ไม่แตะ Pro)
+| เวลา (Z) | ขั้น | ผล |
+|---|---|---|
+| 12:28 | ก่อน | staging HEAD 513bc97 dirty 0 · web/workers Up 5 ชม. · frozen branch `stg/three-tasks-a97ce86` (origin + mirror) · diff โค้ดแอป 513bc97→a97ce86 = `adminPaymentsDashboard.routes.js` +4/−2 เท่านั้น |
+| 12:29:12–24 | deploy | DRY_RUN ผ่าน → `deploy-pinned.sh staging a97ce86… --frozen-ref origin/stg/three-tasks-a97ce86 --keep worker-scan,worker-maintenance,worker-delivery` → recreate **web เท่านั้น** BLUE healthy · HEAD a97ce86 dirty none · image web `e535e58a…` (เดิม 325a983b…) · workers 3 ตัว Up 5 ชม. ไม่ถูก recreate (image เดิม 9a7d0083/0bf48b19/20c8d06e) · health 200 · log ไม่มี error |
+| 12:30 | runtime SHA | container ไม่มี .git → พิสูจน์ด้วยเนื้อไฟล์: `/app/src/routes/adminPaymentsDashboard.routes.js` sha256 `fa056e43…` = blob @a97ce86 (`fa056e43…`) ≠ @513bc97 (`b3da585c…`) · มี `settlementBadgeHtml(p, "inline")` 1 จุด |
+| 12:31 | ตรวจ render ข้อมูลจริง (read-only) | สคริปต์ใน container (boot router จริง + session ปลอม → GET `/admin/payments?status=rejected`, ไม่แตะ DB): HTTP 200 · **PAY-4B106995: ตาราง `money_pending`** · **PAY-STGRJ1: ตาราง `refunded`** · **PAY-STGRJ2: ไม่มีป้าย** · รวมทั้งหน้า: money_pending 2 จุด (ตาราง+การ์ด ของ P2) · refunded 2 จุด (ตาราง+การ์ด ของ F1) · inline 2 (P2, F1) — ตรงตามที่ Codex กำหนด · ชั้น "ผู้ใช้เห็น" (หน้าจอเดสก์ท็อป+มือถือของกบ) รอ |
+**rollback (ถ้าต้อง):** `deploy-pinned.sh staging 513bc97… --frozen-ref origin/stg/three-tasks-513bc97 --keep worker-scan,worker-maintenance,worker-delivery` (ป้ายหายอย่างเดียว ไม่มี schema/งานค้างเกี่ยวข้อง)
