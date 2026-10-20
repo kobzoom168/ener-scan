@@ -205,8 +205,10 @@ function req(port, method, path, { body = "", headers = {} } = {}) {
 const close = (server) => new Promise((r) => { server.closeAllConnections?.(); server.close(r); });
 
 test("Admin GET: แสดง 3 โหมด + โหมดที่มีผล + cutoff + กำหนดการ + ประวัติ · reconcile ตอนเปิด · CSRF ออกใน session · หน้าเก่า 302/410", async () => {
-  const store = fakeStore({ status: st("daily", { eligible_since: "2026-09-26T09:07:59Z" }), schedule: { id: 4, target_mode: "none", effective_at: "2026-10-20T02:00:00Z", created_by: "kob", created_at: "2026-10-14T01:00:00Z", announced_at: "2026-10-14T00:00:00Z" },
-    audit: [{ at: "2026-10-14T01:00:00Z", action: "schedule_set", from_mode: "daily", to_mode: "none", actor: "kob", announced_at: "2026-10-14T00:00:00Z", detail: { effective_at: "2026-10-20T02:00:00Z" } }] });
+  // กำหนดการ "ที่รออยู่" ต้องอยู่ในอนาคตจริง ณ เวลารันเทสต์ (เดิมใช้วันตายตัว 2026-10-20 → ตกเองเมื่อเลยวัน) — 20 ต.ค. 2026
+  const FUTURE_EFFECTIVE = new Date(Date.now() + 5 * 24 * 3600 * 1000).toISOString();
+  const store = fakeStore({ status: st("daily", { eligible_since: "2026-09-26T09:07:59Z" }), schedule: { id: 4, target_mode: "none", effective_at: FUTURE_EFFECTIVE, created_by: "kob", created_at: "2026-10-14T01:00:00Z", announced_at: "2026-10-14T00:00:00Z" },
+    audit: [{ at: "2026-10-14T01:00:00Z", action: "schedule_set", from_mode: "daily", to_mode: "none", actor: "kob", announced_at: "2026-10-14T00:00:00Z", detail: { effective_at: FUTURE_EFFECTIVE } }] });
   const { server, port, session } = await boot({ store });
   try {
     const page = await req(port, "GET", "/admin/free-policy");
