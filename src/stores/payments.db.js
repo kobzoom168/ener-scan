@@ -1022,50 +1022,31 @@ export async function markPaymentRejected({
   paymentId,
   rejectReason = null,
   approvedBy = null,
+  reasonCode = null,
+  moneyPending = false,
 } = {}) {
   const id = String(paymentId || "").trim();
   if (!id) throw new Error("payments_missing_payment_id");
-
-  const nowIso = getNowIso();
-
-  const { data: payment, error: fetchError } = await supabase
-    .from("payments")
-    .select("id,line_user_id,status,payment_ref,package_code")
-    .eq("id", id)
-    .maybeSingle();
-  if (fetchError) throw fetchError;
-  if (!payment) throw new Error("payment_not_found");
-
-  if (payment.status === "rejected") {
-    return { lineUserId: payment.line_user_id || null };
+  // 20 ต.ค. 2026 (sql/069): ปฏิเสธใน DB แบบ atomic (FOR UPDATE) — กันชนกับ approve ที่กำลังล็อกแถว · paid แล้วไม่แตะ · rejected แล้ว idempotent
+  const { data: res, error } = await supabase.rpc("reject_payment_atomic", {
+    p_payment_id: id, p_actor: approvedBy || "admin", p_reason_code: reasonCode || null,
+    p_reason_text: rejectReason || null, p_money_pending: Boolean(moneyPending),
+  });
+  if (error) throw error;
+  if (!res?.ok) {
+    if (res?.reason === "not_found") throw new Error("payment_not_found");
+    if (res?.reason === "already_paid") throw new Error("payment_not_rejectable_in_status_paid");
+    throw new Error(`payment_not_rejectable_in_status_${res?.status || "unknown"}`);
   }
-  if (payment.status !== "pending_verify") {
-    throw new Error(`payment_not_rejectable_in_status_${payment.status}`);
-  }
-
-  const { error: updateError } = await supabase
-    .from("payments")
-    .update({
-      status: "rejected",
-      rejected_at: nowIso,
-      reject_reason: rejectReason || null,
-      approved_by: approvedBy || null,
-      updated_at: nowIso,
-    })
-    .eq("id", id);
-
-  if (updateError) throw updateError;
-
-  const lineUid = String(payment.line_user_id || "").trim();
-  if (lineUid) {
+  const lineUid = String(res.lineUserId || "").trim();
+  if (lineUid && !res.already) {
     emitPaymentRejectedFunnel({
       userId: lineUid,
       paymentId: id,
-      paymentRef: payment.payment_ref ?? null,
-      packageKey: payment.package_code ?? null,
+      paymentRef: res.paymentRef ?? null,
+      packageKey: null,
       reason: rejectReason != null ? String(rejectReason).slice(0, 200) : "admin_reject",
     });
   }
-
-  return { lineUserId: payment.line_user_id || null };
+  return { ok: true, already: Boolean(res.already), lineUserId: res.lineUserId || null, slipAmount: res.slipAmount ?? null, expectedAmount: res.expectedAmount ?? null, settlementStatus: res.settlementStatus ?? null, status: "rejected" };
 }

@@ -1180,7 +1180,7 @@ export async function buildPaymentApprovedText({
  * LINE push after admin rejected slip.
  * @param {{ reason?: string | null }} [opts] Optional short reason from admin (stored in DB).
  */
-export function buildPaymentRejectedText({ reason = null } = {}) {
+export function buildPaymentRejectedText({ reason = null, moneyPending = false } = {}) {
   const r = String(reason ?? "")
     .trim()
     .replace(/\s+/g, " ")
@@ -1191,6 +1191,10 @@ export function buildPaymentRejectedText({ reason = null } = {}) {
   ];
   if (r) {
     lines.push("รายละเอียดเพิ่มเติม:", r, "");
+  }
+  if (moneyPending) {
+    // 20 ต.ค. 2026 (Codex): ข้อความต้องไม่บอกว่ายอดถูกส่งกลับแล้ว และไม่บอกว่าระบบนำสลิปหลายใบมานับรวมได้ — เรื่องยอดที่โอนมาให้ร้านติดต่อกลับเอง
+    lines.push("ถ้ามียอดโอนเข้ามาแล้ว ทางร้านจะติดต่อเรื่องยอดนั้นในแชตนี้ครับ ยังไม่ต้องโอนเพิ่ม", "");
   }
   lines.push(
     "เริ่มขั้นตอนชำระใหม่ได้แบบนี้",

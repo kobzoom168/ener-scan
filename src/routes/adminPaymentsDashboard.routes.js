@@ -224,6 +224,20 @@ function parseRejectReasonFromBody(body) {
   return sanitizeRejectReason(body?.reject_reason || body?.reason) || null;
 }
 
+/** เงินรอดำเนินการ (sql/069): แยกจากสถานะสิทธิ์ — ปิดได้เฉพาะโดยคน พร้อมหมายเหตุ/หลักฐาน · ไม่แตะสิทธิ์ */
+function settlementBlockHtml(p, postBase) {
+  const st = String(p?.settlement_status || "none");
+  const labels = { money_pending: "⚠ เงินรอดำเนินการ (ยังไม่คืน/ยังไม่ตัดจบ)", refunded: "คืนเงินแล้ว", topped_up: "ลูกค้าโอนเพิ่มครบ (บิลใหม่)", written_off: "ตัดจบ ไม่คืน" };
+  if (st === "none") return "";
+  const note = p.settlement_note ? `<div class="card-row"><b>หมายเหตุเงิน</b> <span style="word-break:break-word;">${escapeHtml(String(p.settlement_note))}</span></div>` : "";
+  if (st !== "money_pending") return `<div class="card-row"><b>สถานะเงิน</b> ${escapeHtml(labels[st] || st)}${p.settlement_by ? ` · โดย ${escapeHtml(String(p.settlement_by))}` : ""}</div>${note}`;
+  return `<div class="card-row"><b>สถานะเงิน</b> <span style="color:#b45309;font-weight:600;">${escapeHtml(labels[st])}</span></div>${note}
+<form method="POST" action="${postBase}/settlement" class="adm-inline-form" onsubmit="return confirm('บันทึกการจัดการเงินของรายการนี้? (ไม่กระทบสิทธิ์ลูกค้า)')" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px;">
+  <select name="settlement_status" required><option value="refunded">คืนเงินแล้ว (โอนคืนเองแล้ว)</option><option value="topped_up">ลูกค้าโอนเพิ่มครบ — ไปที่บิลใหม่</option><option value="written_off">ตัดจบ ไม่คืน (ระบุเหตุผล)</option></select>
+  <input type="text" name="settlement_note" required minlength="4" maxlength="400" placeholder="หลักฐาน/เลขอ้างอิง/วันที่ (จำเป็น)" style="min-width:260px;">
+  <button type="submit" class="btn">บันทึกเรื่องเงิน</button></form>`;
+}
+
 function rejectPresetOptionsHtml() {
   return REJECT_PRESETS.map(
     (x) =>
@@ -671,8 +685,8 @@ function renderListPage({
       const lineDisp = escapeHtml(abbreviateLineUserId(p.line_user_id));
       const reasonRow =
         String(p.status) === "rejected" && p.reject_reason
-          ? `<div class="card-row"><b>เหตุผล</b> <span style="word-break:break-word;">${escapeHtml(String(p.reject_reason))}</span></div>`
-          : "";
+          ? `<div class="card-row"><b>เหตุผล</b> <span style="word-break:break-word;">${escapeHtml(String(p.reject_reason))}</span></div>${settlementBlockHtml(p, `/admin/payments/${encodeURIComponent(String(p.id))}`)}`
+          : settlementBlockHtml(p, `/admin/payments/${encodeURIComponent(String(p.id))}`);
       return `
     <article class="card" data-payment-id="${escapeHtml(p.id)}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;">
@@ -1531,6 +1545,25 @@ export default function createAdminPaymentsDashboardRouter(_lineClient) {
     },
   );
 
+  // ปิดเรื่องเงินโดยคน (sql/069) — ไม่แตะสิทธิ์ ไม่ลบหลักฐาน · เปลี่ยนได้เฉพาะจาก money_pending
+  router.post("/admin/payments/:id/settlement", requireAdminSession, async (req, res) => {
+    const paymentId = String(req.params?.id || "").trim();
+    const status = String(req.body?.settlement_status || "").trim();
+    const note = String(req.body?.settlement_note || "").trim();
+    try {
+      const { supabase } = await import("../config/supabase.js");
+      const { data, error } = await supabase.rpc("payment_settlement_resolve", { p_payment_id: paymentId, p_status: status, p_note: note, p_actor: "admin_dashboard" });
+      if (error) throw error;
+      console.log(JSON.stringify({ event: "ADMIN_PAYMENT_SETTLEMENT", paymentId, status, ok: Boolean(data?.ok), reason: data?.reason || null }));
+      if (prefersAdminJson(req)) return res.json({ ok: Boolean(data?.ok), reason: data?.reason || null });
+      return res.redirect(`/admin/payments/${encodeURIComponent(paymentId)}?settlement=${data?.ok ? "ok" : encodeURIComponent(data?.reason || "failed")}`);
+    } catch (e) {
+      console.error(JSON.stringify({ event: "ADMIN_PAYMENT_SETTLEMENT_FAILED", paymentId, reason: String(e?.message || e).slice(0, 120) }));
+      if (prefersAdminJson(req)) return res.status(400).json({ ok: false });
+      return res.status(400).send("settlement_failed: " + String(e?.message || e).slice(0, 80));
+    }
+  });
+
   router.post("/admin/payments/:id/reject", requireAdminSession, async (req, res) => {
     const paymentId = String(req.params?.id || "").trim();
     const rejectReason = parseRejectReasonFromBody(req.body || {});
@@ -1546,18 +1579,23 @@ export default function createAdminPaymentsDashboardRouter(_lineClient) {
     }
 
     try {
-      const { lineUserId } = await markPaymentRejected({
+      const preset = String(req.body?.reject_preset || "").trim();
+      // เงินอาจเข้าแล้ว (sql/069): preset ยอดไม่ตรง/หมดอายุ/อื่น ๆ → คงเรื่องเงินไว้รอดำเนินการ ไม่ปิดไปพร้อมสิทธิ์
+      const { lineUserId, already, slipAmount } = await markPaymentRejected({
         paymentId,
         rejectReason,
         approvedBy,
+        reasonCode: preset || null,
+        moneyPending: ["amount", "expired", "other"].includes(preset) || req.body?.money_pending === "1",
       });
+      const moneyPendingNow = ["amount", "expired", "other"].includes(preset) || Number(slipAmount) > 0;
 
-      if (lineUserId) {
+      if (lineUserId && !already) {
         try {
           const rejectEnq = await enqueueRejectNotify({
             lineUserId,
             paymentId,
-            text: buildPaymentRejectedText({ reason: rejectReason }),
+            text: buildPaymentRejectedText({ reason: rejectReason, moneyPending: moneyPendingNow }),
           });
           console.log(
             JSON.stringify({

@@ -1,8 +1,8 @@
-# md5(prosrc) อ้างอิงของฟังก์ชัน migration ชุด three-tasks (057/061/062/063/064/065/066/067/068)
+# md5(prosrc) อ้างอิงของฟังก์ชัน migration ชุด three-tasks (057/061/062/063/064/065/066/067/068/069)
 # ที่มา: staging DB ener_scan_staging 30 ก.ย. 2026 หลัง apply ไฟล์ใน repo ตามลำดับ + integration tests ผ่าน
 # free_policy_* + new_customer_trial_status + guard_new_customer_trial_job + set_new_customer_trial_policy + free_policy_lock + guard_free_policy_settings = นิยาม 067 รอบ 3 (14 ต.ค. 2026 Codex: guard owner-check SECURITY INVOKER + เวลาหลังล็อก clock_timestamp; apply 057→064→065→066→067 ลง DB ใช้แล้วทิ้ง; ฟังก์ชันอื่น md5 ไม่เปลี่ยน) · telegram_settings_* = นิยาม 066 (2 ต.ค. 2026, apply 057→064→065→066 ลง DB ใช้แล้วทิ้ง) · new_customer_trial_used = นิยาม 065 (1 ต.ค. 2026, จากการ apply 057→064→065 ลง DB ใช้แล้วทิ้ง) · 057/064: ตรงกับผลจากการ apply ไฟล์ commit ลง DB ใช้แล้วทิ้ง (ตรวจ 26 ก.ย.) · ใช้กับ scripts/ops/verify-migration-versions.sh
 approve_payment_and_grant 07362f4b541c1a7da38e508a557f9757
-consume_telegram_approval_token aa101094ff223e55a55707ffe57f798e
+consume_telegram_approval_token 86055f687146879b7c42803a023c0871
 guard_new_customer_trial_job c96b84585d470e721c94c5717ca98f76
 issue_telegram_approval_token 4b08783667015e50663fade567166ed0
 list_payment_grants_pending_notify 12bd5e87190863cf2d955371a4a70e12
@@ -35,3 +35,6 @@ guard_free_policy_settings 04def842bcd2819e512d19f233b9864a
 admin_alert_outbox_claim 8f244aeadef62d8091311f98b2ff5850
 admin_alert_outbox_enqueue 8d79dec9f4cd80c2b4d1730d8dfeefbd
 admin_alert_outbox_finish 94e7d64d1aaefb1f5ebad84a459c30a1
+issue_telegram_reject_token da1ca99e9d39accb29b8962dc25f8fa1
+reject_payment_atomic 1274cbc289cb0f1dcce1f89bed404fa8
+payment_settlement_resolve 68bc75930805a8e6caa642a9102c9d65

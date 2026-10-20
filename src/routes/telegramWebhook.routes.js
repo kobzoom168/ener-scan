@@ -119,7 +119,7 @@ async function buildRuntimeDeps() {
     async loadPayment(paymentId) {
       const { data, error } = await supabase
         .from("payments")
-        .select("id,status,package_code,package_name,expected_amount,payment_ref,line_user_id")
+        .select("id,status,package_code,package_name,expected_amount,slip_amount,payment_ref,line_user_id")
         .eq("id", paymentId)
         .maybeSingle();
       if (error) throw error;
@@ -130,9 +130,19 @@ async function buildRuntimeDeps() {
         packageCode: data.package_code,
         packageName: data.package_name,
         expectedAmount: data.expected_amount != null ? Number(data.expected_amount) : null,
+        slipAmount: data.slip_amount != null ? Number(data.slip_amount) : null,
         paymentRef: data.payment_ref,
         lineUserId: data.line_user_id,
       };
+    },
+    // ไม่อนุมัติ (20 ต.ค. 2026): atomic ใน DB (sql/069) · paid แล้วไม่แตะ · ไม่แตะสิทธิ์ · เงินที่อาจเข้าแล้ว = settlement money_pending
+    async rejectPayment({ paymentId, actor, reasonCode, reasonText, moneyPending }) {
+      return payments.markPaymentRejected({ paymentId, rejectReason: reasonText, approvedBy: actor, reasonCode, moneyPending });
+    },
+    async notifyCustomerReject({ lineUserId, paymentId, reasonText, moneyPending }) {
+      const { buildPaymentRejectedText } = await import("../utils/webhookText.util.js");
+      const text = buildPaymentRejectedText({ reason: reasonText, moneyPending });
+      return enqueue.enqueueRejectNotify({ lineUserId, paymentId, text });
     },
     // ← approval service เดิม แต่ตอนนี้เป็น transaction เดียว (ดู sql/062)
     // ส่ง expect เข้าไปให้ตรวจ "ยอด/แพ็ก/สถานะ" ณ จุด commit จริง ไม่ใช่ตรวจใน handler แล้วอ่านใหม่
