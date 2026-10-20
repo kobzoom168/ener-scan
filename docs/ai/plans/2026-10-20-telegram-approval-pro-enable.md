@@ -27,3 +27,11 @@
 | 7 | ผิดปกติ | ops `disable ops:rollback` + `delete-webhook` → webhook 404 · ช่องตรวจมือ (หน้า Admin payments + LINE แจ้ง) ยังอยู่ · รายงานหลักฐาน | — |
 **ไม่ทำ:** ปิดแจ้ง LINE สลิป · แตะนโยบายฟรี/ยอดสิทธิ์ลูกค้า · cleanup อื่น · deploy โค้ดใหม่
 **เครื่องมือ:** `scripts/ops/telegram-approval-ops.mjs` (commit นี้; รันใน image web Pro ด้วย `--env-file` + network Pro; ไม่พิมพ์ token/secret; static test `tests/telegramApprovalOps.static.test.js`)
+
+## 4. ผลขั้น 0–2 (20 ต.ค. 2026 11:13–11:15 ไทย) — กบอนุมัติ
+- backup: `/root/backup-ops-20261002/pro-tg-20261020-041326/.env.pro.bak` (600) + settings rows before = 0 · `.env.bak-2026-10-20T0413` (จาก gen-jwt)
+- env Pro: `TELEGRAM_CONFIG_KEY` (64 hex ใหม่ ไม่พิมพ์) · `TELEGRAM_CONFIG_DB_KEY` role telegram_config_admin exp 2038 fingerprint `7f1825f3` · ไม่ตั้งตัวแปร env-authority (DB เป็นผู้คุม)
+- recreate web เท่านั้น: `deploy-pinned.sh pro c102b71… --frozen-ref origin/pro/three-tasks-c102b71 --keep worker-scan,worker-maintenance,worker-delivery` 11:13:48–11:15:01 ไทย · BLUE healthy · HEAD เดิม c102b71 · image web ใหม่ `f1dfdc40…` (build ใหม่จาก SHA เดิม เพราะ build cache ถูกล้าง 20 ต.ค.; โค้ดเดิม) · worker 3 ตัวไม่แตะ (StartedAt 19 ต.ค. 15:20 เดิม) · `/health` 200 · webhook ยัง 404 (ยังไม่มี settings) · ดิสก์ 78% ว่าง 17G
+- ops script `/root/ener-ops-tg-7d8a338/telegram-approval-ops.mjs` (sha256 `0ec099e3…` ตรง repo 7d8a338) · `status` บน Pro: configured=false token_set=false enabled=false = store พร้อม (key ใช้ได้) รอกบกรอกหน้า Admin
+- **คำถามจากกบ:** ใช้ bot `@ener_kob_approval_test_bot` + กลุ่ม "approval ener scan" (-5440947116, 3 คน) ที่สร้างไว้ตอน staging ได้ไหม → ตอบ: ได้ ภายใต้เงื่อนไข (1) bot หนึ่งตัวมี webhook ได้ URL เดียว → เมื่อชี้ Pro แล้ว staging ห้ามเปิดใช้ bot นี้อีก (staging ตอนนี้ปิดอยู่ webhook ว่าง — ตรวจซ้ำก่อน set) (2) ควรเปลี่ยนชื่อกลุ่มให้ชัดว่าเป็น Pro และสมาชิกที่ไม่ใช่ผู้อนุมัติกดจะได้ "ไม่มีสิทธิ์" (3) token ต้องกรอกที่หน้า Admin Pro เอง (ค่าใน DB staging ถอดรหัสด้วย key staging — ผมไม่ย้ายข้าม env) (4) ต้องยืนยันเป็นข้อความชัด ๆ ว่า "ใช้ bot/ห้องนี้กับ Pro" ตาม Codex
+- **รอ:** ยืนยันข้อข้างบน + ชื่อและ Telegram user id ของผู้อนุมัติคนที่ 2
