@@ -53,3 +53,12 @@
 - **ผลกระทบสิทธิ์ (จาก `approve_payment_and_grant` sql/063 + `resolveEntitlementForPackage`):** grant ตั้ง `paid_until = เวลาอนุมัติ+24 ชม.` และ `paid_remaining = 4 + carry` โดย carry ให้เฉพาะเมื่อเป็นแพ็กสูงสุด **และคนละ plan** กับที่ถืออยู่ → Test UID (`Ufe02fff…`) ถือ `49baht_4scans_24h` อยู่ (47 ครั้ง ถึง 2027-07-09) **จะถูกรีเซ็ตเป็น 4 ครั้ง/24 ชม.** · ไม่มีหน้า Admin คืนสิทธิ์ (routes: payments/reject เท่านั้น) → **กบเลือกใช้บัญชี LINE อื่นที่ไม่มีแพ็ก** (ผลกระทบ = +4 ครั้ง/24 ชม. เท่านั้น)
 - **ก่อนกบกดยืนยัน ผมต้องรายงาน:** payment id, UID ย่อ, แพ็ก/ยอดที่คาด (49) vs ยอดสลิป (50), เหตุที่ auto ไม่ผ่าน, สิทธิ์ก่อน (snapshot) และผลหลังอนุมัติที่คาด (+4 ครั้ง, paid_until = อนุมัติ+24 ชม.) → กบตอบ "ยืนยัน" ค่อยกด
 - **หลังกด:** ตรวจ grant 1 แถว · ยอด/paid_until เปลี่ยนครั้งเดียว · กดซ้ำไม่เปลี่ยน · outbound/LINE ถึงลูกค้า 1 ครั้ง · **ห้ามลบหลักฐาน ห้ามหักสิทธิ์คืนเอง** · LINE แจ้งแอดมินคงเปิด
+
+## 8. ตรวจเงื่อนไข 50 บาทและสิทธิ์แพ็กบน Pro (read-only 20 ต.ค. 11:46 ไทย — ตาม Codex ข้อ 1–3)
+- **ค่า effective ใน container web Pro** (import env.js ไม่พิมพ์ค่าลับ): `SLIP_AMOUNT_TOLERANCE=0` · `SLIP_AUTO_APPROVE_ENABLED=true` · `DRY_RUN=false` · `MAX_AGE_HOURS=24` · `EASYSLIP_ENABLED=true` (SlipOK ปิด) · `ADMIN_PAYMENT_SLIP_NOTIFY=true`
+- **แพ็กที่ active บน Pro (app_settings.scan_offer `promo_jul2026_v2`):** 29 บาท/1 ครั้ง/24 ชม. · 49 บาท/4 ครั้ง/24 ชม. · 399 บาท/30 ครั้ง/720 ชม. → **ไม่มีแพ็กราคา 50** จึงไม่เกิดการสลับแพ็กตามยอด
+- **Spend-to-upgrade credit:** `app_settings.upgrade_credit.enabled=false` (ปิดโดยกบ 12 ส.ค.) → ไม่มีเส้นเครดิตอัปเกรด (และบัญชีใหม่ไม่มีประวัติจ่ายอยู่แล้ว)
+- ⇒ สลิป 50 บาท กับรายการแพ็ก 49: `|50−49| = 1 > tolerance 0` → `amount_mismatch` → ไม่ auto-approve → **pending_verify** (เส้นสลับแพ็ก/เครดิตไม่เข้าเงื่อนไข) · เงื่อนไขอื่นที่อาจเพิ่ม reason (slip อายุ >24 ชม., OCR อ่านไม่ได้, duplicate) ก็ยังจบที่ pending_verify ไม่ใช่ reject · **ไม่เปลี่ยน config ใดเพื่อบังคับผล**
+- **สิทธิ์ของรายการนี้ (คำนวณจริงใน container `resolveEntitlementForPackage`):** plan `49baht_4scans_24h` · **scans 4** · `paidUntil = เวลาอนุมัติ + 24 ชม.` (ตัวอย่างคำนวณ 11:46 → 2026-10-21 11:46) · `isTopPackage=false` (แพ็กสูงสุดคือ 399) → **carry-over = 0 เสมอสำหรับแพ็ก 49** (SQL ต้องครบ: แพ็กใหญ่สุด + แพ็กเดิมยังไม่หมดอายุ + คนละ plan + ยอดคงเหลือ 1–899999)
+- หมายเหตุ: `unlock_hours` ของ payment (ถ้ามี) ใช้แทน windowHours — ต้องอ่านค่าจริงจากแถว payment ที่เกิดขึ้นก่อนรายงานให้กบยืนยัน
+- กติกาซื้อ plan เดิมซ้ำไม่สะสมยอดเดิม = **งานทบทวนแยก** ไม่แก้ปนกับการเปิด Telegram
