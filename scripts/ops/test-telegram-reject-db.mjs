@@ -1,6 +1,7 @@
 // 069 รอบ 2 — DB test บน container แยก (ener-trial-policy-test, network none)
 // apply 061→062→063→069 จริง แล้วทดสอบ: สิทธิ์ (anon/service_role ถูกปฏิเสธ, payment_ops_writer ได้) · token kinds · reject atomic ตัดสิน money ใน DB ·
 // race กับ approve_payment_and_grant จริงทั้งสองลำดับ (approve ชนะ / reject ชนะ) ตรวจ grant/ยอด/วันหมดอายุ · notify pending/queued · settlement resolve + audit
+// รอบ 3: unique 1 แถว outbound reject_notify ต่อ payment (23505) · snapshot ข้อความแจ้ง ณ เวลาปฏิเสธ คงที่แม้ settlement เปลี่ยน · list คืน snapshot · พิมพ์ md5(prosrc) 6 ฟังก์ชันไว้เทียบ reference
 import { execFileSync, execFile } from "node:child_process";
 import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
@@ -51,6 +52,16 @@ try {
   assert.equal(sql(`SELECT count(*) FROM payment_approval_audit WHERE payment_id='${p1}' AND action='rejected' AND channel='web'`), "1");
   r = J(ops(`SELECT reject_payment_atomic('${p1}','telegram:7486','telegram','amount','x',true)`)); assert.equal(r.already, true); assert.equal(r.notifyPending, true, "already ยังบอกว่างานแจ้งค้าง");
   assert.equal(sql(`SELECT count(*) FROM payment_approval_audit WHERE payment_id='${p1}' AND action='rejected'`), "1", "already ไม่บันทึก audit ซ้ำ");
+  // ── รอบ 3: snapshot ข้อความแจ้ง = ค่าตอนปฏิเสธจริง (blur, money=true) · already ด้วยเหตุผลใหม่ 'amount' ก็คืน snapshot เดิม
+  assert.deepEqual([r.notifySnapshot.reasonText, r.notifySnapshot.reasonCode, r.notifySnapshot.moneyPending], ["สลิปไม่ชัด", "blur", true], "already คืน snapshot เดิม ไม่ใช่เหตุผลจากคำขอใหม่");
+  assert.equal(sql(`SELECT reject_notify_snapshot->>'reasonCode' FROM payments WHERE id='${p1}'`), "blur");
+  // ── รอบ 3: unique index — insert แถว reject_notify ซ้ำ payment เดิม → 23505 · kind อื่น/payment อื่นไม่ติด
+  sql(`INSERT INTO outbound_messages(related_payment_id, kind, status, line_user_id) VALUES ('${p1}','reject_notify','sent','U1')`);
+  assert.throws(() => sql(`INSERT INTO outbound_messages(related_payment_id, kind, status, line_user_id) VALUES ('${p1}','reject_notify','queued','U1')`), /uq_outbound_reject_notify_per_payment|duplicate key/, "แถวที่ 2 ต่อ payment ต้องถูกกันแม้แถวแรก sent แล้ว");
+  sql(`INSERT INTO outbound_messages(related_payment_id, kind, status, line_user_id) VALUES ('${p1}','payment_approved','queued','U1')`);
+  sql(`INSERT INTO outbound_messages(related_payment_id, kind, status, line_user_id) VALUES (NULL,'reject_notify','queued','U1'), (NULL,'reject_notify','queued','U2')`);
+  assert.equal(sql(`SELECT count(*) FROM outbound_messages WHERE related_payment_id='${p1}' AND kind='reject_notify'`), "1");
+  assert.equal(sql("SELECT indexdef LIKE '%UNIQUE%' FROM pg_indexes WHERE indexname='uq_outbound_reject_notify_per_payment'"), "t");
   // สลิปอ่านยอดไม่ได้ + เหตุผลไม่บ่งเงิน → none
   const u0 = mkUser("U0"); const p0 = sql(`INSERT INTO payments(user_id,line_user_id,status,package_code,expected_amount,payment_ref) VALUES ('${u0}','U0','pending_verify','29baht_1scan_24h',29,'PAY-0') RETURNING id`);
   r = J(ops(`SELECT reject_payment_atomic('${p0}','a','web','blur','สลิปไม่ชัด',false)`)); assert.equal(r.settlementStatus, "none");
@@ -58,6 +69,8 @@ try {
   assert.equal(ops("SELECT count(*) FROM list_reject_notify_pending(10)"), "0", "ยังไม่ถึง 1 นาที");
   sql(`UPDATE payments SET rejected_at = now() - interval '2 minutes' WHERE id IN ('${p1}','${p0}')`);
   assert.equal(ops("SELECT count(*) FROM list_reject_notify_pending(10)"), "2");
+  assert.equal(ops(`SELECT reject_notify_snapshot->>'reasonText' FROM list_reject_notify_pending(10) WHERE payment_id='${p1}'`), "สลิปไม่ชัด", "list ต้องคืน snapshot");
+  assert.equal(ops(`SELECT reject_notify_snapshot->>'moneyPending' FROM list_reject_notify_pending(10) WHERE payment_id='${p0}'`), "false");
   assert.equal(ops(`SELECT mark_reject_notify_queued('${p1}')`), "t"); assert.equal(ops(`SELECT mark_reject_notify_queued('${p1}')`), "f", "mark ซ้ำ = false");
   assert.equal(ops("SELECT count(*) FROM list_reject_notify_pending(10)"), "1");
   // ── race 1: approve ชนะ (approve ถือล็อกก่อน) → reject เห็น paid ไม่ทับ · grant 1 · สิทธิ์เติม · notify ไม่ pending
@@ -84,9 +97,11 @@ try {
   r = J(ops(`SELECT payment_settlement_resolve('${p1}','refunded','โอนคืน 10 บาท 20 ต.ค. slip#123','admin_dashboard')`)); assert.equal(r.ok, true);
   r = J(ops(`SELECT payment_settlement_resolve('${p1}','topped_up','x2 note','admin')`)); assert.equal(r.ok, false); assert.equal(r.reason, "not_money_pending");
   assert.equal(sql(`SELECT settlement_status||' '||settlement_by FROM payments WHERE id='${p1}'`), "refunded admin_dashboard");
+  assert.equal(sql(`SELECT reject_notify_snapshot->>'moneyPending' FROM payments WHERE id='${p1}'`), "true", "snapshot คงที่แม้ settlement เปลี่ยนเป็น refunded แล้ว");
   assert.equal(sql(`SELECT count(*) FROM payment_approval_audit WHERE payment_id='${p1}' AND action='settlement_resolved'`), "1");
   assert.equal(sql("SELECT count(*) FROM payments"), "4", "ไม่มีแถวถูกลบ");
-  console.log("PASS 069 v2: roles (anon/service_role denied, payment_ops_writer ok) · token kinds · reject atomic money decided in DB · notify pending/list/mark · race vs real approve_payment_and_grant both orders (grants/scans/expiry) · settlement resolve + audit");
+  console.log("md5(prosrc) หลัง apply 069 (เทียบ scripts/ops/migration-function-md5.reference.txt):\n" + sql("SELECT proname||' '||md5(prosrc) FROM pg_proc WHERE proname IN ('issue_telegram_reject_token','consume_telegram_approval_token','reject_payment_atomic','payment_settlement_resolve','mark_reject_notify_queued','list_reject_notify_pending') ORDER BY proname"));
+  console.log("PASS 069 v3: unique reject_notify per payment (23505) · notify snapshot fixed at reject time (already/list/after settlement) · roles (anon/service_role denied, payment_ops_writer ok) · token kinds · reject atomic money decided in DB · notify pending/list/mark · race vs real approve_payment_and_grant both orders (grants/scans/expiry) · settlement resolve + audit");
 } finally {
   sql(`DROP DATABASE ${db} WITH (FORCE);`, "postgres");
   console.log(`Removed synthetic database ${db}; no customer data used.`);

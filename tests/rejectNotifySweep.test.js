@@ -1,8 +1,9 @@
-// sweep กู้งานแจ้งลูกค้าหลังไม่อนุมัติ (sql/069): enqueue ล้ม = ไม่ mark (คงค้าง) · สำเร็จ/dedupe = mark · list ล้ม = ไม่พัง · ข้อความตาม settlement
+// sweep กู้งานแจ้งลูกค้าหลังไม่อนุมัติ (sql/069): enqueue ล้ม = ไม่ mark (คงค้าง) · สำเร็จ/dedupe = mark · list ล้ม = ไม่พัง
+// รอบ 3: ข้อความจาก snapshot ณ เวลาปฏิเสธ (ไม่ใช่ settlement/reason ปัจจุบัน) · mark เฉพาะเมื่อยืนยันว่ามีแถว outbound (id) · แถว stuck นับแยก
 import test from "node:test";
 import assert from "node:assert/strict";
 for (const [k, v] of Object.entries({ SUPABASE_URL: "http://127.0.0.1:9", LOCAL_POSTGREST_URL: "http://127.0.0.1:9", LOCAL_POSTGREST_ANON_KEY: "x", LOCAL_POSTGREST_SERVICE_KEY: "x", SUPABASE_SERVICE_ROLE_KEY: "x", OPENAI_API_KEY: "sk-test", CHANNEL_ACCESS_TOKEN: "t", CHANNEL_SECRET: "s", GEMINI_API_KEY: "g", REDIS_URL: "" })) process.env[k] ??= v;
-const { sweepRejectNotifyPending } = await import("../src/services/payments/rejectNotifySweep.service.js");
+const { sweepRejectNotifyPending, rejectNotifyTextFromSnapshot } = await import("../src/services/payments/rejectNotifySweep.service.js");
 const rows = [
   { payment_id: "p1", line_user_id: "U1", reject_reason: "ยอดเงินไม่ตรง", settlement_status: "money_pending", rejected_at: "2026-10-20T04:54:15Z" },
   { payment_id: "p2", line_user_id: "U2", reject_reason: "สลิปไม่ชัด", settlement_status: "none", rejected_at: "2026-10-20T04:55:00Z" },
@@ -12,7 +13,7 @@ test("sweep: enqueue สำเร็จ → mark · enqueue ล้ม → ไม
   const store = { listRejectNotifyPending: async () => rows, markRejectNotifyQueued: async (id) => { marks.push(id); return true; } };
   const oe = console.error; console.error = () => {};
   let s;
-  try { s = await sweepRejectNotifyPending({ store, enqueueRejectNotify: async (a) => { enq.push(a); if (a.paymentId === "p2") throw new Error("db down"); return { id: "o1", deduped: false }; } }); } finally { console.error = oe; }
+  try { s = await sweepRejectNotifyPending({ store, enqueueRejectNotify: async (a) => { enq.push(a); if (a.paymentId === "p2") throw new Error("db down"); return { id: "o1", status: "queued", deduped: false }; } }); } finally { console.error = oe; }
   assert.deepEqual([s.listed, s.queued, s.failed, s.deduped], [2, 1, 1, 0]); assert.deepEqual(marks, ["p1"]);
   assert.match(enq[0].text, /ยังไม่ต้องโอนเพิ่มหรือส่งสลิปใหม่/); assert.doesNotMatch(enq[0].text, /เริ่มขั้นตอนชำระใหม่/); assert.match(enq[1].text, /เริ่มขั้นตอนชำระใหม่/);
   const s2 = await sweepRejectNotifyPending({ store: { listRejectNotifyPending: async () => [rows[0]], markRejectNotifyQueued: async () => true }, enqueueRejectNotify: async () => ({ id: "o1", deduped: true }) });
@@ -20,4 +21,25 @@ test("sweep: enqueue สำเร็จ → mark · enqueue ล้ม → ไม
   const oe2 = console.error; console.error = () => {};
   let s3; try { s3 = await sweepRejectNotifyPending({ store: { listRejectNotifyPending: async () => { throw new Error("permission denied"); }, markRejectNotifyQueued: async () => true } }); } finally { console.error = oe2; }
   assert.equal(s3.error, "list_failed");
+});
+
+test("รอบ 3: ข้อความจาก snapshot แม้ settlement/reason ปัจจุบันเปลี่ยนแล้ว · enqueue ไม่คืน id → ไม่ mark (unconfirmed) · แถวเดิม sent = deduped+mark · แถว dead = stuck+mark (ไม่สร้างซ้ำ)", async () => {
+  const snapRow = { payment_id: "p9", line_user_id: "U9", reject_reason: "แก้ทีหลัง", settlement_status: "refunded", rejected_at: "2026-10-20T04:54:15Z", reject_notify_snapshot: { reasonText: "ยอดเงินไม่ตรง", reasonCode: "amount", moneyPending: true } };
+  const marks = []; const enq = [];
+  const store = { listRejectNotifyPending: async () => [snapRow], markRejectNotifyQueued: async (id) => { marks.push(id); return true; } };
+  const s = await sweepRejectNotifyPending({ store, enqueueRejectNotify: async (a) => { enq.push(a); return { id: "o9", status: "queued", deduped: false }; } });
+  assert.equal(s.queued, 1); assert.deepEqual(marks, ["p9"]);
+  assert.match(enq[0].text, /ยอดเงินไม่ตรง/); assert.doesNotMatch(enq[0].text, /แก้ทีหลัง/); assert.match(enq[0].text, /ยังไม่ต้องโอนเพิ่มหรือส่งสลิปใหม่/, "moneyPending จาก snapshot (refunded ตอนนี้ก็ยังข้อความเดิม)");
+  assert.equal(rejectNotifyTextFromSnapshot(snapRow.reject_notify_snapshot), enq[0].text, "ทุกเส้นกู้คืนใช้ฟังก์ชันเดียวกัน");
+  // แถวเก่าไม่มี snapshot → fallback ค่าในแถว
+  assert.match(rejectNotifyTextFromSnapshot(null, { reason: "สลิปไม่ชัด", moneyPending: false }), /สลิปไม่ชัด/);
+  // ไม่มี id → ไม่ mark
+  const marks2 = []; const oe = console.error; console.error = () => {}; let s2;
+  try { s2 = await sweepRejectNotifyPending({ store: { listRejectNotifyPending: async () => [snapRow], markRejectNotifyQueued: async (id) => { marks2.push(id); return true; } }, enqueueRejectNotify: async () => ({ deduped: false }) }); } finally { console.error = oe; }
+  assert.deepEqual([s2.unconfirmed, s2.queued, marks2.length], [1, 0, 0]);
+  // sent แล้ว → deduped + mark · dead → stuck + mark
+  const marks3 = [];
+  const st3 = { listRejectNotifyPending: async () => [snapRow, { ...snapRow, payment_id: "p10" }], markRejectNotifyQueued: async (id) => { marks3.push(id); return true; } };
+  const s3 = await sweepRejectNotifyPending({ store: st3, enqueueRejectNotify: async (a) => (a.paymentId === "p9" ? { id: "o9", status: "sent", deduped: true, stuck: false } : { id: "o10", status: "dead", deduped: true, stuck: true }) });
+  assert.deepEqual([s3.deduped, s3.stuck, s3.queued], [1, 1, 0]); assert.deepEqual(marks3, ["p9", "p10"]);
 });

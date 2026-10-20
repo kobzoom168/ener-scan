@@ -223,6 +223,25 @@ export async function updateOutboundMessage(id, patch) {
  * @param {string} kind
  * @returns {Promise<{ id: string, status: string } | null>}
  */
+/**
+ * แถว outbound ของ payment+kind **ทุกสถานะ** (รวม sent/failed/dead) — ใช้กับงานที่มี unique index ต่อ payment (reject_notify, sql/069 รอบ 3)
+ * @returns {Promise<{id:string,status:string,created_at?:string}|null>}
+ */
+export async function findOutboundByPaymentAndKindAnyStatus(paymentId, kind) {
+  const pid = String(paymentId || "").trim();
+  if (!pid) return null;
+  const { data, error } = await supabase
+    .from("outbound_messages")
+    .select("id,status,created_at")
+    .eq("related_payment_id", pid)
+    .eq("kind", kind)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
 export async function findActiveOutboundByPaymentAndKind(paymentId, kind) {
   const pid = String(paymentId || "").trim();
   if (!pid) return null;

@@ -56,6 +56,11 @@ ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS settlement_updated_at times
 ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS settlement_by text;
 ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS reject_notify_pending boolean NOT NULL DEFAULT false;
 ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS reject_notify_queued_at timestamptz;
+-- รอบ 3 (Codex 20 ต.ค. 2026): snapshot ข้อความแจ้งลูกค้า "ณ เวลาปฏิเสธ" (reasonText/reasonCode/moneyPending) — ทุกเส้นกู้คืน (Telegram กดซ้ำ / Admin / sweep) ใช้ชุดเดียวกัน ไม่เปลี่ยนตามข้อมูลภายหลัง
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS reject_notify_snapshot jsonb;
+-- รอบ 3: กันข้อความแจ้งปฏิเสธซ้ำระดับ DB — 1 แถว outbound ต่อ payment (ทุกสถานะ รวม sent/failed/dead) · แอปจับ 23505 = dedupe
+CREATE UNIQUE INDEX IF NOT EXISTS uq_outbound_reject_notify_per_payment
+  ON public.outbound_messages (related_payment_id) WHERE kind = 'reject_notify' AND related_payment_id IS NOT NULL;
 ALTER TABLE public.payments DROP CONSTRAINT IF EXISTS payments_settlement_status_check;
 ALTER TABLE public.payments ADD CONSTRAINT payments_settlement_status_check
   CHECK (settlement_status IN ('none','money_pending','refunded','topped_up','written_off'));
@@ -68,7 +73,7 @@ CREATE INDEX IF NOT EXISTS idx_payments_reject_notify_pending ON public.payments
 CREATE OR REPLACE FUNCTION public.reject_payment_atomic(
   p_payment_id uuid, p_actor text, p_channel text, p_reason_code text, p_reason_text text, p_money_pending boolean DEFAULT false
 ) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-DECLARE pay public.payments%ROWTYPE; money boolean; st text;
+DECLARE pay public.payments%ROWTYPE; money boolean; st text; snap jsonb;
 BEGIN
   IF p_payment_id IS NULL THEN RAISE EXCEPTION 'payment_id_required'; END IF;
   IF p_channel IS NULL OR btrim(p_channel) = '' THEN RAISE EXCEPTION 'channel_required'; END IF;
@@ -76,7 +81,8 @@ BEGIN
   IF NOT FOUND THEN RETURN jsonb_build_object('ok', false, 'reason', 'not_found'); END IF;
   IF pay.status = 'rejected' THEN
     RETURN jsonb_build_object('ok', true, 'already', true, 'status', pay.status, 'lineUserId', pay.line_user_id, 'paymentRef', pay.payment_ref,
-      'slipAmount', pay.slip_amount, 'expectedAmount', pay.expected_amount, 'settlementStatus', pay.settlement_status, 'notifyPending', pay.reject_notify_pending);
+      'slipAmount', pay.slip_amount, 'expectedAmount', pay.expected_amount, 'settlementStatus', pay.settlement_status, 'notifyPending', pay.reject_notify_pending,
+      'notifySnapshot', pay.reject_notify_snapshot);
   END IF;
   IF pay.status = 'paid' THEN
     RETURN jsonb_build_object('ok', false, 'reason', 'already_paid', 'status', pay.status);
@@ -86,6 +92,7 @@ BEGIN
   END IF;
   money := COALESCE(p_money_pending, false) OR COALESCE(pay.slip_amount, 0) > 0;
   st := CASE WHEN money THEN 'money_pending' ELSE pay.settlement_status END;
+  snap := jsonb_build_object('reasonText', left(COALESCE(p_reason_text, p_reason_code, 'admin_reject'), 400), 'reasonCode', p_reason_code, 'moneyPending', money, 'rejectedAt', now());
   UPDATE public.payments
      SET status = 'rejected', rejected_at = now(), reject_reason = left(COALESCE(p_reason_text, p_reason_code, 'admin_reject'), 400),
          approved_by = left(COALESCE(p_actor, 'admin'), 80), updated_at = now(),
@@ -93,13 +100,15 @@ BEGIN
          settlement_note = CASE WHEN money THEN left('ปฏิเสธสิทธิ์ ('||COALESCE(p_reason_code,'-')||') แต่มียอดโอนที่อ่านได้ '||COALESCE(pay.slip_amount::text,'?')||' บาท — รอคืน/โอนเพิ่ม/ตัดจบ โดยคน (ยังไม่พิสูจน์เงินเข้า)', 400) ELSE settlement_note END,
          settlement_updated_at = CASE WHEN money THEN now() ELSE settlement_updated_at END,
          settlement_by = CASE WHEN money THEN left(COALESCE(p_actor,'admin'),80) ELSE settlement_by END,
-         reject_notify_pending = (pay.line_user_id IS NOT NULL)
+         reject_notify_pending = (pay.line_user_id IS NOT NULL),
+         reject_notify_snapshot = snap
    WHERE id = p_payment_id;
   INSERT INTO public.payment_approval_audit(payment_id, channel, actor, action, result, detail)
   VALUES (p_payment_id, left(p_channel, 40), left(COALESCE(p_actor,'admin'), 80), 'rejected', 'ok',
           jsonb_build_object('reasonCode', p_reason_code, 'moneyPending', money, 'slipAmount', pay.slip_amount, 'expectedAmount', pay.expected_amount));
   RETURN jsonb_build_object('ok', true, 'already', false, 'status', 'rejected', 'lineUserId', pay.line_user_id, 'paymentRef', pay.payment_ref,
-    'slipAmount', pay.slip_amount, 'expectedAmount', pay.expected_amount, 'settlementStatus', st, 'notifyPending', (pay.line_user_id IS NOT NULL));
+    'slipAmount', pay.slip_amount, 'expectedAmount', pay.expected_amount, 'settlementStatus', st, 'notifyPending', (pay.line_user_id IS NOT NULL),
+    'notifySnapshot', snap);
 END;
 $$;
 
@@ -112,10 +121,11 @@ BEGIN
   GET DIAGNOSTICS n = ROW_COUNT; RETURN n = 1;
 END;
 $$;
+DROP FUNCTION IF EXISTS public.list_reject_notify_pending(integer); -- รอบ 2 คืน 5 คอลัมน์ (ไม่เคย apply staging/Pro) → รอบ 3 เพิ่ม snapshot
 CREATE OR REPLACE FUNCTION public.list_reject_notify_pending(p_limit integer DEFAULT 20)
-RETURNS TABLE(payment_id uuid, line_user_id text, reject_reason text, settlement_status text, rejected_at timestamptz)
+RETURNS TABLE(payment_id uuid, line_user_id text, reject_reason text, settlement_status text, rejected_at timestamptz, reject_notify_snapshot jsonb)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
-  SELECT p.id, p.line_user_id, p.reject_reason, p.settlement_status, p.rejected_at
+  SELECT p.id, p.line_user_id, p.reject_reason, p.settlement_status, p.rejected_at, p.reject_notify_snapshot
     FROM public.payments p
    WHERE p.reject_notify_pending AND p.status = 'rejected' AND p.line_user_id IS NOT NULL
      AND p.rejected_at < now() - interval '1 minute'

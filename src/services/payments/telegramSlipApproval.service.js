@@ -538,11 +538,16 @@ export async function handleApprovalCallback(cb, deps = {}) {
     const moneyPending = out.settlementStatus === "money_pending"; // ค่าจริงจาก DB (Admin/Telegram ได้ผลเดียวกัน)
     // งานแจ้งลูกค้าคงทน: DB ตั้ง reject_notify_pending ไว้แล้ว → enqueue (คิว outbound มี retry/dedupe) → mark ว่าเข้าคิวแล้ว · ล้ม = sweep กู้เอง
     // "เข้าคิวแจ้งแล้ว" ≠ "ส่งถึง LINE แล้ว" — ที่นี่รู้ได้แค่เข้าคิว
+    // ข้อความลูกค้าใช้ snapshot ที่ DB บันทึก "ณ เวลาปฏิเสธ" (รอบ 3) — กดซ้ำด้วยเหตุผลอื่น/เงินถูกปิดเรื่องไปแล้ว ก็ยังได้ข้อความชุดเดิม
+    const snap = out.notifySnapshot && typeof out.notifySnapshot === "object" ? out.notifySnapshot : null;
+    const notifyReasonText = snap?.reasonText ?? reason.label;
+    const notifyMoneyPending = snap ? Boolean(snap.moneyPending) : moneyPending;
     let notify = { queued: false, reason: "skipped" };
     if (out.lineUserId && out.notifyPending !== false && typeof deps.notifyCustomerReject === "function") {
       try {
-        const r = await deps.notifyCustomerReject({ lineUserId: out.lineUserId, paymentId, reasonText: reason.label, moneyPending });
-        notify = { queued: true, deduped: Boolean(r?.deduped) };
+        const r = await deps.notifyCustomerReject({ lineUserId: out.lineUserId, paymentId, reasonText: notifyReasonText, moneyPending: notifyMoneyPending });
+        if (!r?.id) throw new Error("outbound_row_unconfirmed"); // ไม่มีแถว outbound ที่ยืนยันได้ → ถือว่าเข้าคิวไม่สำเร็จ ห้าม mark
+        notify = { queued: true, deduped: Boolean(r?.deduped), stuck: Boolean(r?.stuck) };
         if (typeof deps.markRejectNotifyQueued === "function") { try { await deps.markRejectNotifyQueued(paymentId); } catch (e) { console.error(JSON.stringify({ event: "TELEGRAM_REJECT_NOTIFY_MARK_FAILED", paymentId, reason: String(e?.message || e).slice(0, 120) })); } }
       } catch (e) { notify = { queued: false, reason: String(e?.message || e).slice(0, 120) }; console.error(JSON.stringify({ event: "TELEGRAM_REJECT_CUSTOMER_NOTIFY_FAILED", paymentId, reason: notify.reason, recovery: "reject_notify_pending คงอยู่ → maintenance sweep จะเข้าคิวให้ใหม่" })); }
     }
@@ -554,7 +559,7 @@ export async function handleApprovalCallback(cb, deps = {}) {
     return { action: "confirm", result: "ok", text: [
       "ไม่อนุมัติแล้ว ไม่เติมสิทธิ์ ไม่หักสิทธิ์เดิม",
       moneyPending ? `⚠ เงินรอดำเนินการ: ยอดที่อ่านได้ ${out.slipAmount != null ? `${out.slipAmount} บาท` : "-"} (ยังไม่พิสูจน์เงินเข้า) — ไปที่หน้า Admin > รายการนี้ เพื่อบันทึกคืนเงิน/โอนเพิ่ม/ตัดจบ` : null,
-      notify.queued ? "เข้าคิวแจ้งลูกค้าทาง LINE แล้ว (ยังไม่ยืนยันว่าส่งถึง)" : "เข้าคิวแจ้งลูกค้าไม่สำเร็จ — ระบบจะลองเข้าคิวใหม่เองภายในไม่กี่นาที (ไม่กระทบสถานะรายการ)",
+      notify.stuck ? "ข้อความแจ้งลูกค้ามีอยู่แล้วแต่ส่งไม่สำเร็จก่อนหน้า — ระบบไม่สร้างซ้ำ แจ้งแอดมินให้ตรวจแล้ว" : notify.queued ? "เข้าคิวแจ้งลูกค้าทาง LINE แล้ว (ยังไม่ยืนยันว่าส่งถึง)" : "เข้าคิวแจ้งลูกค้าไม่สำเร็จ — ระบบจะลองเข้าคิวใหม่เองภายในไม่กี่นาที (ไม่กระทบสถานะรายการ)",
     ].filter(Boolean).join("\n") };
   }
   return { action: "unknown", result: "denied", text: "ปุ่มนี้ไม่รองรับ" };

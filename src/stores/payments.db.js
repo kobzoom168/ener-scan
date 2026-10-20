@@ -1,4 +1,5 @@
 import { supabase } from "../config/supabase.js";
+const defaultSupabase = supabase;
 import { upsertPaymentSlipRetentionRow } from "./paymentSlips.db.js";
 import {
   emitPaymentApprovedFunnel,
@@ -712,14 +713,19 @@ const ADMIN_PAYMENT_LIST_SELECT = `
       verified_at,
       rejected_at,
       reject_reason,
+      settlement_status,
+      settlement_note,
+      settlement_by,
       app_users ( paid_until, paid_remaining_scans )
     `;
 
+/** @param {{status?:string,limit?:number,q?:string}} p @param {{client?: object}} [deps] — deps.client สำหรับเทสต์ store→render (ค่าเริ่มต้น = client anon เดิม) */
 export async function getPaymentsForAdminByStatus({
   status = "pending_verify",
   limit = 200,
   q = "",
-} = {}) {
+} = {}, deps = {}) {
+  const supabase = deps.client ?? defaultSupabase;
   const s = String(status || "").trim();
   const safeStatus = ADMIN_LIST_STATUSES.includes(s) ? s : "pending_verify";
   const lim = Math.min(Math.max(Number(limit) || 200, 1), 500);
@@ -1052,5 +1058,6 @@ export async function markPaymentRejected({
     slipAmount: res.slipAmount ?? null, expectedAmount: res.expectedAmount ?? null,
     settlementStatus: res.settlementStatus ?? null, moneyPending: res.settlementStatus === "money_pending",
     notifyPending: Boolean(res.notifyPending),
+    notifySnapshot: res.notifySnapshot && typeof res.notifySnapshot === "object" ? res.notifySnapshot : null,
   };
 }

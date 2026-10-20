@@ -268,7 +268,8 @@ export default function createAdminAuthRouter() {
       res.redirect(302, "/admin/login?error=server");
       return;
     }
-    req.session.admin = { authenticated: true };
+    // loginAt = ตัวระบุ session ใน actor ของงาน ops (เช่น settlement) — ไม่เก็บ secret
+    req.session.admin = { authenticated: true, loginAt: new Date().toISOString() };
     req.session.save((err) => {
       if (err) {
         console.error("[ADMIN_LOGIN] session save failed:", err);

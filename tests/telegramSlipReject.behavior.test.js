@@ -35,7 +35,7 @@ function mkDeps(over = {}) {
     notifyCustomer: async () => ({ deduped: false }),
     // เหมือน DB (sql/069): money_pending ตัดสินจาก flag ผู้เรียก OR slip_amount>0 ของแถวที่ล็อก · notifyPending=true จนแอป mark
     rejectPayment: over.rejectPayment ?? (async (a) => { rejects.push(a); status = "rejected"; const slip = over.slipAmount === undefined ? PAY.slipAmount : over.slipAmount; const money = Boolean(a.moneyPending) || Number(slip) > 0; return { ok: true, already: false, lineUserId: PAY.lineUserId, paymentRef: PAY.paymentRef, slipAmount: slip, expectedAmount: PAY.expectedAmount, settlementStatus: money ? "money_pending" : "none", notifyPending: true }; }),
-    notifyCustomerReject: over.notifyCustomerReject ?? (async (a) => { notifies.push(a); return { deduped: false }; }),
+    notifyCustomerReject: over.notifyCustomerReject ?? (async (a) => { notifies.push(a); return { id: "ob-1", status: "queued", deduped: false }; }),
     markRejectNotifyQueued: over.markRejectNotifyQueued ?? (async (id) => { marks.push(id); return true; }),
   };
 }
@@ -112,17 +112,31 @@ test("ชนิด token สลับกันไม่ได้: token อน�
 
 test("enqueue แจ้งลูกค้าล้ม: ปฏิเสธสำเร็จแล้ว ไม่ mark queued (pending คงใน DB ให้ sweep กู้) · ข้อความบอกว่าเข้าคิวไม่สำเร็จ ระบบจะลองใหม่ · กดซ้ำได้ already + เข้าคิวที่ค้าง", async () => {
   let fail = true;
-  const d = mkDeps({ notifyCustomerReject: async (a) => { if (fail) throw new Error("outbound insert failed"); d.notifies.push(a); return { deduped: false }; } });
+  const d = mkDeps({ notifyCustomerReject: async (a) => { if (fail) throw new Error("outbound insert failed"); d.notifies.push(a); return { id: "ob-1", deduped: false }; } });
   const rr = await svc.handleApprovalCallback(cb(`rr:${PAY.paymentId}:amount`), d);
   const oe = console.error; console.error = () => {};
   let r; try { r = await svc.handleApprovalCallback(cb(rr.replyMarkup.inline_keyboard[0][0].callback_data), d); } finally { console.error = oe; }
   assert.equal(r.result, "ok"); assert.match(r.text, /เข้าคิวแจ้งลูกค้าไม่สำเร็จ — ระบบจะลองเข้าคิวใหม่เอง/); assert.equal(d.marks.length, 0, "ห้าม mark ว่าเข้าคิวแล้วเมื่อ enqueue ล้ม"); assert.equal(d.rejects.length, 1);
   // รอบถัดไป (เช่นกดจากปุ่มใหม่): DB ตอบ already + notifyPending=true → ลองเข้าคิวอีกครั้ง แล้ว mark
   fail = false;
-  const d2 = mkDeps({ rejectPayment: async () => ({ ok: true, already: true, lineUserId: PAY.lineUserId, slipAmount: 10, settlementStatus: "money_pending", notifyPending: true }), notifyCustomerReject: async (a) => { d2.notifies.push(a); return { deduped: false }; } });
+  // รอบ 3: DB ปิดเรื่องเงินไปแล้ว (refunded) และผู้กดครั้งใหม่เลือกเหตุผล "amount" — ข้อความลูกค้าต้องมาจาก snapshot ตอนปฏิเสธจริง (blur + moneyPending=true) ไม่ใช่ค่าใหม่/ค่าปัจจุบัน
+  const snapshot = { reasonText: "สลิปไม่ชัด", reasonCode: "blur", moneyPending: true, rejectedAt: "2026-10-20T05:00:00Z" };
+  const d2 = mkDeps({ rejectPayment: async () => ({ ok: true, already: true, lineUserId: PAY.lineUserId, slipAmount: 10, settlementStatus: "refunded", notifyPending: true, notifySnapshot: snapshot }), notifyCustomerReject: async (a) => { d2.notifies.push(a); return { id: "ob-9", status: "queued", deduped: false }; } });
   const rr2 = await svc.handleApprovalCallback(cb(`rr:${PAY.paymentId}:amount`), d2);
   const r2 = await svc.handleApprovalCallback(cb(rr2.replyMarkup.inline_keyboard[0][0].callback_data), d2);
   assert.match(r2.text, /ถูกปฏิเสธไปแล้วก่อนหน้านี้ — เข้าคิวแจ้งลูกค้าที่ค้างอยู่ให้แล้ว/); assert.equal(d2.notifies.length, 1); assert.deepEqual(d2.marks, [PAY.paymentId]);
+  assert.equal(d2.notifies[0].reasonText, "สลิปไม่ชัด", "ใช้เหตุผลจาก snapshot ไม่ใช่คำขอครั้งใหม่ (amount)"); assert.equal(d2.notifies[0].moneyPending, true, "moneyPending จาก snapshot ไม่ใช่ settlement ปัจจุบัน (refunded)");
+  // enqueue ตอบกลับโดยไม่มี id (ยืนยันแถว outbound ไม่ได้) → ถือว่าเข้าคิวไม่สำเร็จ ไม่ mark
+  const d4 = mkDeps({ notifyCustomerReject: async () => ({ deduped: false }) });
+  const rr4 = await svc.handleApprovalCallback(cb(`rr:${PAY.paymentId}:amount`), d4);
+  const oe4 = console.error; console.error = () => {};
+  let r4; try { r4 = await svc.handleApprovalCallback(cb(rr4.replyMarkup.inline_keyboard[0][0].callback_data), d4); } finally { console.error = oe4; }
+  assert.match(r4.text, /เข้าคิวแจ้งลูกค้าไม่สำเร็จ/); assert.equal(d4.marks.length, 0, "ไม่มีแถว outbound ยืนยัน = ห้าม mark");
+  // แถวเดิม failed/dead (stuck) → มีแถวจริง mark ได้ แต่ข้อความบอกว่าไม่สร้างซ้ำและแจ้งแอดมิน
+  const d5 = mkDeps({ notifyCustomerReject: async () => ({ id: "ob-dead", status: "dead", deduped: true, stuck: true }) });
+  const rr5 = await svc.handleApprovalCallback(cb(`rr:${PAY.paymentId}:amount`), d5);
+  const r5 = await svc.handleApprovalCallback(cb(rr5.replyMarkup.inline_keyboard[0][0].callback_data), d5);
+  assert.match(r5.text, /มีอยู่แล้วแต่ส่งไม่สำเร็จก่อนหน้า — ระบบไม่สร้างซ้ำ/); assert.deepEqual(d5.marks, [PAY.paymentId]);
   // already + notifyPending=false (เข้าคิวไปแล้ว) → ไม่แจ้งซ้ำ
   const d3 = mkDeps({ rejectPayment: async () => ({ ok: true, already: true, lineUserId: PAY.lineUserId, settlementStatus: "money_pending", notifyPending: false }) });
   const rr3 = await svc.handleApprovalCallback(cb(`rr:${PAY.paymentId}:amount`), d3);
@@ -153,18 +167,26 @@ test("static: role จำกัด payment_ops_writer (ไม่ใช่ anon) 
   const fnBody = util.split("export function buildPaymentRejectedText")[1].split("\nexport ")[0];
   assert.match(fnBody, /ยังไม่ต้องโอนเพิ่มหรือส่งสลิปใหม่/); assert.match(fnBody, /if \(moneyPending\) \{[\s\S]*?return lines\.join/, "เส้น moneyPending ต้อง return ก่อนบรรทัดชวนเริ่มชำระใหม่");
   const admin = read("src/routes/adminPaymentsDashboard.routes.js");
-  assert.match(admin, /moneyPending: moneyPendingNow, notifyPending \} = await markPaymentRejected/); assert.match(admin, /channel: "web"/); assert.match(admin, /if \(lineUserId && notifyPending\)/);
-  assert.match(admin, /router\.post\("\/admin\/payments\/:id\/settlement", requireAdminSession/); assert.match(admin, /timingSafeEqual\(Buffer\.from\(csrf\), Buffer\.from\(expected\)\)/); assert.match(admin, /ops\.resolveSettlement\(/); assert.doesNotMatch(admin, /supabase\.rpc\("payment_settlement_resolve"/);
+  assert.match(admin, /moneyPending: moneyPendingNow, notifyPending, notifySnapshot \} = await markPaymentRejected/); assert.match(admin, /channel: "web"/); assert.match(admin, /if \(lineUserId && notifyPending\)/);
+  assert.match(admin, /rejectNotifyTextFromSnapshot\(notifySnapshot/, "Admin ใช้ snapshot ทำข้อความลูกค้า"); assert.match(admin, /if \(!rejectEnq\?\.id\) throw/, "mark queued เฉพาะเมื่อมีแถว outbound จริง");
+  assert.match(admin, /router\.post\("\/admin\/payments\/:id\/settlement", requireAdminSessionOnly/, "settlement ต้อง session-only (ไม่รับ legacy token)");
+  assert.doesNotMatch(admin, /settlement", requireAdminSession,/); assert.match(admin, /req\.session\?\.admin\?\.loginAt/, "actor จาก session.admin.loginAt");
+  assert.match(read("src/routes/adminAuth.routes.js"), /req\.session\.admin = \{ authenticated: true, loginAt: new Date\(\)\.toISOString\(\) \}/, "login ต้องตั้ง loginAt");
+  const enq = read("src/services/scanV2/outboundAdminEnqueue.service.js");
+  assert.match(enq, /findOutboundByPaymentAndKindAnyStatus/, "dedupe ต้องดูทุกสถานะ"); assert.match(enq, /"23505"/, "unique violation = dedupe"); assert.doesNotMatch(enq.split("export async function enqueueRejectNotify")[1].split("\nasync function")[0], /findActiveOutboundByPaymentAndKind\(/);
+  const sweep = read("src/services/payments/rejectNotifySweep.service.js");
+  assert.match(sweep, /rejectNotifyTextFromSnapshot\(r\.reject_notify_snapshot/); assert.match(sweep, /if \(!q\?\.id\)/);
+  const sel = store.split("const ADMIN_PAYMENT_LIST_SELECT")[1].split("`;")[0]; for (const c of ["settlement_status", "settlement_note", "settlement_by"]) assert.ok(sel.includes(c), "ADMIN_PAYMENT_LIST_SELECT ต้องมี " + c); assert.match(admin, /timingSafeEqual\(Buffer\.from\(csrf\), Buffer\.from\(expected\)\)/); assert.match(admin, /ops\.resolveSettlement\(/); assert.doesNotMatch(admin, /supabase\.rpc\("payment_settlement_resolve"/);
   assert.match(admin, /export function settlementBlockHtml\(p, postBase, csrf = ""\)/); assert.match(admin, /<div>settlement<\/div><div>\$\{settlementBlockHtml\(p, `\/admin\/payments\/\$\{encodeURIComponent\(String\(p\.id\)\)\}`, csrf\)\}<\/div>/, "หน้ารายละเอียดต้องเรียก block พร้อม csrf");
   assert.match(admin, /csrf: \(req\.session\.paymentOpsCsrf \|\|= randomBytes\(24\)\.toString\("hex"\)\)/);
   assert.match(read("src/workers/maintenanceWorker.js"), /sweepRejectNotifyPending\(\)/);
   assert.match(read(".env.example"), /PAYMENT_OPS_DB_KEY=/);
   const sql = read("sql/069_telegram_reject_and_settlement.sql");
-  for (const t of ["CREATE ROLE payment_ops_writer NOLOGIN", "FROM PUBLIC, web_anon, service_role;", "TO payment_ops_writer;", "reject_notify_pending", "mark_reject_notify_queued", "list_reject_notify_pending", "COALESCE(pay.slip_amount, 0) > 0", "INSERT INTO public.payment_approval_audit", "kind IN ('confirm','reject_confirm')", "settlement_note_required"]) assert.ok(sql.includes(t), t);
+  for (const t of ["reject_notify_snapshot jsonb", "'notifySnapshot', snap", "'notifySnapshot', pay.reject_notify_snapshot", "CREATE UNIQUE INDEX IF NOT EXISTS uq_outbound_reject_notify_per_payment", "WHERE kind = 'reject_notify' AND related_payment_id IS NOT NULL", "rejected_at timestamptz, reject_notify_snapshot jsonb)", "CREATE ROLE payment_ops_writer NOLOGIN", "FROM PUBLIC, web_anon, service_role;", "TO payment_ops_writer;", "reject_notify_pending", "mark_reject_notify_queued", "list_reject_notify_pending", "COALESCE(pay.slip_amount, 0) > 0", "INSERT INTO public.payment_approval_audit", "kind IN ('confirm','reject_confirm')", "settlement_note_required"]) assert.ok(sql.includes(t), t);
   assert.ok(!/GRANT EXECUTE ON FUNCTION public\.(reject_payment_atomic|payment_settlement_resolve|mark_reject_notify_queued|list_reject_notify_pending)[^\n]*TO [^\n]*(web_anon|service_role)/.test(sql), "RPC เขียนห้ามให้ anon/service_role");
   assert.doesNotMatch(sql, /app_users|paid_remaining_scans|paid_until/, "069 ต้องไม่แตะสิทธิ์ผู้ใช้");
   const md5 = read("scripts/ops/migration-function-md5.reference.txt");
   for (const f of ["issue_telegram_reject_token", "reject_payment_atomic", "payment_settlement_resolve", "mark_reject_notify_queued", "list_reject_notify_pending"]) assert.match(md5, new RegExp(`^${f} [0-9a-f]{32}$`, "m"));
-  assert.match(read("scripts/ops/preflight-three-tasks-migrations.sql"), /069 RPCs present \(5/); assert.match(read("scripts/ops/preflight-three-tasks-migrations.sql"), /069 write RPCs only for payment_ops_writer/);
-  assert.match(read("package.json"), /tests\/telegramSlipReject\.behavior\.test\.js/); assert.match(read("package.json"), /tests\/rejectNotifySweep\.test\.js/); assert.match(read("package.json"), /tests\/adminSettlementRender\.test\.js/);
+  assert.match(read("scripts/ops/preflight-three-tasks-migrations.sql"), /069 RPCs present \(5/); assert.match(read("scripts/ops/preflight-three-tasks-migrations.sql"), /069r3 payments\.reject_notify_snapshot \+ unique index/); assert.match(read("scripts/ops/preflight-three-tasks-migrations.sql"), /069 write RPCs only for payment_ops_writer/);
+  assert.match(read("package.json"), /tests\/telegramSlipReject\.behavior\.test\.js/); assert.match(read("package.json"), /tests\/rejectNotifyEnqueue\.test\.js/); assert.match(read("package.json"), /tests\/adminSettlementRoute\.behavior\.test\.js/); assert.match(read("package.json"), /tests\/rejectNotifySweep\.test\.js/); assert.match(read("package.json"), /tests\/adminSettlementRender\.test\.js/);
 });

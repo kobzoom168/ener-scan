@@ -4,7 +4,7 @@
 import express, { Router } from "express";
 
 import { supabase } from "../config/supabase.js";
-import { requireAdminSession } from "../middleware/requireAdmin.js";
+import { requireAdminSession, requireAdminSessionOnly } from "../middleware/requireAdmin.js";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import {
   ensurePaymentRefForPaymentId,
@@ -31,7 +31,6 @@ import {
 import { getScanUsageSummaryForAppUser } from "../stores/paymentAccess.db.js";
 import {
   buildPaymentApprovedText,
-  buildPaymentRejectedText,
 } from "../utils/webhookText.util.js";
 import { logEvent } from "../utils/personaAnalytics.util.js";
 import { getAssignedPersonaVariant } from "../utils/personaVariant.util.js";
@@ -46,6 +45,7 @@ import {
   snapshotAbuseForAdminResetLog,
 } from "../stores/abuseGuard.store.js";
 import { clearPaymentState } from "../stores/manualPaymentAccess.store.js";
+import { rejectNotifyTextFromSnapshot } from "../services/payments/rejectNotifySweep.service.js";
 import {
   enqueueApproveNotify,
   enqueueAdminSystemText,
@@ -1180,20 +1180,29 @@ function renderDetailPage({
 </html>`;
 }
 
-export default function createAdminPaymentsDashboardRouter(_lineClient) {
+/**
+ * @param {object} _lineClient
+ * @param {{ paymentOps?: object, listPayments?: Function, statusCounts?: Function }} [deps] — สำหรับเทสต์ (store/ops ปลอม) · auth ใช้ middleware จริงเสมอ
+ */
+export default function createAdminPaymentsDashboardRouter(_lineClient, deps = {}) {
   const router = Router();
+  const listPayments = deps.listPayments ?? getPaymentsForAdminByStatus;
+  const statusCounts = deps.statusCounts ?? getPaymentStatusCountsForAdmin;
+  const loadPaymentOps = async () => deps.paymentOps ?? (await import("../stores/paymentOps.store.js"));
+  /** actor ของงาน ops = session ที่ login (adminAuth ตั้ง loginAt ตอน login) — ไม่รับ legacy token จึงมี session เสมอ */
+  const opsActor = (req) => `admin_dashboard:${String(req.session?.admin?.loginAt || "").slice(0, 19) || "session"}`;
 
   router.get("/admin/payments", requireAdminSession, async (req, res) => {
     try {
       const status = String(req.query?.status || "pending_verify").trim();
       const q = String(req.query?.q || "").trim();
-      const [{ rows, filterStatus }, statusCounts] = await Promise.all([
-        getPaymentsForAdminByStatus({
+      const [{ rows, filterStatus }, counts] = await Promise.all([
+        listPayments({
           status,
           limit: 200,
           q,
         }),
-        getPaymentStatusCountsForAdmin(),
+        statusCounts(),
       ]);
       const flashMap = {
         approved: "อนุมัติแล้ว ✅",
@@ -1206,7 +1215,7 @@ export default function createAdminPaymentsDashboardRouter(_lineClient) {
         rows,
         filterStatus,
         flash,
-        statusCounts,
+        statusCounts: counts,
         searchQuery: q,
       });
       res.status(200).type("html").send(html);
@@ -1558,8 +1567,8 @@ export default function createAdminPaymentsDashboardRouter(_lineClient) {
     },
   );
 
-  // ปิดเรื่องเงินโดยคน (sql/069) — session-only + CSRF · ผ่าน role จำกัด payment_ops_writer · บันทึก audit ใน DB · ไม่แตะสิทธิ์ ไม่ลบหลักฐาน
-  router.post("/admin/payments/:id/settlement", requireAdminSession, async (req, res) => {
+  // ปิดเรื่องเงินโดยคน (sql/069) — **session-only** (requireAdminSessionOnly: ไม่รับ legacy ADMIN_TOKEN) + CSRF · ผ่าน role จำกัด payment_ops_writer · บันทึก audit ใน DB · ไม่แตะสิทธิ์ ไม่ลบหลักฐาน
+  router.post("/admin/payments/:id/settlement", requireAdminSessionOnly, async (req, res) => {
     const paymentId = String(req.params?.id || "").trim();
     const status = String(req.body?.settlement_status || "").trim();
     const note = String(req.body?.settlement_note || "").trim();
@@ -1570,8 +1579,8 @@ export default function createAdminPaymentsDashboardRouter(_lineClient) {
       return res.status(403).send("csrf_invalid");
     }
     try {
-      const ops = await import("../stores/paymentOps.store.js");
-      const data = await ops.resolveSettlement({ paymentId, status, note, actor: `admin_dashboard:${String(req.session?.adminLoginAt || "").slice(0, 19) || "session"}` });
+      const ops = await loadPaymentOps();
+      const data = await ops.resolveSettlement({ paymentId, status, note, actor: opsActor(req) });
       console.log(JSON.stringify({ event: "ADMIN_PAYMENT_SETTLEMENT", paymentId, status, ok: Boolean(data?.ok), reason: data?.reason || null }));
       if (prefersAdminJson(req)) return res.json({ ok: Boolean(data?.ok), reason: data?.reason || null });
       return res.redirect(`/admin/payments/${encodeURIComponent(paymentId)}?settlement=${data?.ok ? "ok" : encodeURIComponent(data?.reason || "failed")}`);
@@ -1599,7 +1608,7 @@ export default function createAdminPaymentsDashboardRouter(_lineClient) {
     try {
       const preset = String(req.body?.reject_preset || "").trim();
       // sql/069: DB ตัดสิน "เงินรอดำเนินการ" จากแถวที่ล็อก (คำใบ้จาก preset ยอดไม่ตรง/หมดอายุ/อื่น ๆ OR slip_amount>0) — ใช้ค่าที่ DB คืนมาเป็นหลัก
-      const { lineUserId, already, moneyPending: moneyPendingNow, notifyPending } = await markPaymentRejected({
+      const { lineUserId, already, moneyPending: moneyPendingNow, notifyPending, notifySnapshot } = await markPaymentRejected({
         paymentId,
         rejectReason,
         approvedBy,
@@ -1610,12 +1619,14 @@ export default function createAdminPaymentsDashboardRouter(_lineClient) {
 
       if (lineUserId && notifyPending) {
         try {
+          // ข้อความลูกค้าจาก snapshot ณ เวลาปฏิเสธ (DB) — เส้นกู้คืน (Telegram/sweep) ใช้ชุดเดียวกัน
           const rejectEnq = await enqueueRejectNotify({
             lineUserId,
             paymentId,
-            text: buildPaymentRejectedText({ reason: rejectReason, moneyPending: moneyPendingNow }),
+            text: rejectNotifyTextFromSnapshot(notifySnapshot, { reason: rejectReason, moneyPending: moneyPendingNow }),
           });
-          try { const ops = await import("../stores/paymentOps.store.js"); await ops.markRejectNotifyQueued(paymentId); }
+          if (!rejectEnq?.id) throw new Error("outbound_row_unconfirmed"); // ไม่ mark ถ้ายังไม่เห็นแถว outbound จริง → sweep กู้
+          try { const ops = await loadPaymentOps(); await ops.markRejectNotifyQueued(paymentId); }
           catch (markErr) { console.error(JSON.stringify({ event: "ADMIN_REJECT_NOTIFY_MARK_FAILED", paymentId, reason: String(markErr?.message || markErr).slice(0, 120) })); }
           console.log(
             JSON.stringify({
@@ -1626,6 +1637,7 @@ export default function createAdminPaymentsDashboardRouter(_lineClient) {
                 ? String(rejectEnq.id).slice(0, 8)
                 : null,
               deduped: Boolean(rejectEnq?.deduped),
+              stuck: Boolean(rejectEnq?.stuck),
             }),
           );
         } catch (notifyErr) {

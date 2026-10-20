@@ -1,6 +1,7 @@
 import {
   insertOutboundMessage,
   findActiveOutboundByPaymentAndKind,
+  findOutboundByPaymentAndKindAnyStatus,
 } from "../../stores/scanV2/outboundMessages.db.js";
 import {
   OUTBOUND_PRIORITY,
@@ -86,44 +87,65 @@ export async function enqueueApproveNotify({
  * @param {string} opts.paymentId
  * @param {string} opts.text
  */
-export async function enqueueRejectNotify({ lineUserId, paymentId, text }) {
-  const existing = await findActiveOutboundByPaymentAndKind(
-    paymentId,
-    "reject_notify",
-  );
-  if (existing?.id) {
-    console.log(
-      JSON.stringify({
-        event: "OUTBOUND_ENQUEUE_DEDUPE",
-        kind: "reject_notify",
-        paymentIdPrefix: String(paymentId).slice(0, 8),
-      }),
-    );
-    return { id: existing.id, deduped: true };
+/** สถานะที่ "ยังอยู่ในคิว/ส่งแล้ว" = dedupe เงียบได้ · failed/dead/suppressed = มีแถวแล้วแต่ไม่ถึงลูกค้า → ไม่สร้างซ้ำเงียบ ๆ แต่รายงาน (log + admin alert) */
+export const REJECT_NOTIFY_LIVE_STATUSES = Object.freeze(["queued", "sending", "retry_wait", "sent"]);
+
+/**
+ * เข้าคิวข้อความ "ไม่อนุมัติ" ให้ลูกค้า (kind reject_notify) — 1 แถวต่อ payment ตลอดอายุ (unique index sql/069 รอบ 3)
+ *  - ตรวจแถวเดิมทุกสถานะก่อน · insert แล้วชน 23505 (แข่งกันเข้าคิว) = dedupe ไม่ใช่ error
+ *  - แถวเดิม failed/dead/suppressed: ไม่สร้างใหม่เงียบ ๆ → คืน stuck=true + onStuck (default: log + sendAdminAlert) ให้คนตัดสินใจ (ไม่ requeue เอง)
+ *  - คืน { id, status, deduped, stuck } · id มีค่าเมื่อยืนยันแล้วว่ามีแถว outbound จริง (ผู้เรียก mark queued เฉพาะเมื่อมี id)
+ * @param {{ lineUserId: string, paymentId: string, text: string }} p
+ * @param {{ findExisting?: Function, insert?: Function, onStuck?: Function }} [deps]
+ */
+export async function enqueueRejectNotify({ lineUserId, paymentId, text }, deps = {}) {
+  const findExisting = deps.findExisting ?? findOutboundByPaymentAndKindAnyStatus;
+  const insert = deps.insert ?? insertOutboundMessage;
+  const pidPrefix = String(paymentId).slice(0, 8);
+  const describe = async (row, via) => {
+    const status = String(row?.status || "");
+    if (REJECT_NOTIFY_LIVE_STATUSES.includes(status)) {
+      console.log(JSON.stringify({ event: "OUTBOUND_ENQUEUE_DEDUPE", kind: "reject_notify", via, status, paymentIdPrefix: pidPrefix }));
+      return { id: row.id, status, deduped: true, stuck: false };
+    }
+    console.error(JSON.stringify({ event: "OUTBOUND_REJECT_NOTIFY_EXISTING_NOT_DELIVERED", via, status, paymentIdPrefix: pidPrefix, outboundIdPrefix: String(row.id).slice(0, 8), note: "ไม่สร้างข้อความซ้ำ — ต้องมีคนดู (ห้าม requeue อัตโนมัติ)" }));
+    const onStuck = deps.onStuck ?? defaultRejectNotifyStuckAlert;
+    try { await onStuck({ paymentId, outboundId: row.id, status }); } catch (e) { console.error(JSON.stringify({ event: "OUTBOUND_REJECT_NOTIFY_STUCK_ALERT_FAILED", paymentIdPrefix: pidPrefix, reason: String(e?.message || e).slice(0, 120) })); }
+    return { id: row.id, status, deduped: true, stuck: true };
+  };
+
+  const existing = await findExisting(paymentId, "reject_notify");
+  if (existing?.id) return describe(existing, "lookup");
+
+  let row;
+  try {
+    row = await insert({
+      line_user_id: lineUserId,
+      kind: "reject_notify",
+      priority: OUTBOUND_PRIORITY.reject_notify,
+      related_payment_id: paymentId,
+      payload_json: { text: String(text || "").slice(0, 4900), paymentId: String(paymentId) },
+      status: "queued",
+    });
+  } catch (e) {
+    if (String(e?.code || "") === "23505") {
+      // แข่งกันเข้าคิว (เช่น Telegram กดซ้ำ + sweep) → unique index กันไว้ → อ่านแถวที่ชนะมาใช้
+      const winner = await findExisting(paymentId, "reject_notify");
+      if (winner?.id) return describe(winner, "unique_violation");
+    }
+    throw e;
   }
 
-  const row = await insertOutboundMessage({
-    line_user_id: lineUserId,
-    kind: "reject_notify",
-    priority: OUTBOUND_PRIORITY.reject_notify,
-    related_payment_id: paymentId,
-    payload_json: {
-      text: String(text || "").slice(0, 4900),
-      paymentId: String(paymentId),
-    },
-    status: "queued",
+  console.log(JSON.stringify({ event: "OUTBOUND_ADMIN_ENQUEUED", kind: "reject_notify", paymentIdPrefix: pidPrefix, outboundIdPrefix: row?.id ? String(row.id).slice(0, 8) : null }));
+  return { id: row?.id ?? null, status: "queued", deduped: false, stuck: false };
+}
+
+async function defaultRejectNotifyStuckAlert({ paymentId, outboundId, status }) {
+  const { sendAdminAlert } = await import("../adminAlerts/adminAlert.service.js");
+  return sendAdminAlert({
+    category: "payments", severity: "med", dedupeKey: `reject_notify_stuck:${paymentId}`, dedupeSec: 6 * 3600,
+    text: `ข้อความแจ้ง "ไม่อนุมัติ" ของบิล ${String(paymentId).slice(0, 8)}… มีอยู่แล้วแต่สถานะ ${status} (outbound ${String(outboundId).slice(0, 8)}…) — ระบบไม่สร้างซ้ำ ให้คนตรวจที่หน้า Admin > รายการนี้ / DLQ`,
   });
-
-  console.log(
-    JSON.stringify({
-      event: "OUTBOUND_ADMIN_ENQUEUED",
-      kind: "reject_notify",
-      paymentIdPrefix: String(paymentId).slice(0, 8),
-      outboundIdPrefix: row?.id ? String(row.id).slice(0, 8) : null,
-    }),
-  );
-
-  return { id: row?.id ?? null, deduped: false };
 }
 
 /**
