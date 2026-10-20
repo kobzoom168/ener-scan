@@ -1,0 +1,1412 @@
+From 76dd77f9f3702346bc19ba56ccaaff8c9da2a5fd Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 19 Oct 2026 10:08:37 +0000
+Subject: [PATCH 1/3] =?UTF-8?q?monitor:=20alert=5Fstate=20=E2=80=94=20sing?=
+ =?UTF-8?q?le=20state=20machine=20for=20disk/cpu/ram=20shared=20by=20healt?=
+ =?UTF-8?q?h=5Fcheck=20+=20monitor=5Fcheck=20(lock=20+=20SQLite=20claim),?=
+ =?UTF-8?q?=20persist=20only=20after=20Telegram=20success=20(retry=20on=20?=
+ =?UTF-8?q?failure,=20survives=20restart),=20per-signature=20app=5Ferror?=
+ =?UTF-8?q?=20without=20auto-recovery,=20[ener-ai]=20prefix=20+=20Thai=20t?=
+ =?UTF-8?q?ime=20+=20real=20values,=20log=20excerpts=20redacted;=20thresho?=
+ =?UTF-8?q?lds=2080/85=20unchanged=20(+critical=2090);=2015-min=20log=20wi?=
+ =?UTF-8?q?ndow?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ app/agents/alert_state.py   | 304 ++++++++++++++++++++++++++++++++++++
+ app/agents/monitor_agent.py |  97 ++++++------
+ app/scheduler.py            |  31 +++-
+ tests/test_alert_state.py   | 203 ++++++++++++++++++++++++
+ 4 files changed, 576 insertions(+), 59 deletions(-)
+ create mode 100644 app/agents/alert_state.py
+ create mode 100644 tests/test_alert_state.py
+
+diff --git a/app/agents/alert_state.py b/app/agents/alert_state.py
+new file mode 100644
+index 0000000..8d0eeef
+--- /dev/null
++++ b/app/agents/alert_state.py
+@@ -0,0 +1,304 @@
++"""
++Alert state machine — แจ้งเตือนทรัพยากร/ข้อผิดพลาดแบบ "สถานะ" ครั้งเดียวต่อเหตุ (Codex/กบ 19 ต.ค. 2026)
++
++ทำไม: health_check (*/30) และ monitor_check (*/10) เคยตรวจดิสก์ลูกเดียวกันแล้วต่างคนต่างส่ง → เหตุเดียวซ้ำ 2 ทาง
++กติกา:
++  - ระดับ ok < warn < high < critical ต่อ topic (เกณฑ์เดิม 80/85 คงไว้ เพิ่ม critical 90 เป็นระดับใหม่ ไม่ขยับของเดิม)
++  - ส่งเมื่อ: ระดับเพิ่ม (escalate) · กลับ ok (recover) · ระดับลดแต่ยังไม่ ok (deescalate) · ระดับเท่าเดิม = reminder ตามระดับ (warn 6 ชม. / high 2 ชม. / critical 30 นาที) — ไม่เงียบ ไม่ปิด alert
++  - ล็อกร่วม: asyncio.Lock ต่อ topic (job ในโปรเซสเดียว) + claim ใน SQLite (TTL 2 นาที, BEGIN IMMEDIATE) กันหลายโปรเซส → ผู้ส่งมีคนเดียว
++  - บันทึก state/last_sent **หลัง Telegram ส่งสำเร็จเท่านั้น** · ส่งล้ม = ไม่บันทึก → รอบถัดไปลองใหม่ · state อยู่ใน SQLite (memories) → restart ไม่ลืม
++  - app_error: แยกตาม "ลายเซ็น" ของ error (hash ของบรรทัดที่ normalize แล้ว) → error ใหม่ไม่ถูก cooldown ของ error เก่าบัง · **ไม่แจ้ง recovery เอง** (ไม่พบ error ใน 15 นาที ≠ บริการกลับมา)
++  - ข้อความ: [ener-ai][topic][level] เวลาไทย · ค่าจริง · ตั้งแต่เมื่อไร · (reminder) · ข้อความ/บรรทัด error ผ่าน redact() ก่อนเสมอ
++"""
++from __future__ import annotations
++
++import asyncio
++import hashlib
++import json
++import re
++from collections.abc import Awaitable, Callable
++from datetime import datetime, timedelta
++from zoneinfo import ZoneInfo
++
++from app.core.database import get_db
++
++_BANGKOK = ZoneInfo("Asia/Bangkok")
++LEVELS: tuple[str, ...] = ("ok", "warn", "high", "critical")
++THRESHOLDS: dict[str, dict[str, float]] = {
++    "disk": {"warn": 80, "high": 85, "critical": 90},   # 80/85 = เกณฑ์เดิมของ health_check/monitor_check
++    "cpu": {"high": 85, "critical": 95},
++    "ram": {"high": 90, "critical": 95},
++}
++REMINDER: dict[str, timedelta] = {"warn": timedelta(hours=6), "high": timedelta(hours=2), "critical": timedelta(minutes=30)}
++APP_ERROR_REMINDER = timedelta(hours=6)
++CLAIM_TTL = timedelta(minutes=2)
++SYSTEM_TAG = "ener-ai"
++THAI_MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."]
++
++Sender = Callable[[str], Awaitable[bool]]
++_locks: dict[str, asyncio.Lock] = {}
++
++
++def _lock(topic: str) -> asyncio.Lock:
++    if topic not in _locks:
++        _locks[topic] = asyncio.Lock()
++    return _locks[topic]
++
++
++def _now() -> datetime:
++    return datetime.now(_BANGKOK)
++
++
++def fmt_time(dt: datetime) -> str:
++    dt = dt.astimezone(_BANGKOK)
++    return f"{dt.day} {THAI_MONTHS[dt.month - 1]} {dt:%H:%M}"
++
++
++def _parse(iso: str | None) -> datetime | None:
++    if not iso:
++        return None
++    try:
++        dt = datetime.fromisoformat(str(iso))
++        return dt if dt.tzinfo else dt.replace(tzinfo=_BANGKOK)
++    except Exception:
++        return None
++
++
++# ───────── redaction (ก่อนส่งทุกข้อความที่มีเนื้อ log) ─────────
++_REDACT_PATTERNS = [
++    (re.compile(r"\b\d{6,}:[A-Za-z0-9_-]{30,}"), "<telegram-token>"),
++    (re.compile(r"\bsk-[A-Za-z0-9_-]{10,}"), "<api-key>"),
++    (re.compile(r"\b(?:Bearer|bearer)\s+[A-Za-z0-9._\-]{8,}"), "Bearer <token>"),
++    (re.compile(r"\b(api[_-]?key|token|secret|password|passwd|authorization)\s*[=:]\s*\S+", re.I), r"\1=<redacted>"),
++    (re.compile(r"\bU[0-9a-f]{32}\b"), lambda m: m.group(0)[:8] + "…"),          # LINE userId → prefix 8
++    (re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"), "<email>"),
++    (re.compile(r"\b0[0-9]{8,9}\b"), "<phone>"),
++    (re.compile(r"\b[0-9a-f]{40,}\b"), "<hex>"),
++    (re.compile(r"eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}"), "<jwt>"),
++]
++
++
++def redact(text: str) -> str:
++    out = str(text or "")
++    for pat, rep in _REDACT_PATTERNS:
++        out = pat.sub(rep, out)
++    return out
++
++
++# ───────── level / decision (pure) ─────────
++def level_for(topic: str, value: float) -> str:
++    thresholds = THRESHOLDS.get(topic, {})
++    level = "ok"
++    for lv in ("warn", "high", "critical"):
++        t = thresholds.get(lv)
++        if t is not None and value >= t:
++            level = lv
++    return level
++
++
++def decide(prev: dict | None, level: str, now: datetime, reminder: dict[str, timedelta] | None = None) -> dict:
++    """ตัดสินว่าต้องส่งไหมและเพราะอะไร — ไม่แตะ DB (ทดสอบได้ตรง ๆ)"""
++    reminder = reminder or REMINDER
++    prev_level = (prev or {}).get("level", "ok")
++    if prev_level not in LEVELS:
++        prev_level = "ok"
++    same = prev_level == level
++    since = (prev or {}).get("since") if same and prev else now.isoformat()
++    last_sent = _parse((prev or {}).get("last_sent")) if prev else None
++    kind = None
++    if LEVELS.index(level) > LEVELS.index(prev_level):
++        kind = "escalate"
++    elif level == "ok" and prev_level != "ok":
++        kind = "recover"
++    elif level != "ok" and LEVELS.index(level) < LEVELS.index(prev_level):
++        kind = "deescalate"
++    elif level != "ok" and same:
++        gap = reminder.get(level, timedelta(hours=6))
++        if last_sent is None or now - last_sent >= gap:
++            kind = "reminder"
++    return {"send": kind is not None, "kind": kind, "level": level, "prev_level": prev_level, "since": since or now.isoformat()}
++
++
++# ───────── persistence (SQLite memories) ─────────
++def _key(topic: str) -> str:
++    return f"alert_state_{topic}"
++
++
++async def load_state(topic: str) -> dict | None:
++    async with get_db() as db:
++        cur = await db.execute("SELECT value FROM memories WHERE key = ?", (_key(topic),))
++        row = await cur.fetchone()
++    if not row:
++        return None
++    try:
++        return json.loads(row["value"])
++    except Exception:
++        return None
++
++
++async def save_state(topic: str, state: dict) -> None:
++    async with get_db() as db:
++        await db.execute(
++            """INSERT INTO memories (key, value, tag) VALUES (?, ?, 'alert_state')
++               ON CONFLICT(key) DO UPDATE SET value = excluded.value, tag = 'alert_state', updated_at = CURRENT_TIMESTAMP""",
++            (_key(topic), json.dumps(state, ensure_ascii=False)),
++        )
++        await db.commit()
++
++
++async def _claim(topic: str, now: datetime) -> bool:
++    """claim ข้าม process: แถว alert_claim_<topic> ถ้าหมดอายุ (TTL) หรือไม่มี → ยึดได้ · ใช้ BEGIN IMMEDIATE กัน race"""
++    key = f"alert_claim_{topic}"
++    async with get_db() as db:
++        await db.execute("BEGIN IMMEDIATE")
++        try:
++            cur = await db.execute("SELECT value FROM memories WHERE key = ?", (key,))
++            row = await cur.fetchone()
++            held = _parse(row["value"]) if row else None
++            if held and now - held < CLAIM_TTL:
++                await db.execute("ROLLBACK")
++                return False
++            await db.execute(
++                """INSERT INTO memories (key, value, tag) VALUES (?, ?, 'alert_claim')
++                   ON CONFLICT(key) DO UPDATE SET value = excluded.value, tag = 'alert_claim', updated_at = CURRENT_TIMESTAMP""",
++                (key, now.isoformat()),
++            )
++            await db.execute("COMMIT")
++            return True
++        except Exception:
++            try:
++                await db.execute("ROLLBACK")
++            except Exception:
++                pass
++            raise
++
++
++async def _release(topic: str) -> None:
++    async with get_db() as db:
++        await db.execute("DELETE FROM memories WHERE key = ?", (f"alert_claim_{topic}",))
++        await db.commit()
++
++
++# ───────── message ─────────
++_ICON = {"escalate": "🔴", "reminder": "🟠", "deescalate": "🟡", "recover": "✅"}
++_KIND_TH = {"escalate": "ระดับเพิ่ม", "reminder": "ยังคงอยู่ (เตือนซ้ำตามรอบ)", "deescalate": "ระดับลดลง แต่ยังไม่ปกติ", "recover": "กลับสู่ปกติ"}
++
++
++def format_message(topic: str, decision: dict, value: float | None, now: datetime, details: str = "") -> str:
++    level = decision["level"]
++    kind = decision["kind"]
++    since = _parse(decision.get("since"))
++    parts = [f"[{SYSTEM_TAG}][{topic}][{level}] {fmt_time(now)} · {_ICON.get(kind, '')} {_KIND_TH.get(kind, kind)}"]
++    if value is not None:
++        parts.append(f"ค่า {value:.0f}%" + (f" (ก่อนหน้า: {decision['prev_level']})" if kind != "reminder" else ""))
++    if since and kind != "recover":
++        parts.append(f"ตั้งแต่ {fmt_time(since)}")
++    if level in REMINDER and kind != "recover":
++        gap = REMINDER[level]
++        parts.append(f"เตือนซ้ำทุก {int(gap.total_seconds() // 3600)} ชม." if gap >= timedelta(hours=1) else f"เตือนซ้ำทุก {int(gap.total_seconds() // 60)} นาที")
++    head = " · ".join(parts)
++    body = redact(details).strip()
++    return f"{head}\n{body}" if body else head
++
++
++# ───────── public API ─────────
++async def check_and_notify(
++    topic: str,
++    value: float,
++    send: Sender,
++    *,
++    details: str | Callable[[], str] | None = None,
++    now: datetime | None = None,
++) -> dict:
++    """ประเมินค่า → ส่งเมื่อสถานะเปลี่ยน/ถึงรอบ reminder · บันทึกเฉพาะเมื่อส่งสำเร็จ · คืน {sent, kind, level, reason}"""
++    now = now or _now()
++    async with _lock(topic):
++        if not await _claim(topic, now):
++            return {"sent": False, "reason": "claimed_by_other_process", "level": level_for(topic, value)}
++        try:
++            prev = await load_state(topic)
++            level = level_for(topic, value)
++            d = decide(prev, level, now)
++            if not d["send"]:
++                # ค่าเปลี่ยนแต่ระดับเดิม/ok: อัปเดตค่าล่าสุดไว้ดู (ไม่แตะ last_sent)
++                if prev and prev.get("level") == level and prev.get("value") != value:
++                    await save_state(topic, {**prev, "value": value})
++                return {"sent": False, "reason": "no_change", "level": level, "prev_level": d["prev_level"]}
++            detail_text = details() if callable(details) else (details or "")
++            text = format_message(topic, d, value, now, detail_text)
++            ok = False
++            try:
++                ok = bool(await send(text))
++            except Exception:
++                ok = False
++            if not ok:
++                return {"sent": False, "reason": "send_failed_retry_next_run", "kind": d["kind"], "level": level}
++            await save_state(topic, {"level": level, "value": value, "since": d["since"], "last_sent": now.isoformat(), "last_kind": d["kind"]})
++            return {"sent": True, "kind": d["kind"], "level": level, "prev_level": d["prev_level"], "text": text}
++        finally:
++            await _release(topic)
++
++
++def error_signature(line: str) -> tuple[str, str]:
++    """(topic, ข้อความลายเซ็น) — ตัด timestamp/ตัวเลข/hex ให้ error ชนิดเดียวกันรวมกัน แต่ชนิดต่างกันแยกกัน"""
++    s = re.sub(r"^\S*\d{4}-\d{2}-\d{2}T[\d:.]+Z?\s*", "", str(line or "").strip())
++    s = redact(s)
++    norm = re.sub(r"0x[0-9a-f]+|\b\d+\b", "#", s.lower())
++    norm = re.sub(r"\s+", " ", norm)[:160]
++    digest = hashlib.sha1(norm.encode("utf-8")).hexdigest()[:10]
++    return f"app_error:{digest}", s[:160]
++
++
++async def report_app_error(line: str, send: Sender, *, excerpt: str = "", now: datetime | None = None, container: str = "ener-ai") -> dict:
++    """error จาก log ล่าสุด: แจ้งครั้งแรกทันที · ซ้ำชนิดเดิม = reminder ทุก 6 ชม. · ชนิดใหม่ไม่ถูกบัง · ไม่มี recovery อัตโนมัติ"""
++    now = now or _now()
++    topic, sig = error_signature(line)
++    async with _lock(topic):
++        if not await _claim(topic, now):
++            return {"sent": False, "reason": "claimed_by_other_process", "topic": topic}
++        try:
++            prev = await load_state(topic)
++            d = decide(prev, "high", now, reminder={"high": APP_ERROR_REMINDER})
++            if not d["send"]:
++                return {"sent": False, "reason": "no_change", "topic": topic}
++            since = _parse(d["since"]) or now
++            text = (
++                f"[{SYSTEM_TAG}][app_error][high] {fmt_time(now)} · {'🔴 พบ error ใหม่' if d['kind'] == 'escalate' else '🟠 error เดิมยังพบอยู่ (เตือนซ้ำทุก 6 ชม.)'}\n"
++                f"container: {container} · ครั้งแรก {fmt_time(since)}\n"
++                f"{sig}\n"
++                + (f"ตัวอย่าง log:\n{redact(excerpt).strip()[:600]}\n" if excerpt else "")
++                + "หมายเหตุ: ไม่พบ error นี้ในรอบต่อไป ≠ บริการกลับมาใช้ได้ — ต้องตรวจยืนยันเอง (ไม่มีการแจ้ง recovery อัตโนมัติ)"
++            )
++            ok = False
++            try:
++                ok = bool(await send(text))
++            except Exception:
++                ok = False
++            if not ok:
++                return {"sent": False, "reason": "send_failed_retry_next_run", "topic": topic}
++            await save_state(topic, {"level": "high", "signature": sig, "since": d["since"], "last_sent": now.isoformat(), "last_kind": d["kind"]})
++            return {"sent": True, "kind": d["kind"], "topic": topic, "text": text}
++        finally:
++            await _release(topic)
++
++
++def extract_error_lines(log_text: str, max_items: int = 5) -> list[tuple[str, str]]:
++    """จาก log ที่กรองแล้ว → [(บรรทัด error หลัก, excerpt 3 บรรทัดรอบ ๆ)] ไม่ซ้ำลายเซ็น · ข้าม traceback frames ('  File ...')"""
++    lines = [l for l in str(log_text or "").split("\n") if l.strip()]
++    out: list[tuple[str, str]] = []
++    seen: set[str] = set()
++    for i, line in enumerate(lines):
++        body = re.sub(r"^\S*\d{4}-\d{2}-\d{2}T[\d:.]+Z?\s*", "", line.strip())
++        if body.startswith(("File ", "Traceback", "The above exception", "During handling")) or body.startswith(("raise ", "await ", "return ")):
++            continue
++        if not re.search(r"error|exception|critical|failed", body, re.I):
++            continue
++        topic, _ = error_signature(line)
++        if topic in seen:
++            continue
++        seen.add(topic)
++        excerpt = "\n".join(lines[max(0, i - 1): i + 2])
++        out.append((line, excerpt))
++        if len(out) >= max_items:
++            break
++    return out
+diff --git a/app/agents/monitor_agent.py b/app/agents/monitor_agent.py
+index 117e433..1127868 100644
+--- a/app/agents/monitor_agent.py
++++ b/app/agents/monitor_agent.py
+@@ -58,6 +58,7 @@ def diagnose_load(kind: str = "cpu") -> str:
+ from datetime import datetime, timedelta
+ from zoneinfo import ZoneInfo
+ 
++from app.agents import alert_state
+ from app.core.ai import chat, get_model_availability
+ from app.core.agents import log_agent_run
+ from app.core.config import settings
+@@ -168,8 +169,8 @@ def _logs_filter_reported_no_errors(log_text: str) -> bool:
+     return "ไม่พบ error" in s or "ไม่มี logs" in s
+ 
+ 
+-def get_docker_logs(lines: int = 20, filter_errors: bool = False) -> str:
+-    """ดึง docker logs ล่าสุด"""
++def get_docker_logs(lines: int = 20, filter_errors: bool = False, since_minutes: int | None = None) -> str:
++    """ดึง docker logs ล่าสุด · since_minutes = จำกัดช่วงเวลา (alert ใช้ 15 นาที — ไม่เอา error เก่าหลายชั่วโมงมาผูกกับเหตุใหม่)"""
+     try:
+         client = docker_sdk.from_env()
+ 
+@@ -183,10 +184,11 @@ def get_docker_logs(lines: int = 20, filter_errors: bool = False) -> str:
+         if not target:
+             return "ไม่พบ container ener-ai"
+ 
+-        output = target.logs(
+-            tail=lines,
+-            timestamps=True,
+-        ).decode("utf-8", errors="replace")
++        log_kwargs = {"tail": lines, "timestamps": True}
++        if since_minutes:
++            from datetime import datetime as _dt, timedelta as _td
++            log_kwargs["since"] = _dt.utcnow() - _td(minutes=int(since_minutes))
++        output = target.logs(**log_kwargs).decode("utf-8", errors="replace")
+ 
+         if filter_errors:
+             error_lines = _filter_relevant_log_lines(output, error_only=True)
+@@ -516,66 +518,57 @@ async def cmd_status() -> str:
+     return f"{stats_text}\n\n🤖 AI Analysis:\n{summary}"
+ 
+ 
+-@log_agent_run("MonitorAgent", triggered_by="scheduler")
++@log_agent_run("MonitorAgent")
+ async def check_and_alert(bot) -> str | None:
+     """
+-    เรียกจาก scheduler ทุก 10 นาที
+-    ถ้าพบปัญหา → ส่ง Telegram alert
++    เรียกจาก scheduler ทุก 10 นาที (19 ต.ค. 2026 — alert_state):
++      - disk/cpu/ram → alert_state (ล็อก+claim ร่วมกับ health_check) ส่งเมื่อสถานะเปลี่ยน/ถึงรอบ reminder/กลับปกติ
++      - error ใน log ener-ai เฉพาะ 15 นาทีล่าสุด → แยกตามลายเซ็น (error ใหม่ไม่ถูก cooldown ของ error เก่าบัง) · ไม่แจ้ง recovery เอง
++      - ข้อความทุกก้อน [ener-ai][topic][level] + เวลาไทย + ค่าจริง · log ผ่าน redact ก่อนส่ง · ไม่ปิด alert ไม่ขยับเกณฑ์
+     """
+     stats = get_server_stats()
+-    errors = get_docker_logs(lines=200, filter_errors=True)
+-    patterns = analyze_error_patterns(errors)
+-
+-    alert_lines = []
+-    high_patterns = [pattern for pattern in patterns if pattern["severity"] == "high"]
+-    for pattern in high_patterns:
+-        if await _should_send_alert(pattern["pattern"]):
+-            alert_lines.append(
+-                f"🔴 {pattern['pattern']} (x{pattern['count']})\n"
+-                f"สาเหตุ: {pattern['cause']}\n"
+-                f"แก้ไข: {pattern['fix']}"
+-            )
+-
+-    if stats["cpu_percent"] > 85 and await _should_send_alert("cpu"):
+-        why = await asyncio.to_thread(diagnose_load, "cpu")
+-        alert_lines.append(f"🟡 CPU สูง {stats['cpu_percent']:.0f}%\nสาเหตุ: {why}")
+-    if stats["ram_percent"] > 90 and await _should_send_alert("ram"):
+-        why = await asyncio.to_thread(diagnose_load, "ram")
+-        alert_lines.append(f"🔴 RAM สูง {stats['ram_percent']:.0f}%\nสาเหตุ: {why}")
+-    if stats["disk_percent"] > 85 and await _should_send_alert("disk"):
+-        alert_lines.append(f"🟡 Disk สูง {stats['disk_percent']:.0f}%")
+ 
+-    if not alert_lines:
+-        return None
++    async def _send(text: str) -> bool:
++        await bot.send_message(chat_id=settings.telegram_chat_id, text=text, parse_mode=None)
++        return True
+ 
+-    issue_summary = "\n".join(alert_lines)
+-    analysis = ""
+-    if high_patterns:
+-        prompt = (
+-            f"ปัญหาที่พบ:\n{issue_summary}\n\n"
+-            f"Errors:\n{errors[-1200:]}\n\n"
+-            "สรุปและแนะนำวิธีแก้สั้นๆ"
+-        )
+-        analysis = await _analyze_with_groq(prompt)
+-    if not analysis:
+-        analysis = _basic_error_analysis(errors)
+-
+-    alert_msg = f"⚠️ Server Alert\n\n{issue_summary}\n\n🤖 สรุป: {analysis}"
+-    await bot.send_message(
+-        chat_id=settings.telegram_chat_id,
+-        text=alert_msg,
+-        parse_mode=None,
++    sent: list[str] = []
++    disk_details = (
++        f"root fs ใช้ {stats['disk_used_gb']:.1f}/{stats['disk_total_gb']:.1f} GB "
++        f"ว่าง {max(stats['disk_total_gb'] - stats['disk_used_gb'], 0):.1f} GB"
+     )
++    for topic, value, details in (
++        ("disk", stats["disk_percent"], disk_details),
++        ("cpu", stats["cpu_percent"], lambda: diagnose_load("cpu")),
++        ("ram", stats["ram_percent"], lambda: diagnose_load("ram")),
++    ):
++        try:
++            r = await alert_state.check_and_notify(topic, value, _send, details=details)
++            if r.get("sent"):
++                sent.append(r["text"])
++        except Exception as exc:
++            print(f"[monitor] alert_state {topic} failed: {exc}")
++
++    errors = get_docker_logs(lines=200, filter_errors=True, since_minutes=15)
++    if errors and "ไม่พบ error" not in errors and "ดึง logs ไม่ได้" not in errors and "ไม่พบ container" not in errors:
++        for line, excerpt in alert_state.extract_error_lines(errors):
++            try:
++                r = await alert_state.report_app_error(line, _send, excerpt=excerpt)
++                if r.get("sent"):
++                    sent.append(r["text"])
++            except Exception as exc:
++                print(f"[monitor] report_app_error failed: {exc}")
+ 
++    if not sent:
++        return None
+     try:
+         await log_event(
+             agent_name="MonitorAgent",
+             event_type="warning",
+-            summary=f"Alert: {issue_summary[:200]}",
++            summary=f"Alert: {' | '.join(t.splitlines()[0] for t in sent)[:200]}",
+             tags=["monitor", "alert"],
+             result="success",
+         )
+     except Exception:
+         pass
+-
+-    return alert_msg
++    return "\n\n".join(sent)
+diff --git a/app/scheduler.py b/app/scheduler.py
+index cc66856..21da019 100644
+--- a/app/scheduler.py
++++ b/app/scheduler.py
+@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
+ from apscheduler.schedulers.asyncio import AsyncIOScheduler
+ from apscheduler.triggers.cron import CronTrigger
+ from telegram import Bot
+-from app.agents import briefing_agent, log_keeper, memory_curator, memory_keeper, monitor_agent, news, news_discovery, session_agent, standup_agent, summary
++from app.agents import alert_state, briefing_agent, log_keeper, memory_curator, memory_keeper, monitor_agent, news, news_discovery, session_agent, standup_agent, summary
+ from app.core.agents import log_agent_run
+ from app.core.config import settings
+ from app.core.database import get_config, get_db
+@@ -77,7 +77,17 @@ async def _send_alert(bot: Bot, text: str, action: str):
+ 
+ 
+ async def _send_warning(bot: Bot, details: str, action: str):
+-    await _send_alert(bot, f"⚠️ Health Warning: {details}", action)
++    # 19 ต.ค. 2026: ระบุระบบต้นทาง + เวลา (ดิสก์ไม่ผ่านทางนี้แล้ว — ใช้ alert_state ร่วมกับ monitor_check)
++    await _send_alert(bot, f"[{alert_state.SYSTEM_TAG}][health][warn] {alert_state.fmt_time(datetime.now(_BANGKOK))} · ⚠️ {details}", action)
++
++
++def _telegram_sender(bot: Bot, action: str):
++    """ส่งข้อความ 1 ก้อน คืน True เมื่อ Telegram รับ (alert_state บันทึก state เฉพาะเมื่อ True)"""
++    async def _send(text: str) -> bool:
++        await bot.send_message(chat_id=settings.telegram_chat_id, text=text, parse_mode=None)
++        await _log_audit(action, text[:300])
++        return True
++    return _send
+ 
+ 
+ def build_scheduler(bot: Bot) -> AsyncIOScheduler:
+@@ -237,21 +247,28 @@ def build_scheduler(bot: Bot) -> AsyncIOScheduler:
+         try:
+             data_dir = _APP_DATA_DIR if _APP_DATA_DIR.exists() else _database_file().parent
+             usage = shutil.disk_usage(data_dir)
+-            used_ratio = usage.used / usage.total
+-            if used_ratio > 0.8:
+-                issues.append(f"disk usage ของ {data_dir} เกิน 80% แล้ว")
+-                # 🧹 สแกนไฟล์สื่อชั่วคราวที่ลบได้อย่างปลอดภัย แล้ว "ขออนุมัติ" ทาง Telegram ก่อนลบ
++            used_pct = usage.used / usage.total * 100
++
++            def _disk_details() -> str:
++                # คำนวณเฉพาะตอนจะส่งจริง (ไม่ใช่ทุก 30 นาที)
++                lines = [
++                    f"{data_dir} (ดิสก์เดียวกับ root) ใช้ {usage.used / 1024**3:.1f}/{usage.total / 1024**3:.1f} GB ว่าง {usage.free / 1024**3:.1f} GB"
++                ]
+                 try:
+                     from app.agents import disk_cleaner
+                     plan = disk_cleaner.scan()
+                     if plan["mb"] >= 100:
+-                        issues.append(
++                        lines.append(
+                             f"🧹 พบไฟล์ชั่วคราวลบได้ ~{plan['mb']}MB "
+                             f"({len(plan['files'])} ไฟล์ + {len(plan['dirs'])} โฟลเดอร์งานตัดต่อเก่า — "
+                             "เฉพาะไฟล์เจนอายุ >2 วันที่ไม่ถูกบอร์ด/คลังใช้ ไม่แตะไฟล์ระบบ) "
+                             "→ พิมพ์ /clean_ok เพื่ออนุมัติลบ หรือ /clean เพื่อดูรายละเอียด")
+                 except Exception:
+                     pass
++                return "\n".join(lines)
++
++            # ดิสก์: state machine ร่วมกับ monitor_check (ล็อก+claim เดียวกัน) → เหตุเดียวส่งครั้งเดียว + reminder ตามระดับ + แจ้งเมื่อกลับปกติ
++            await alert_state.check_and_notify("disk", used_pct, _telegram_sender(bot, "health_disk_alert"), details=_disk_details)
+         except Exception as exc:
+             issues.append(f"เช็ก disk usage ไม่ได้: {exc}")
+ 
+diff --git a/tests/test_alert_state.py b/tests/test_alert_state.py
+new file mode 100644
+index 0000000..7942eb7
+--- /dev/null
++++ b/tests/test_alert_state.py
+@@ -0,0 +1,203 @@
++"""alert_state (19 ต.ค. 2026): escalate/recover/reminder · ส่งล้มไม่บันทึก (retry) · restart ไม่ลืม · สอง job พร้อมกันส่งครั้งเดียว · app_error แยกลายเซ็น ไม่ recovery เอง · redact · integration static"""
++import asyncio
++import os
++import re
++import tempfile
++import unittest
++from contextlib import asynccontextmanager
++from datetime import datetime, timedelta
++from pathlib import Path
++from zoneinfo import ZoneInfo
++
++import aiosqlite
++
++from app.agents import alert_state as A
++
++BKK = ZoneInfo("Asia/Bangkok")
++T0 = datetime(2026, 10, 19, 12, 59, tzinfo=BKK)
++
++
++def _tmp_db():
++    fd, path = tempfile.mkstemp(suffix=".db"); os.close(fd)
++
++    @asynccontextmanager
++    async def get_db():
++        async with aiosqlite.connect(path, timeout=30.0) as db:
++            db.row_factory = aiosqlite.Row
++            await db.execute("PRAGMA journal_mode=WAL")
++            await db.execute("PRAGMA busy_timeout=10000")
++            await db.execute("CREATE TABLE IF NOT EXISTS memories (id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT UNIQUE NOT NULL, value TEXT NOT NULL, tag TEXT DEFAULT 'general', updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)")
++            yield db
++    return get_db, path
++
++
++class Sender:
++    def __init__(self, fail_times=0, delay=0.0):
++        self.sent = []; self.fail_times = fail_times; self.delay = delay; self.calls = 0
++
++    async def __call__(self, text):
++        self.calls += 1
++        if self.delay:
++            await asyncio.sleep(self.delay)
++        if self.fail_times > 0:
++            self.fail_times -= 1
++            raise RuntimeError("telegram down")
++        self.sent.append(text)
++        return True
++
++
++class AlertStateTests(unittest.TestCase):
++    def setUp(self):
++        self.get_db, self.path = _tmp_db()
++        self._orig = A.get_db; A.get_db = self.get_db; A._locks.clear()
++
++    def tearDown(self):
++        A.get_db = self._orig
++        for suffix in ("", "-wal", "-shm"):
++            try: os.remove(self.path + suffix)
++            except FileNotFoundError: pass
++
++    def run_async(self, coro):
++        return asyncio.run(coro)
++
++    def test_levels_and_decide(self):
++        self.assertEqual([A.level_for("disk", v) for v in (10, 80, 84.9, 85, 89, 90)], ["ok", "warn", "warn", "high", "high", "critical"])
++        self.assertEqual(A.level_for("cpu", 50), "ok"); self.assertEqual(A.level_for("unknown", 99), "ok")
++        d = A.decide(None, "warn", T0); self.assertEqual((d["send"], d["kind"]), (True, "escalate"))
++        prev = {"level": "warn", "since": T0.isoformat(), "last_sent": T0.isoformat()}
++        self.assertFalse(A.decide(prev, "warn", T0 + timedelta(hours=1))["send"], "ระดับเดิม ก่อนครบรอบ = ไม่ส่ง")
++        self.assertEqual(A.decide(prev, "warn", T0 + timedelta(hours=6))["kind"], "reminder")
++        self.assertEqual(A.decide(prev, "high", T0 + timedelta(minutes=1))["kind"], "escalate")
++        self.assertEqual(A.decide({"level": "high", "since": "x", "last_sent": T0.isoformat()}, "warn", T0 + timedelta(minutes=1))["kind"], "deescalate")
++        self.assertEqual(A.decide(prev, "ok", T0 + timedelta(minutes=1))["kind"], "recover")
++        self.assertFalse(A.decide({"level": "ok"}, "ok", T0)["send"])
++
++    def test_escalate_reminder_recover_persisted(self):
++        s = Sender()
++        async def run():
++            r1 = await A.check_and_notify("disk", 86, s, now=T0, details="root fs ใช้ 61/75 GB")
++            r2 = await A.check_and_notify("disk", 86, s, now=T0 + timedelta(minutes=30))   # job อีกตัว 30 นาทีถัดมา
++            r3 = await A.check_and_notify("disk", 87, s, now=T0 + timedelta(hours=2))      # reminder high ทุก 2 ชม.
++            r4 = await A.check_and_notify("disk", 91, s, now=T0 + timedelta(hours=2, minutes=10))  # critical
++            r5 = await A.check_and_notify("disk", 70, s, now=T0 + timedelta(hours=3))      # recover
++            r6 = await A.check_and_notify("disk", 70, s, now=T0 + timedelta(hours=4))
++            return r1, r2, r3, r4, r5, r6
++        r1, r2, r3, r4, r5, r6 = self.run_async(run())
++        self.assertEqual([r["sent"] for r in (r1, r2, r3, r4, r5, r6)], [True, False, True, True, True, False])
++        self.assertEqual([r.get("kind") for r in (r1, r3, r4, r5)], ["escalate", "reminder", "escalate", "recover"])
++        self.assertEqual(r2["reason"], "no_change")
++        self.assertTrue(s.sent[0].startswith("[ener-ai][disk][high] 19 ต.ค. 12:59 · 🔴 ระดับเพิ่ม"), s.sent[0])
++        self.assertIn("ค่า 86%", s.sent[0]); self.assertIn("root fs ใช้ 61/75 GB", s.sent[0]); self.assertIn("เตือนซ้ำทุก 2 ชม.", s.sent[0])
++        self.assertIn("[disk][critical]", s.sent[2]); self.assertIn("เตือนซ้ำทุก 30 นาที", s.sent[2])
++        self.assertIn("[disk][ok]", s.sent[3]); self.assertIn("✅ กลับสู่ปกติ", s.sent[3])
++
++    def test_send_failure_keeps_state_and_retries(self):
++        s = Sender(fail_times=1)
++        async def run():
++            r1 = await A.check_and_notify("disk", 86, s, now=T0)
++            st = await A.load_state("disk")
++            r2 = await A.check_and_notify("disk", 86, s, now=T0 + timedelta(minutes=10))
++            return r1, st, r2
++        r1, st, r2 = self.run_async(run())
++        self.assertFalse(r1["sent"]); self.assertEqual(r1["reason"], "send_failed_retry_next_run")
++        self.assertIsNone(st, "ส่งล้ม = ไม่บันทึก last_sent/level")
++        self.assertTrue(r2["sent"]); self.assertEqual(r2["kind"], "escalate"); self.assertEqual(len(s.sent), 1)
++        self.assertEqual(self.run_async(A.load_state("disk"))["level"], "high")
++
++    def test_restart_does_not_forget(self):
++        s = Sender()
++        self.run_async(A.check_and_notify("disk", 86, s, now=T0))
++        A._locks.clear()  # จำลอง restart โปรเซส (in-memory หาย, SQLite อยู่)
++        r = self.run_async(A.check_and_notify("disk", 86, s, now=T0 + timedelta(minutes=20)))
++        self.assertFalse(r["sent"]); self.assertEqual(len(s.sent), 1)
++        r2 = self.run_async(A.check_and_notify("disk", 86, s, now=T0 + timedelta(hours=2)))
++        self.assertTrue(r2["sent"]); self.assertEqual(r2["kind"], "reminder")
++
++    def test_two_jobs_concurrently_send_once(self):
++        s = Sender(delay=0.05)
++        async def run():
++            return await asyncio.gather(
++                A.check_and_notify("disk", 86, s, now=T0),
++                A.check_and_notify("disk", 86, s, now=T0),
++                A.check_and_notify("disk", 86, s, now=T0 + timedelta(seconds=1)),
++            )
++        rs = self.run_async(run())
++        self.assertEqual(sum(1 for r in rs if r["sent"]), 1, rs); self.assertEqual(len(s.sent), 1)
++
++    def test_cross_process_claim(self):
++        s = Sender()
++        async def run():
++            ok = await A._claim("disk", T0); again = await A._claim("disk", T0 + timedelta(seconds=30)); expired = await A._claim("disk", T0 + timedelta(minutes=3))
++            await A._release("disk")
++            return ok, again, expired
++        ok, again, expired = self.run_async(run())
++        self.assertEqual((ok, again, expired), (True, False, True))
++        A._locks.clear()
++        async def run2():
++            await A._claim("disk", T0)  # โปรเซสอื่นถือ claim อยู่
++            r = await A.check_and_notify("disk", 86, s, now=T0 + timedelta(seconds=10))
++            await A._release("disk")
++            return r
++        r = self.run_async(run2())
++        self.assertEqual(r["reason"], "claimed_by_other_process"); self.assertEqual(len(s.sent), 0)
++
++    def test_app_error_signatures_and_no_recovery(self):
++        s = Sender()
++        feather = '2026-10-19T02:00:02.059Z RuntimeError: Featherless request failed: HTTP 403: {"error":{"message":"You do not have an active subscription"}}'
++        locked = "2026-10-19T02:05:00.000Z sqlite3.OperationalError: database is locked"
++        async def run():
++            r1 = await A.report_app_error(feather, s, excerpt=feather, now=T0)
++            r2 = await A.report_app_error(feather.replace("02:00:02.059", "02:30:00.000"), s, now=T0 + timedelta(minutes=30))  # ชนิดเดิม → ไม่ส่ง
++            r3 = await A.report_app_error(locked, s, now=T0 + timedelta(minutes=31))                                         # ชนิดใหม่ → ส่ง ไม่ถูกบัง
++            r4 = await A.report_app_error(feather, s, now=T0 + timedelta(hours=6))                                           # reminder 6 ชม.
++            return r1, r2, r3, r4
++        r1, r2, r3, r4 = self.run_async(run())
++        self.assertEqual([r["sent"] for r in (r1, r2, r3, r4)], [True, False, True, True])
++        self.assertNotEqual(r1["topic"], r3["topic"]); self.assertEqual(r1["topic"], r4["topic"])
++        self.assertIn("[ener-ai][app_error][high]", s.sent[0]); self.assertIn("🔴 พบ error ใหม่", s.sent[0]); self.assertIn("Featherless request failed: HTTP 403", s.sent[0])
++        self.assertIn("ไม่พบ error นี้ในรอบต่อไป ≠ บริการกลับมาใช้ได้", s.sent[0])
++        self.assertIn("error เดิมยังพบอยู่", s.sent[2])
++        # ไม่มี API ใดส่ง recovery ของ app_error
++        self.assertFalse(hasattr(A, "report_app_error_recovered"))
++        self.assertEqual(A.decide({"level": "high", "last_sent": T0.isoformat(), "since": T0.isoformat()}, "high", T0 + timedelta(hours=1), reminder={"high": A.APP_ERROR_REMINDER})["send"], False)
++
++    def test_extract_error_lines_skips_frames_and_dedupes(self):
++        log = "\n".join([
++            "2026-10-19T02:00:02.0Z Traceback (most recent call last):",
++            '2026-10-19T02:00:02.0Z   File "/app/x.py", line 10, in f',
++            "2026-10-19T02:00:02.0Z     raise RuntimeError(f\"Featherless request failed: {detail}\") from exc",
++            "2026-10-19T02:00:02.0Z RuntimeError: Featherless request failed: HTTP 403: no active subscription id=12345",
++            "2026-10-19T02:00:02.1Z The above exception was the direct cause of the following exception:",
++            "2026-10-19T02:00:02.2Z RuntimeError: Featherless request failed: HTTP 403: no active subscription id=99999",
++            "2026-10-19T02:05:00.0Z sqlite3.OperationalError: database is locked",
++        ])
++        items = A.extract_error_lines(log)
++        self.assertEqual(len(items), 2, items)
++        self.assertIn("Featherless request failed", items[0][0]); self.assertIn("database is locked", items[1][0])
++        self.assertIn("RuntimeError: Featherless", items[0][1])
++
++    def test_redact(self):
++        raw = "token=123456789:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA key sk-abcdefghijklmnop Bearer abcdefghij12 user Ufe02fffb43200f2a32eabb919130ed9b mail a@b.co tel 0812345678 api_key=XYZ"
++        out = A.redact(raw)
++        for bad in ("AAAAAAAAAAAAAAAA", "sk-abcdefghijklmnop", "abcdefghij12", "Ufe02fffb43200f2a32eabb919130ed9b", "a@b.co", "0812345678", "XYZ"):
++            self.assertNotIn(bad, out, out)
++        self.assertIn("Ufe02fff…", out); self.assertNotRegex(out, r"\d{6,}:[A-Za-z0-9_-]{30,}")
++        self.assertIn("<telegram-token>", A.redact("bot 123456789:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA ok"))
++
++    def test_integration_static(self):
++        root = Path(__file__).resolve().parents[1]
++        sched = (root / "app/scheduler.py").read_text(encoding="utf-8")
++        mon = (root / "app/agents/monitor_agent.py").read_text(encoding="utf-8")
++        self.assertIn('alert_state.check_and_notify("disk", used_pct, _telegram_sender(bot, "health_disk_alert")', sched)
++        self.assertNotIn('issues.append(f"disk usage ของ {data_dir} เกิน 80% แล้ว")', sched, "health_check ต้องไม่ส่งดิสก์แยกทางอีก")
++        self.assertIn("[{alert_state.SYSTEM_TAG}][health][warn]", sched)
++        self.assertIn('alert_state.check_and_notify(topic, value, _send, details=details)', mon)
++        self.assertIn("since_minutes=15", mon)
++        self.assertNotIn('_should_send_alert("disk")', mon); self.assertNotIn('_should_send_alert("cpu")', mon)
++        self.assertNotIn("มี exception ในแอป ควรเปิดดู stack trace", mon.split("async def check_and_alert")[1].split("\n\n\n")[0], "ประโยค template ต้องไม่ถูกใช้ใน alert")
++        self.assertIn("alert_state.report_app_error(line, _send, excerpt=excerpt)", mon)
++        self.assertTrue(re.search(r"THRESHOLDS.*\"disk\": \{\"warn\": 80, \"high\": 85, \"critical\": 90\}", (root / "app/agents/alert_state.py").read_text(encoding="utf-8"), re.S), "เกณฑ์เดิม 80/85 คงไว้")
++
++
++if __name__ == "__main__":
++    unittest.main()
+-- 
+2.43.0
+
+
+From 56d6b51dd7fc4ecc9a738ea937a6cd9e7ac56a7a Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 20 Oct 2026 00:51:14 +0000
+Subject: [PATCH 2/3] alert_state round 2 (Codex): redaction covers JSON/URL
+ bot token/Authorization Basic/query/db-uri (tested through real messages);
+ Telegram result independent of audit (audit failure no longer causes resend);
+ lease with owner token + renew + guarded release (expired holder cannot
+ delete new holder; state saved only while lease held; send timeout 60s < TTL
+ 2m); error signature keeps short codes (HTTP 403 vs 500 differ) and drops
+ timestamps/uuids/request ids/long numbers
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ app/agents/alert_state.py | 131 +++++++++++++++++++++++++++++---------
+ app/scheduler.py          |   6 +-
+ tests/test_alert_state.py |  92 ++++++++++++++++++++++++--
+ 3 files changed, 195 insertions(+), 34 deletions(-)
+
+diff --git a/app/agents/alert_state.py b/app/agents/alert_state.py
+index 8d0eeef..c82ed7d 100644
+--- a/app/agents/alert_state.py
++++ b/app/agents/alert_state.py
+@@ -16,6 +16,7 @@ import asyncio
+ import hashlib
+ import json
+ import re
++import uuid
+ from collections.abc import Awaitable, Callable
+ from datetime import datetime, timedelta
+ from zoneinfo import ZoneInfo
+@@ -65,11 +66,21 @@ def _parse(iso: str | None) -> datetime | None:
+ 
+ 
+ # ───────── redaction (ก่อนส่งทุกข้อความที่มีเนื้อ log) ─────────
++_SECRET_KEYS = r"(?:api[_-]?key|apikey|access[_-]?token|refresh[_-]?token|client[_-]?secret|private[_-]?key|token|secret|password|passwd|pwd|authorization|auth|signature|sig|x-api-key)"
+ _REDACT_PATTERNS = [
+-    (re.compile(r"\b\d{6,}:[A-Za-z0-9_-]{30,}"), "<telegram-token>"),
++    # Telegram bot token ทุกตำแหน่ง รวมใน URL https://api.telegram.org/bot<TOKEN>/… (ไม่ใช้ \b เพราะ "bot" ติดกับตัวเลข)
++    (re.compile(r"\d{6,}:[A-Za-z0-9_-]{30,}"), "<telegram-token>"),
+     (re.compile(r"\bsk-[A-Za-z0-9_-]{10,}"), "<api-key>"),
+-    (re.compile(r"\b(?:Bearer|bearer)\s+[A-Za-z0-9._\-]{8,}"), "Bearer <token>"),
+-    (re.compile(r"\b(api[_-]?key|token|secret|password|passwd|authorization)\s*[=:]\s*\S+", re.I), r"\1=<redacted>"),
++    # Authorization: Basic/Bearer/… <credential> → ค่าทั้งก้อน (รวม scheme) ถูกแทน
++    (re.compile(r"(authorization\s*[:=]\s*)(?:(?:bearer|basic|token|digest)\s+)?[^\s,\"'}\]]+", re.I), r"\1<redacted>"),
++    # Bearer/Basic/Token/Digest … ที่ลอยอยู่ → ลบ credential
++    (re.compile(r"\b(Bearer|Basic|Token|Digest|bearer|basic|token)\s+[A-Za-z0-9+/=._\-]{6,}"), r"\1 <token>"),
++    # JSON/dict: "api_key": "…", 'password': '…', password=…, token: … (ค่าในเครื่องหมายคำพูดหรือไม่ก็ได้)
++    (re.compile(r"([\"']?" + _SECRET_KEYS + r"[\"']?\s*[:=]\s*)(?:\"[^\"]*\"|'[^']*'|[^,\s}\]&]+)", re.I), r"\1<redacted>"),
++    # query string ?key=…&token=…
++    (re.compile(r"([?&]" + _SECRET_KEYS + r"=)[^&\s\"']+", re.I), r"\1<redacted>"),
++    # DB/HTTP URI credentials scheme://user:pass@host
++    (re.compile(r"(\w+://)[^/\s:@]+:[^/\s@]+@"), r"\1<cred>@"),
+     (re.compile(r"\bU[0-9a-f]{32}\b"), lambda m: m.group(0)[:8] + "…"),          # LINE userId → prefix 8
+     (re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"), "<email>"),
+     (re.compile(r"\b0[0-9]{8,9}\b"), "<phone>"),
+@@ -146,22 +157,34 @@ async def save_state(topic: str, state: dict) -> None:
+         await db.commit()
+ 
+ 
+-async def _claim(topic: str, now: datetime) -> bool:
+-    """claim ข้าม process: แถว alert_claim_<topic> ถ้าหมดอายุ (TTL) หรือไม่มี → ยึดได้ · ใช้ BEGIN IMMEDIATE กัน race"""
++def _claim_row(row) -> dict | None:
++    """รูปแบบ claim: JSON {owner, at} (รองรับค่าเก่าที่เป็น ISO ล้วน = ไม่มี owner)"""
++    if not row:
++        return None
++    try:
++        v = json.loads(row["value"])
++        if isinstance(v, dict) and "at" in v:
++            return {"owner": str(v.get("owner") or ""), "at": _parse(v["at"])}
++    except Exception:
++        pass
++    return {"owner": "", "at": _parse(row["value"])}
++
++
++async def _claim(topic: str, now: datetime, owner: str) -> bool:
++    """lease ข้าม process: แถว alert_claim_<topic> = {owner, at} · ยึดได้เมื่อไม่มี/หมดอายุ (CLAIM_TTL) หรือเป็นของ owner เดิม (ต่ออายุ) · BEGIN IMMEDIATE กัน race"""
+     key = f"alert_claim_{topic}"
+     async with get_db() as db:
+         await db.execute("BEGIN IMMEDIATE")
+         try:
+             cur = await db.execute("SELECT value FROM memories WHERE key = ?", (key,))
+-            row = await cur.fetchone()
+-            held = _parse(row["value"]) if row else None
+-            if held and now - held < CLAIM_TTL:
++            held = _claim_row(await cur.fetchone())
++            if held and held["at"] and now - held["at"] < CLAIM_TTL and held["owner"] != owner:
+                 await db.execute("ROLLBACK")
+                 return False
+             await db.execute(
+                 """INSERT INTO memories (key, value, tag) VALUES (?, ?, 'alert_claim')
+                    ON CONFLICT(key) DO UPDATE SET value = excluded.value, tag = 'alert_claim', updated_at = CURRENT_TIMESTAMP""",
+-                (key, now.isoformat()),
++                (key, json.dumps({"owner": owner, "at": now.isoformat()})),
+             )
+             await db.execute("COMMIT")
+             return True
+@@ -173,10 +196,48 @@ async def _claim(topic: str, now: datetime) -> bool:
+             raise
+ 
+ 
+-async def _release(topic: str) -> None:
++async def _renew(topic: str, now: datetime, owner: str) -> bool:
++    """ต่ออายุ lease ก่อนงานที่ใช้เวลา (ส่ง Telegram) — คืน False ถ้า lease ถูกคนอื่นยึดไปแล้ว"""
++    return await _claim(topic, now, owner)
++
++
++async def _holds(topic: str, owner: str, now: datetime) -> bool:
+     async with get_db() as db:
+-        await db.execute("DELETE FROM memories WHERE key = ?", (f"alert_claim_{topic}",))
+-        await db.commit()
++        cur = await db.execute("SELECT value FROM memories WHERE key = ?", (f"alert_claim_{topic}",))
++        held = _claim_row(await cur.fetchone())
++    return bool(held and held["owner"] == owner and held["at"] and now - held["at"] < CLAIM_TTL)
++
++
++async def _release(topic: str, owner: str) -> bool:
++    """ปล่อย lease เฉพาะเมื่อยังเป็นของ owner นี้ (ผู้ถือเก่าที่หมดอายุไปแล้วห้ามลบ claim ของผู้ถือใหม่)"""
++    key = f"alert_claim_{topic}"
++    async with get_db() as db:
++        await db.execute("BEGIN IMMEDIATE")
++        try:
++            cur = await db.execute("SELECT value FROM memories WHERE key = ?", (key,))
++            held = _claim_row(await cur.fetchone())
++            if not held or held["owner"] != owner:
++                await db.execute("ROLLBACK")
++                return False
++            await db.execute("DELETE FROM memories WHERE key = ?", (key,))
++            await db.execute("COMMIT")
++            return True
++        except Exception:
++            try:
++                await db.execute("ROLLBACK")
++            except Exception:
++                pass
++            raise
++
++
++SEND_TIMEOUT_SEC = 60  # ส่ง Telegram ต้องจบก่อน lease (CLAIM_TTL 2 นาที) หมดอายุ
++
++
++async def _send_guarded(send: Sender, text: str) -> bool:
++    try:
++        return bool(await asyncio.wait_for(send(text), timeout=SEND_TIMEOUT_SEC))
++    except Exception:
++        return False
+ 
+ 
+ # ───────── message ─────────
+@@ -212,8 +273,9 @@ async def check_and_notify(
+ ) -> dict:
+     """ประเมินค่า → ส่งเมื่อสถานะเปลี่ยน/ถึงรอบ reminder · บันทึกเฉพาะเมื่อส่งสำเร็จ · คืน {sent, kind, level, reason}"""
+     now = now or _now()
++    owner = uuid.uuid4().hex
+     async with _lock(topic):
+-        if not await _claim(topic, now):
++        if not await _claim(topic, now, owner):
+             return {"sent": False, "reason": "claimed_by_other_process", "level": level_for(topic, value)}
+         try:
+             prev = await load_state(topic)
+@@ -226,25 +288,35 @@ async def check_and_notify(
+                 return {"sent": False, "reason": "no_change", "level": level, "prev_level": d["prev_level"]}
+             detail_text = details() if callable(details) else (details or "")
+             text = format_message(topic, d, value, now, detail_text)
+-            ok = False
+-            try:
+-                ok = bool(await send(text))
+-            except Exception:
+-                ok = False
++            if not await _renew(topic, _now() if now is None else now, owner):
++                return {"sent": False, "reason": "lease_lost_before_send", "level": level}
++            ok = await _send_guarded(send, text)
+             if not ok:
+                 return {"sent": False, "reason": "send_failed_retry_next_run", "kind": d["kind"], "level": level}
+-            await save_state(topic, {"level": level, "value": value, "since": d["since"], "last_sent": now.isoformat(), "last_kind": d["kind"]})
++            state = {"level": level, "value": value, "since": d["since"], "last_sent": now.isoformat(), "last_kind": d["kind"]}
++            if not await _holds(topic, owner, now):
++                # ส่งไปแล้วแต่ lease หลุด (เกิน TTL) → ไม่ทับ state ของผู้ถือใหม่ · รายงานให้รู้
++                return {"sent": True, "kind": d["kind"], "level": level, "reason": "lease_lost_state_not_saved", "text": text}
++            await save_state(topic, state)
+             return {"sent": True, "kind": d["kind"], "level": level, "prev_level": d["prev_level"], "text": text}
+         finally:
+-            await _release(topic)
++            await _release(topic, owner)
+ 
+ 
+ def error_signature(line: str) -> tuple[str, str]:
+     """(topic, ข้อความลายเซ็น) — ตัด timestamp/ตัวเลข/hex ให้ error ชนิดเดียวกันรวมกัน แต่ชนิดต่างกันแยกกัน"""
+     s = re.sub(r"^\S*\d{4}-\d{2}-\d{2}T[\d:.]+Z?\s*", "", str(line or "").strip())
+     s = redact(s)
+-    norm = re.sub(r"0x[0-9a-f]+|\b\d+\b", "#", s.lower())
+-    norm = re.sub(r"\s+", " ", norm)[:160]
++    norm = s.lower()
++    # ตัดเฉพาะค่าแปรผัน: timestamp/วันที่/เวลา, uuid, hex ยาว, request/trace id, ตัวเลขยาว ≥5 หลัก, pointer, ระยะเวลา
++    norm = re.sub(r"\d{4}-\d{2}-\d{2}[t ]\d{2}:\d{2}(:\d{2})?(\.\d+)?(z|[+-]\d{2}:?\d{2})?", "#ts", norm)
++    norm = re.sub(r"\b\d{1,2}:\d{2}(:\d{2})?\b", "#time", norm)
++    norm = re.sub(r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b", "#uuid", norm)
++    norm = re.sub(r"\b(request[_ -]?id|req[_ -]?id|trace[_ -]?id|correlation[_ -]?id|x-request-id|id)\s*[=:]\s*[\w-]+", r"\1=#", norm)
++    norm = re.sub(r"0x[0-9a-f]+|\b[0-9a-f]{8,}\b", "#hex", norm)
++    norm = re.sub(r"\b\d+(\.\d+)?\s*(ms|s|sec|secs|seconds|min|minutes|mb|gb|kb|bytes|%)\b", "#qty", norm)
++    norm = re.sub(r"\b\d{5,}\b", "#num", norm)  # ตัวเลขสั้น (HTTP 403/500, errno, exit code) คงไว้ = คนละสาเหตุคนละ signature
++    norm = re.sub(r"\s+", " ", norm)[:200]
+     digest = hashlib.sha1(norm.encode("utf-8")).hexdigest()[:10]
+     return f"app_error:{digest}", s[:160]
+ 
+@@ -253,8 +325,9 @@ async def report_app_error(line: str, send: Sender, *, excerpt: str = "", now: d
+     """error จาก log ล่าสุด: แจ้งครั้งแรกทันที · ซ้ำชนิดเดิม = reminder ทุก 6 ชม. · ชนิดใหม่ไม่ถูกบัง · ไม่มี recovery อัตโนมัติ"""
+     now = now or _now()
+     topic, sig = error_signature(line)
++    owner = uuid.uuid4().hex
+     async with _lock(topic):
+-        if not await _claim(topic, now):
++        if not await _claim(topic, now, owner):
+             return {"sent": False, "reason": "claimed_by_other_process", "topic": topic}
+         try:
+             prev = await load_state(topic)
+@@ -269,17 +342,17 @@ async def report_app_error(line: str, send: Sender, *, excerpt: str = "", now: d
+                 + (f"ตัวอย่าง log:\n{redact(excerpt).strip()[:600]}\n" if excerpt else "")
+                 + "หมายเหตุ: ไม่พบ error นี้ในรอบต่อไป ≠ บริการกลับมาใช้ได้ — ต้องตรวจยืนยันเอง (ไม่มีการแจ้ง recovery อัตโนมัติ)"
+             )
+-            ok = False
+-            try:
+-                ok = bool(await send(text))
+-            except Exception:
+-                ok = False
++            if not await _renew(topic, now, owner):
++                return {"sent": False, "reason": "lease_lost_before_send", "topic": topic}
++            ok = await _send_guarded(send, text)
+             if not ok:
+                 return {"sent": False, "reason": "send_failed_retry_next_run", "topic": topic}
++            if not await _holds(topic, owner, now):
++                return {"sent": True, "kind": d["kind"], "topic": topic, "reason": "lease_lost_state_not_saved", "text": text}
+             await save_state(topic, {"level": "high", "signature": sig, "since": d["since"], "last_sent": now.isoformat(), "last_kind": d["kind"]})
+             return {"sent": True, "kind": d["kind"], "topic": topic, "text": text}
+         finally:
+-            await _release(topic)
++            await _release(topic, owner)
+ 
+ 
+ def extract_error_lines(log_text: str, max_items: int = 5) -> list[tuple[str, str]]:
+diff --git a/app/scheduler.py b/app/scheduler.py
+index 21da019..30699b0 100644
+--- a/app/scheduler.py
++++ b/app/scheduler.py
+@@ -85,7 +85,11 @@ def _telegram_sender(bot: Bot, action: str):
+     """ส่งข้อความ 1 ก้อน คืน True เมื่อ Telegram รับ (alert_state บันทึก state เฉพาะเมื่อ True)"""
+     async def _send(text: str) -> bool:
+         await bot.send_message(chat_id=settings.telegram_chat_id, text=text, parse_mode=None)
+-        await _log_audit(action, text[:300])
++        # Telegram รับแล้ว = สำเร็จ · audit เป็น best-effort (ล้ม = log ไม่ทำให้ state machine ส่งซ้ำ)
++        try:
++            await _log_audit(action, text[:300])
++        except Exception as exc:
++            print(f"[scheduler] audit log failed after telegram ok ({action}): {exc}")
+         return True
+     return _send
+ 
+diff --git a/tests/test_alert_state.py b/tests/test_alert_state.py
+index 7942eb7..4df0c87 100644
+--- a/tests/test_alert_state.py
++++ b/tests/test_alert_state.py
+@@ -127,16 +127,16 @@ class AlertStateTests(unittest.TestCase):
+     def test_cross_process_claim(self):
+         s = Sender()
+         async def run():
+-            ok = await A._claim("disk", T0); again = await A._claim("disk", T0 + timedelta(seconds=30)); expired = await A._claim("disk", T0 + timedelta(minutes=3))
+-            await A._release("disk")
++            ok = await A._claim("disk", T0, "A"); again = await A._claim("disk", T0 + timedelta(seconds=30), "B"); expired = await A._claim("disk", T0 + timedelta(minutes=3), "B")
++            await A._release("disk", "B")
+             return ok, again, expired
+         ok, again, expired = self.run_async(run())
+         self.assertEqual((ok, again, expired), (True, False, True))
+         A._locks.clear()
+         async def run2():
+-            await A._claim("disk", T0)  # โปรเซสอื่นถือ claim อยู่
++            await A._claim("disk", T0, "other-process")  # โปรเซสอื่นถือ claim อยู่
+             r = await A.check_and_notify("disk", 86, s, now=T0 + timedelta(seconds=10))
+-            await A._release("disk")
++            await A._release("disk", "other-process")
+             return r
+         r = self.run_async(run2())
+         self.assertEqual(r["reason"], "claimed_by_other_process"); self.assertEqual(len(s.sent), 0)
+@@ -201,3 +201,87 @@ class AlertStateTests(unittest.TestCase):
+ 
+ if __name__ == "__main__":
+     unittest.main()
++
++class CodexRound2Tests(AlertStateTests):
++    """รอบ 2 Codex: redaction ผ่านข้อความส่งจริง · audit ล้มไม่ส่งซ้ำ · lease owner · signature คง HTTP code"""
++
++    def test_redaction_through_real_messages(self):
++        s = Sender()
++        excerpt = (
++            '2026-10-19T02:00:02Z RuntimeError: POST https://api.telegram.org/bot123456789:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/sendMessage failed '
++            'payload={"api_key":"AKIA1234567890SECRET","password":"p@ssw0rd!","chat_id":123} '
++            "headers Authorization: Basic dXNlcjpwYXNzd29yZA== also Bearer abcdefghijklmnop "
++            "db postgres://ener:S3cretPass@host.docker.internal:5432/ener url https://x.io/cb?token=tok_live_123456&sig=abcdef"
++        )
++        async def run():
++            r = await A.report_app_error(excerpt, s, excerpt=excerpt, now=T0)
++            r2 = await A.check_and_notify("disk", 86, s, now=T0, details=excerpt)
++            return r, r2
++        r, r2 = self.run_async(run())
++        self.assertTrue(r["sent"] and r2["sent"])
++        for text in s.sent:
++            for bad in ("AAAAAAAAAAAAAAAA", "AKIA1234567890SECRET", "p@ssw0rd!", "dXNlcjpwYXNzd29yZA==", "abcdefghijklmnop", "S3cretPass", "tok_live_123456", "sig=abcdef"):
++                self.assertNotIn(bad, text, text)
++            self.assertIn("bot<telegram-token>/sendMessage", text)
++            self.assertIn("Authorization: <redacted>", text); self.assertIn("Bearer <token>", text)
++            self.assertIn("://<cred>@host.docker.internal", text)
++        self.assertEqual(A.redact('{"password": "x y z", "Token":"abc"} secret=zz'), '{"password": <redacted>, "Token":<redacted>} secret=<redacted>')
++
++    def test_telegram_ok_but_audit_fails_no_resend(self):
++        # จำลอง sender แบบ scheduler._telegram_sender: Telegram ส่งสำเร็จ แต่ audit ล้ม → ต้องคืน True และรอบถัดไปไม่ส่งซ้ำ
++        import importlib
++        sched = importlib.import_module("app.scheduler")
++        from unittest.mock import AsyncMock, patch
++        bot = type("B", (), {})(); bot.send_message = AsyncMock(return_value=None)
++        with patch.object(sched, "_log_audit", AsyncMock(side_effect=RuntimeError("sqlite locked"))):
++            sender = sched._telegram_sender(bot, "health_disk_alert")
++            async def run():
++                r1 = await A.check_and_notify("disk", 86, sender, now=T0)
++                r2 = await A.check_and_notify("disk", 86, sender, now=T0 + timedelta(minutes=30))
++                return r1, r2
++            r1, r2 = self.run_async(run())
++        self.assertTrue(r1["sent"]); self.assertFalse(r2["sent"]); self.assertEqual(bot.send_message.await_count, 1, "audit ล้มต้องไม่ทำให้ส่งซ้ำ")
++        self.assertEqual(self.run_async(A.load_state("disk"))["level"], "high")
++
++    def test_lease_owner_release_and_expiry(self):
++        async def run():
++            okA = await A._claim("disk", T0, "A")
++            okB_early = await A._claim("disk", T0 + timedelta(seconds=30), "B")       # ยังไม่หมดอายุ
++            okA_renew = await A._renew("disk", T0 + timedelta(seconds=40), "A")        # owner เดิมต่ออายุได้
++            okB = await A._claim("disk", T0 + timedelta(minutes=3), "B")               # หมดอายุ → B ยึด
++            relA = await A._release("disk", "A")                                       # ผู้ถือเก่ากลับมา → ห้ามลบของ B
++            okC = await A._claim("disk", T0 + timedelta(minutes=3, seconds=10), "C")   # B ยังถืออยู่ → C ไม่ได้
++            holdsB = await A._holds("disk", "B", T0 + timedelta(minutes=3, seconds=20))
++            holdsA = await A._holds("disk", "A", T0 + timedelta(minutes=3, seconds=20))
++            relB = await A._release("disk", "B")
++            okC2 = await A._claim("disk", T0 + timedelta(minutes=3, seconds=30), "C")
++            await A._release("disk", "C")
++            return okA, okB_early, okA_renew, okB, relA, okC, holdsB, holdsA, relB, okC2
++        res = self.run_async(run())
++        self.assertEqual(res, (True, False, True, True, False, False, True, False, True, True), res)
++        # ส่งสำเร็จแต่ lease หลุดระหว่างส่ง (ส่งช้าเกิน TTL) → ไม่ทับ state ของผู้ถือใหม่
++        s = Sender()
++        async def slow_send(text):
++            await A._claim("disk", T0 + timedelta(minutes=5), "intruder")  # จำลอง: โปรเซสอื่นยึด lease ไปแล้วเพราะเราช้าเกิน TTL
++            return await s(text)
++        r = self.run_async(A.check_and_notify("disk", 86, slow_send, now=T0))
++        self.assertTrue(r["sent"]); self.assertEqual(r.get("reason"), "lease_lost_state_not_saved"); self.assertIsNone(self.run_async(A.load_state("disk")))
++        self.assertTrue(self.run_async(A._holds("disk", "intruder", T0 + timedelta(minutes=5, seconds=1))), "release ของเราต้องไม่ลบ claim ของผู้ถือใหม่")
++        self.assertEqual(A.CLAIM_TTL, timedelta(minutes=2)); self.assertEqual(A.SEND_TIMEOUT_SEC, 60)
++
++    def test_signature_keeps_http_codes_but_drops_variable_ids(self):
++        t403 = "2026-10-19T02:00:02Z RuntimeError: provider request failed: HTTP 403: no active subscription request_id=req_8f3a2b9c1d"
++        t403b = "2026-10-19T03:15:44Z RuntimeError: provider request failed: HTTP 403: no active subscription request_id=req_zz99yy88xx"
++        t500 = "2026-10-19T02:00:02Z RuntimeError: provider request failed: HTTP 500: upstream error request_id=req_8f3a2b9c1d"
++        s403, s403b, s500 = (A.error_signature(t)[0] for t in (t403, t403b, t500))
++        self.assertEqual(s403, s403b, "error เดิม ต่าง request id → signature เดียวกัน")
++        self.assertNotEqual(s403, s500, "HTTP 403 vs 500 → คนละ signature")
++        self.assertNotEqual(A.error_signature("sqlite3.OperationalError: errno 11 database is locked")[0], A.error_signature("sqlite3.OperationalError: errno 13 permission denied")[0])
++        self.assertEqual(A.error_signature("timeout after 1234 ms id=99999 at 12:30:01")[0], A.error_signature("timeout after 987 ms id=12345 at 09:01:59")[0])
++        self.assertEqual(A.error_signature("job 550e8400-e29b-41d4-a716-446655440000 failed")[0], A.error_signature("job 123e4567-e89b-12d3-a456-426614174000 failed")[0])
++        s = Sender()
++        async def run():
++            r1 = await A.report_app_error(t403, s, now=T0); r2 = await A.report_app_error(t403b, s, now=T0 + timedelta(minutes=5)); r3 = await A.report_app_error(t500, s, now=T0 + timedelta(minutes=6))
++            return r1, r2, r3
++        r1, r2, r3 = self.run_async(run())
++        self.assertEqual([r["sent"] for r in (r1, r2, r3)], [True, False, True])
+-- 
+2.43.0
+
+
+From da1310778aba3cb4fb917c523f705d222ddba017 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 20 Oct 2026 01:00:41 +0000
+Subject: [PATCH 3/3] alert_state round 3 (Codex): lease clock separated from
+ event time (fresh clock after lock, before renew, before save; injectable for
+ tests; lost lease = stop, never reuse old decision); owner check + expiry +
+ state write in one BEGIN IMMEDIATE transaction for metric, app_error and
+ no_change paths; regressions for slow-prepare takeover and
+ write-after-takeover
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ app/agents/alert_state.py | 61 +++++++++++++++++-------
+ tests/test_alert_state.py | 97 ++++++++++++++++++++++++++++++++++++---
+ 2 files changed, 136 insertions(+), 22 deletions(-)
+
+diff --git a/app/agents/alert_state.py b/app/agents/alert_state.py
+index c82ed7d..60afb8d 100644
+--- a/app/agents/alert_state.py
++++ b/app/agents/alert_state.py
+@@ -208,6 +208,31 @@ async def _holds(topic: str, owner: str, now: datetime) -> bool:
+     return bool(held and held["owner"] == owner and held["at"] and now - held["at"] < CLAIM_TTL)
+ 
+ 
++async def _save_state_if_held(topic: str, owner: str, lease_now: datetime, state: dict) -> bool:
++    """เขียน state **เฉพาะเมื่อ** owner นี้ยังถือ lease (ไม่หมดอายุ) — ตรวจและเขียนใน BEGIN IMMEDIATE เดียวกัน (ปิดช่องผู้ถือใหม่แทรกระหว่างตรวจกับเขียน)"""
++    async with get_db() as db:
++        await db.execute("BEGIN IMMEDIATE")
++        try:
++            cur = await db.execute("SELECT value FROM memories WHERE key = ?", (f"alert_claim_{topic}",))
++            held = _claim_row(await cur.fetchone())
++            if not (held and held["owner"] == owner and held["at"] and lease_now - held["at"] < CLAIM_TTL):
++                await db.execute("ROLLBACK")
++                return False
++            await db.execute(
++                """INSERT INTO memories (key, value, tag) VALUES (?, ?, 'alert_state')
++                   ON CONFLICT(key) DO UPDATE SET value = excluded.value, tag = 'alert_state', updated_at = CURRENT_TIMESTAMP""",
++                (_key(topic), json.dumps(state, ensure_ascii=False)),
++            )
++            await db.execute("COMMIT")
++            return True
++        except Exception:
++            try:
++                await db.execute("ROLLBACK")
++            except Exception:
++                pass
++            raise
++
++
+ async def _release(topic: str, owner: str) -> bool:
+     """ปล่อย lease เฉพาะเมื่อยังเป็นของ owner นี้ (ผู้ถือเก่าที่หมดอายุไปแล้วห้ามลบ claim ของผู้ถือใหม่)"""
+     key = f"alert_claim_{topic}"
+@@ -270,34 +295,37 @@ async def check_and_notify(
+     *,
+     details: str | Callable[[], str] | None = None,
+     now: datetime | None = None,
++    clock: Callable[[], datetime] | None = None,
+ ) -> dict:
+-    """ประเมินค่า → ส่งเมื่อสถานะเปลี่ยน/ถึงรอบ reminder · บันทึกเฉพาะเมื่อส่งสำเร็จ · คืน {sent, kind, level, reason}"""
+-    now = now or _now()
++    """ประเมินค่า → ส่งเมื่อสถานะเปลี่ยน/ถึงรอบ reminder · บันทึกเฉพาะเมื่อส่งสำเร็จและยังถือ lease
++    now = เวลาเหตุการณ์ (ใช้ตัดสิน/ข้อความ/state) · clock = นาฬิกา lease (อ่านสดหลังได้ lock, ก่อน renew, ก่อนบันทึก — เทสต์ฉีดได้)"""
++    clock = clock or _now
++    now = now or clock()
+     owner = uuid.uuid4().hex
+     async with _lock(topic):
+-        if not await _claim(topic, now, owner):
++        if not await _claim(topic, clock(), owner):
+             return {"sent": False, "reason": "claimed_by_other_process", "level": level_for(topic, value)}
+         try:
+             prev = await load_state(topic)
+             level = level_for(topic, value)
+             d = decide(prev, level, now)
+             if not d["send"]:
+-                # ค่าเปลี่ยนแต่ระดับเดิม/ok: อัปเดตค่าล่าสุดไว้ดู (ไม่แตะ last_sent)
++                # ค่าเปลี่ยนแต่ระดับเดิม/ok: อัปเดตค่าล่าสุดไว้ดู (ไม่แตะ last_sent) — เขียนเฉพาะเมื่อยังถือ lease
+                 if prev and prev.get("level") == level and prev.get("value") != value:
+-                    await save_state(topic, {**prev, "value": value})
++                    await _save_state_if_held(topic, owner, clock(), {**prev, "value": value})
+                 return {"sent": False, "reason": "no_change", "level": level, "prev_level": d["prev_level"]}
+             detail_text = details() if callable(details) else (details or "")
+             text = format_message(topic, d, value, now, detail_text)
+-            if not await _renew(topic, _now() if now is None else now, owner):
++            # เตรียมข้อความอาจกินเวลา → อ่านนาฬิกาสดแล้ว renew; lease หลุด = หยุด ไม่ใช้ decision เก่าส่งต่อ (รอบถัดไปประเมินใหม่)
++            if not await _renew(topic, clock(), owner):
+                 return {"sent": False, "reason": "lease_lost_before_send", "level": level}
+             ok = await _send_guarded(send, text)
+             if not ok:
+                 return {"sent": False, "reason": "send_failed_retry_next_run", "kind": d["kind"], "level": level}
+             state = {"level": level, "value": value, "since": d["since"], "last_sent": now.isoformat(), "last_kind": d["kind"]}
+-            if not await _holds(topic, owner, now):
+-                # ส่งไปแล้วแต่ lease หลุด (เกิน TTL) → ไม่ทับ state ของผู้ถือใหม่ · รายงานให้รู้
++            if not await _save_state_if_held(topic, owner, clock(), state):
++                # ส่งไปแล้วแต่ lease หลุดระหว่างส่ง → ไม่ทับ state ของผู้ถือใหม่ · รายงานให้รู้
+                 return {"sent": True, "kind": d["kind"], "level": level, "reason": "lease_lost_state_not_saved", "text": text}
+-            await save_state(topic, state)
+             return {"sent": True, "kind": d["kind"], "level": level, "prev_level": d["prev_level"], "text": text}
+         finally:
+             await _release(topic, owner)
+@@ -321,13 +349,14 @@ def error_signature(line: str) -> tuple[str, str]:
+     return f"app_error:{digest}", s[:160]
+ 
+ 
+-async def report_app_error(line: str, send: Sender, *, excerpt: str = "", now: datetime | None = None, container: str = "ener-ai") -> dict:
+-    """error จาก log ล่าสุด: แจ้งครั้งแรกทันที · ซ้ำชนิดเดิม = reminder ทุก 6 ชม. · ชนิดใหม่ไม่ถูกบัง · ไม่มี recovery อัตโนมัติ"""
+-    now = now or _now()
++async def report_app_error(line: str, send: Sender, *, excerpt: str = "", now: datetime | None = None, container: str = "ener-ai", clock: Callable[[], datetime] | None = None) -> dict:
++    """error จาก log ล่าสุด: แจ้งครั้งแรกทันที · ซ้ำชนิดเดิม = reminder ทุก 6 ชม. · ชนิดใหม่ไม่ถูกบัง · ไม่มี recovery อัตโนมัติ · lease/clock เหมือน check_and_notify"""
++    clock = clock or _now
++    now = now or clock()
+     topic, sig = error_signature(line)
+     owner = uuid.uuid4().hex
+     async with _lock(topic):
+-        if not await _claim(topic, now, owner):
++        if not await _claim(topic, clock(), owner):
+             return {"sent": False, "reason": "claimed_by_other_process", "topic": topic}
+         try:
+             prev = await load_state(topic)
+@@ -342,14 +371,14 @@ async def report_app_error(line: str, send: Sender, *, excerpt: str = "", now: d
+                 + (f"ตัวอย่าง log:\n{redact(excerpt).strip()[:600]}\n" if excerpt else "")
+                 + "หมายเหตุ: ไม่พบ error นี้ในรอบต่อไป ≠ บริการกลับมาใช้ได้ — ต้องตรวจยืนยันเอง (ไม่มีการแจ้ง recovery อัตโนมัติ)"
+             )
+-            if not await _renew(topic, now, owner):
++            if not await _renew(topic, clock(), owner):
+                 return {"sent": False, "reason": "lease_lost_before_send", "topic": topic}
+             ok = await _send_guarded(send, text)
+             if not ok:
+                 return {"sent": False, "reason": "send_failed_retry_next_run", "topic": topic}
+-            if not await _holds(topic, owner, now):
++            state = {"level": "high", "signature": sig, "since": d["since"], "last_sent": now.isoformat(), "last_kind": d["kind"]}
++            if not await _save_state_if_held(topic, owner, clock(), state):
+                 return {"sent": True, "kind": d["kind"], "topic": topic, "reason": "lease_lost_state_not_saved", "text": text}
+-            await save_state(topic, {"level": "high", "signature": sig, "since": d["since"], "last_sent": now.isoformat(), "last_kind": d["kind"]})
+             return {"sent": True, "kind": d["kind"], "topic": topic, "text": text}
+         finally:
+             await _release(topic, owner)
+diff --git a/tests/test_alert_state.py b/tests/test_alert_state.py
+index 4df0c87..6a7a5f6 100644
+--- a/tests/test_alert_state.py
++++ b/tests/test_alert_state.py
+@@ -46,7 +46,7 @@ class Sender:
+         return True
+ 
+ 
+-class AlertStateTests(unittest.TestCase):
++class _Base(unittest.TestCase):
+     def setUp(self):
+         self.get_db, self.path = _tmp_db()
+         self._orig = A.get_db; A.get_db = self.get_db; A._locks.clear()
+@@ -60,6 +60,8 @@ class AlertStateTests(unittest.TestCase):
+     def run_async(self, coro):
+         return asyncio.run(coro)
+ 
++
++class AlertStateTests(_Base):
+     def test_levels_and_decide(self):
+         self.assertEqual([A.level_for("disk", v) for v in (10, 80, 84.9, 85, 89, 90)], ["ok", "warn", "warn", "high", "high", "critical"])
+         self.assertEqual(A.level_for("cpu", 50), "ok"); self.assertEqual(A.level_for("unknown", 99), "ok")
+@@ -135,7 +137,7 @@ class AlertStateTests(unittest.TestCase):
+         A._locks.clear()
+         async def run2():
+             await A._claim("disk", T0, "other-process")  # โปรเซสอื่นถือ claim อยู่
+-            r = await A.check_and_notify("disk", 86, s, now=T0 + timedelta(seconds=10))
++            r = await A.check_and_notify("disk", 86, s, now=T0 + timedelta(seconds=10), clock=lambda: T0 + timedelta(seconds=10))
+             await A._release("disk", "other-process")
+             return r
+         r = self.run_async(run2())
+@@ -202,7 +204,7 @@ class AlertStateTests(unittest.TestCase):
+ if __name__ == "__main__":
+     unittest.main()
+ 
+-class CodexRound2Tests(AlertStateTests):
++class CodexRound2Tests(_Base):
+     """รอบ 2 Codex: redaction ผ่านข้อความส่งจริง · audit ล้มไม่ส่งซ้ำ · lease owner · signature คง HTTP code"""
+ 
+     def test_redaction_through_real_messages(self):
+@@ -260,11 +262,12 @@ class CodexRound2Tests(AlertStateTests):
+         res = self.run_async(run())
+         self.assertEqual(res, (True, False, True, True, False, False, True, False, True, True), res)
+         # ส่งสำเร็จแต่ lease หลุดระหว่างส่ง (ส่งช้าเกิน TTL) → ไม่ทับ state ของผู้ถือใหม่
+-        s = Sender()
++        s = Sender(); clk = {"t": T0}
+         async def slow_send(text):
+-            await A._claim("disk", T0 + timedelta(minutes=5), "intruder")  # จำลอง: โปรเซสอื่นยึด lease ไปแล้วเพราะเราช้าเกิน TTL
++            clk["t"] = T0 + timedelta(minutes=5)                       # ส่งช้าเกิน TTL
++            await A._claim("disk", clk["t"], "intruder")               # โปรเซสอื่นยึด lease ไปแล้ว
+             return await s(text)
+-        r = self.run_async(A.check_and_notify("disk", 86, slow_send, now=T0))
++        r = self.run_async(A.check_and_notify("disk", 86, slow_send, now=T0, clock=lambda: clk["t"]))
+         self.assertTrue(r["sent"]); self.assertEqual(r.get("reason"), "lease_lost_state_not_saved"); self.assertIsNone(self.run_async(A.load_state("disk")))
+         self.assertTrue(self.run_async(A._holds("disk", "intruder", T0 + timedelta(minutes=5, seconds=1))), "release ของเราต้องไม่ลบ claim ของผู้ถือใหม่")
+         self.assertEqual(A.CLAIM_TTL, timedelta(minutes=2)); self.assertEqual(A.SEND_TIMEOUT_SEC, 60)
+@@ -285,3 +288,85 @@ class CodexRound2Tests(AlertStateTests):
+             return r1, r2, r3
+         r1, r2, r3 = self.run_async(run())
+         self.assertEqual([r["sent"] for r in (r1, r2, r3)], [True, False, True])
++
++class FakeClock:
++    def __init__(self, start): self.t = start
++    def __call__(self): return self.t
++    def advance(self, **kw): self.t = self.t + timedelta(**kw); return self.t
++
++
++class CodexRound3LeaseTests(_Base):
++    """รอบ 3 Codex: นาฬิกา lease อ่านสด (ไม่ใช่เวลาเริ่มงาน) · ตรวจ owner+หมดอายุ+เขียน state เป็น transaction เดียว"""
++
++    def test_slow_prepare_then_lease_taken_stops_send(self):
++        # A เริ่ม T0 · เตรียมข้อความกิน 121 วิ (เกิน TTL 2 นาที) · ระหว่างนั้น B ยึด lease → A ต้อง renew ไม่ผ่านและไม่ส่งด้วย decision เก่า
++        clock = FakeClock(T0); s = Sender()
++        def slow_details():
++            clock.advance(seconds=121)
++            return "details"
++        async def run():
++            # จำลองด้วยลำดับจริงของ check_and_notify: claim(A, T0) → details (clock +121s) → B claim ที่ T0+121 (จาก "โปรเซสอื่น") → renew(A) ต้องล้ม
++            r_holder = {}
++            orig_renew = A._renew
++            async def renew_hook(topic, lease_now, owner):
++                taken = await A._claim(topic, lease_now, "B")  # B ยึดได้เพราะ lease ของ A หมดอายุแล้ว ณ นาฬิกาสด
++                r_holder["b_took"] = taken
++                return await orig_renew(topic, lease_now, owner)
++            A._renew = renew_hook
++            try:
++                r = await A.check_and_notify("disk", 86, s, now=T0, details=slow_details, clock=clock)
++            finally:
++                A._renew = orig_renew
++            holds_b = await A._holds("disk", "B", clock())
++            await A._release("disk", "B")
++            return r, r_holder, holds_b
++        r, h, holds_b = self.run_async(run())
++        self.assertTrue(h["b_took"], "lease ของ A ต้องหมดอายุตามนาฬิกาสด (T0+121s) ไม่ใช่เวลาเริ่มงาน T0")
++        self.assertFalse(r["sent"]); self.assertEqual(r["reason"], "lease_lost_before_send"); self.assertEqual(len(s.sent), 0)
++        self.assertTrue(holds_b, "release ของ A ต้องไม่ลบ claim ของ B")
++        self.assertIsNone(self.run_async(A.load_state("disk")), "ไม่ใช้ decision เก่าส่งต่อ/ไม่บันทึก state")
++
++    def test_check_owner_and_write_state_atomic(self):
++        # A ส่งสำเร็จ → lease หมดอายุ → B ยึดและเขียน critical → A พยายามเขียน high ต้องถูกปฏิเสธ (ตรวจ+เขียน transaction เดียว)
++        clock = FakeClock(T0); s = Sender()
++        async def sender_then_takeover(text):
++            ok = await s(text)
++            clock.advance(seconds=121)                     # ส่งช้าจน lease หมดอายุ
++            await A._claim("disk", clock(), "B")           # B ยึด
++            await A._save_state_if_held("disk", "B", clock(), {"level": "critical", "value": 91, "since": clock().isoformat(), "last_sent": clock().isoformat()})
++            return ok
++        r = self.run_async(A.check_and_notify("disk", 86, sender_then_takeover, now=T0, clock=clock))
++        self.assertTrue(r["sent"]); self.assertEqual(r["reason"], "lease_lost_state_not_saved")
++        st = self.run_async(A.load_state("disk"))
++        self.assertEqual(st["level"], "critical", "state ของ B ต้องไม่ถูก A เขียนทับ")
++        self.assertTrue(self.run_async(A._holds("disk", "B", clock())))
++        # no_change path: อัปเดต value ก็ต้องตรวจ lease แบบ atomic — B ถือ lease อยู่ → A (owner ใหม่) claim ไม่ได้ตั้งแต่ต้น
++        r2 = self.run_async(A.check_and_notify("disk", 92, s, now=T0 + timedelta(minutes=5), clock=clock))
++        self.assertEqual(r2["reason"], "claimed_by_other_process")
++        self.run_async(A._release("disk", "B"))
++        # app_error path ใช้ชุดเดียวกัน
++        clock2 = FakeClock(T0); s2 = Sender()
++        async def sender_err(text):
++            ok = await s2(text); clock2.advance(seconds=130)
++            topic, _ = A.error_signature("RuntimeError: x failed: HTTP 403")
++            await A._claim(topic, clock2(), "B"); await A._save_state_if_held(topic, "B", clock2(), {"level": "high", "signature": "b", "since": "x", "last_sent": clock2().isoformat()})
++            return ok
++        r3 = self.run_async(A.report_app_error("RuntimeError: x failed: HTTP 403", sender_err, now=T0, clock=clock2))
++        self.assertTrue(r3["sent"]); self.assertEqual(r3["reason"], "lease_lost_state_not_saved")
++        self.assertEqual(self.run_async(A.load_state(r3["topic"]))["signature"], "b")
++
++    def test_save_state_if_held_rules(self):
++        async def run():
++            await A._claim("disk", T0, "A")
++            ok_live = await A._save_state_if_held("disk", "A", T0 + timedelta(seconds=30), {"level": "warn"})
++            ok_expired = await A._save_state_if_held("disk", "A", T0 + timedelta(minutes=3), {"level": "high"})
++            ok_wrong = await A._save_state_if_held("disk", "Z", T0 + timedelta(seconds=10), {"level": "critical"})
++            st = await A.load_state("disk")
++            await A._release("disk", "A")
++            return ok_live, ok_expired, ok_wrong, st
++        ok_live, ok_expired, ok_wrong, st = self.run_async(run())
++        self.assertEqual((ok_live, ok_expired, ok_wrong), (True, False, False)); self.assertEqual(st["level"], "warn")
++        src = Path(__file__).resolve().parents[1].joinpath("app/agents/alert_state.py").read_text(encoding="utf-8")
++        self.assertNotIn("_now() if now is None else now", src)
++        self.assertNotIn("await save_state(topic, {**prev", src, "no_change ต้องเขียนผ่าน _save_state_if_held")
++        self.assertEqual(src.count("await _save_state_if_held("), 3)  # no_change + metric + app_error
+-- 
+2.43.0
+

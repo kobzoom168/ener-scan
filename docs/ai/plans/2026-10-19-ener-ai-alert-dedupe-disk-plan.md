@@ -76,3 +76,10 @@
 **rollback ener-ai ตอนนี้:** image เดิมถูกลบตามที่กบเลือก → ย้อน = `git -C /root/ener-ai checkout b13567f && docker compose up -d --build ener-ai` (build ใหม่ ~5 นาที ใช้พื้นที่ชั่วคราว) · ไม่มี image สำเร็จรูป
 **ข้อจำกัดที่ Codex ระบุ (บันทึก ไม่รับรองส่งครั้งเดียวทุกกรณี):** `_renew()` เรียก `_claim()` ซึ่ง "ยึดใหม่" ได้ถ้า lease ของเราหมดอายุและผู้ถือใหม่ปล่อยไปแล้ว → กรณี A ช้าเกิน TTL, B ยึด-ส่ง-ปล่อย, แล้ว A renew สำเร็จและส่งซ้ำ ยังเป็นไปได้ (A จะใช้ decision เก่า) · ป้องกันเฉพาะส่วน state (ไม่ทับ) · **ตามแก้แยก:** renew ต้องตรวจว่า lease ของเรา "ยังไม่เคยหมดอายุ/ถูกยึดคั่น" (เช่น เก็บ generation/fence ใน claim แล้ว renew เฉพาะ fence เดิม) หรือประเมิน decision ใหม่หลัง renew
 **§8.2 recovery:** หลังลบ image (ดิสก์ 76%) รอบ monitor_check **08:50:01 ไทย** state → `level ok, value 75.1, last_kind recover` = ส่งข้อความ `✅ กลับสู่ปกติ` ครั้งเดียว (ดูในแชต Kob) · reminder 30 นาที (08:40): **ยังไม่ได้พิสูจน์** — state ถูก recover ทับไปแล้ว และเส้น monitor ไม่เขียน audit จึงยืนยันจาก DB ไม่ได้ว่า 08:40 ส่ง reminder หรือไม่ (ดิสก์ลดต่ำกว่า 85 ประมาณ 08:41 คาบเกี่ยวรอบ) → ถ้ากบเห็นข้อความ `🟠 ยังคงอยู่` เวลา 08:40 ในแชตให้ถือว่าพิสูจน์ reminder; ไม่เห็น = ยังไม่พิสูจน์ (จะพิสูจน์ได้ครั้งถัดไปที่ค่าค้างเกินเกณฑ์ >30 นาที)
+
+**§8.3 สถานะสุดท้ายรอบ deploy (Codex 20 ต.ค. 09:00 ไทย):** ปิดงาน deploy ener-ai ได้ตามหลักฐาน — **ไม่ใช่ปิดงานดิสก์/แจ้งเตือนทั้งหมด**
+- ผ่าน: ส่ง disk alert ครั้งแรก (08:10) · ไม่ส่งซ้ำรอบ monitor (08:20) และ health_check (08:30) · recovery ฝั่งระบบ (08:50) · ดิสก์ 76% ว่าง 18 GB
+- ยังไม่พิสูจน์: reminder ครบ 30 นาที — ถ้าพบข้อความต้องเทียบเวลากับรอบ job (08:40:01) และ state/log ให้ตรงก่อนนับ · **ห้ามสร้างเหตุให้ดิสก์เต็มเพื่อทดสอบ**
+- ค้างติดตาม: push `feat/alert-state-dedupe` ไป remote (กบ) · แก้ `_renew()` (fence/generation) · **rollback ener-ai = build ใหม่จาก `b13567f` เท่านั้น เพราะ image เดิมถูกลบแล้ว** (ไม่ใช่ย้อนทันที)
+- สำเนา commit นอก server: `docs/ai/patches/ener-ai-alert-state-da13107/` (format-patch + bundle) ใน repo ener-scan (GitHub private + mirror)
+- งานแยกที่ยังไม่ปิด: journal (E) · btmp (F/F2) · Ollama 13.5G · log legacy 8.2G/legacy stack · SSH · แจ้งเตือนนอกแอป 4 เรื่อง
