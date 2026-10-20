@@ -35,3 +35,8 @@
 - ops script `/root/ener-ops-tg-7d8a338/telegram-approval-ops.mjs` (sha256 `0ec099e3…` ตรง repo 7d8a338) · `status` บน Pro: configured=false token_set=false enabled=false = store พร้อม (key ใช้ได้) รอกบกรอกหน้า Admin
 - **คำถามจากกบ:** ใช้ bot `@ener_kob_approval_test_bot` + กลุ่ม "approval ener scan" (-5440947116, 3 คน) ที่สร้างไว้ตอน staging ได้ไหม → ตอบ: ได้ ภายใต้เงื่อนไข (1) bot หนึ่งตัวมี webhook ได้ URL เดียว → เมื่อชี้ Pro แล้ว staging ห้ามเปิดใช้ bot นี้อีก (staging ตอนนี้ปิดอยู่ webhook ว่าง — ตรวจซ้ำก่อน set) (2) ควรเปลี่ยนชื่อกลุ่มให้ชัดว่าเป็น Pro และสมาชิกที่ไม่ใช่ผู้อนุมัติกดจะได้ "ไม่มีสิทธิ์" (3) token ต้องกรอกที่หน้า Admin Pro เอง (ค่าใน DB staging ถอดรหัสด้วย key staging — ผมไม่ย้ายข้าม env) (4) ต้องยืนยันเป็นข้อความชัด ๆ ว่า "ใช้ bot/ห้องนี้กับ Pro" ตาม Codex
 - **รอ:** ยืนยันข้อข้างบน + ชื่อและ Telegram user id ของผู้อนุมัติคนที่ 2
+
+## 5. การตัดสินใจของกบ (20 ต.ค. 11:30 ไทย)
+- **สร้าง bot และกลุ่มใหม่สำหรับ Pro แยกจาก staging** · คง `@ener_kob_approval_test_bot` + กลุ่ม "approval ener scan" (-5440947116) ไว้สำหรับ staging ตามเดิม (ไม่แตะ)
+- ลำดับต่อไป (รอกบ): (1) กบสร้าง bot ใหม่ที่ @BotFather + กลุ่มใหม่ เชิญ bot เข้ากลุ่ม (2) กบกรอกหน้า Admin Pro `https://scan.my-ener.uk/admin/telegram-approval`: Bot Token · Chat ID ของกลุ่มใหม่ · ผู้อนุมัติ 1–2 คน (label + Telegram user id) → บันทึก (3) กบยืนยันรายชื่อผู้อนุมัติกับผม → ผม: `status` (configured=true) → `bot-info` (username ตรง) → `enable` → `verify-endpoint` 401 → `set-webhook` → `webhook-info` → ทดสอบจริงด้วย Test UID ตามข้อ 2.4/3.6 → รายงาน SHA/config/เวลา/ผลจริง
+- ยังไม่ปิดแจ้งสลิปทาง LINE จนทดสอบผ่านและกบสั่งปิดแยก · ไม่แตะนโยบาย/ยอดสิทธิ์
