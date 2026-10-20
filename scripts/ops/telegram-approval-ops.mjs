@@ -1,6 +1,6 @@
 // Ops สำหรับ Telegram อนุมัติสลิป (config จาก DB, sql/066) — รันในคอนเทนเนอร์ของ env นั้น (มี TELEGRAM_CONFIG_KEY/TELEGRAM_CONFIG_DB_KEY) · **ไม่พิมพ์ token/secret**
 //  ใช้: docker run --rm --env-file /root/ener-scan-<env>/.env --network <net> -v <ops>/scripts/ops/telegram-approval-ops.mjs:/app/ops-tg.mjs:ro <image> node /app/ops-tg.mjs <cmd> [args]
-//  cmd: status · bot-info · webhook-info · enable <actor> · disable <actor> · set-webhook <https-url> · delete-webhook · verify-endpoint <https-url>
+//  cmd: status · bot-info · updates (chat/user ids ก่อนตั้ง webhook) · webhook-info · enable <actor> · disable <actor> · set-webhook <https-url> · delete-webhook · verify-endpoint <https-url>
 //  กติกา: enable/set-webhook ต้องมีอนุมัติแยก · set-webhook ใช้ secret จาก DB (ถอดรหัสในโปรเซส) allowed_updates=callback_query drop_pending_updates=true
 import crypto from "node:crypto";
 const [cmd, arg1] = process.argv.slice(2);
@@ -30,6 +30,16 @@ const rawSecrets = async () => {
   return { token: store.decryptSecret(data.bot_token_enc, env), secret: data.webhook_secret_enc ? store.decryptSecret(data.webhook_secret_enc, env) : null, chatId: data.chat_id, enabled: data.enabled };
 };
 if (cmd === "bot-info") { const { token } = await rawSecrets(); const r = await api(token, "getMe"); out({ event: "TG_BOT_INFO", ok: r.ok, id: r.result?.id ?? null, username: r.result?.username ?? null, is_bot: r.result?.is_bot ?? null, desc: r.ok ? null : r.desc }); process.exit(r.ok ? 0 : 3); }
+if (cmd === "updates") {
+  // อ่าน getUpdates (ใช้ได้เฉพาะตอนยังไม่ตั้ง webhook) → chat id ของกลุ่ม + user id ของคนที่พิมพ์ (สำหรับกรอกหน้า Admin) · ไม่พิมพ์ข้อความ/token
+  const { token } = await rawSecrets(); const r = await api(token, "getUpdates", { limit: 50, allowed_updates: ["message", "my_chat_member", "chat_member"] });
+  const seen = new Map();
+  for (const u of r.result || []) {
+    const m = u.message || u.my_chat_member || u.chat_member || {}; const chat = m.chat || {}; const from = m.from || {};
+    if (chat.id != null) { const k = String(chat.id); const cur = seen.get(k) || { chat_id: k, type: chat.type, title: chat.title || null, from_user_ids: new Set() }; if (from.id != null) cur.from_user_ids.add(`${from.id} (${from.first_name || ""}${from.username ? " @" + from.username : ""})`); seen.set(k, cur); }
+  }
+  out({ event: "TG_UPDATES", ok: r.ok, desc: r.ok ? null : r.desc, count: (r.result || []).length, chats: [...seen.values()].map((c) => ({ ...c, from_user_ids: [...c.from_user_ids] })) }); process.exit(r.ok ? 0 : 3);
+}
 if (cmd === "webhook-info") { const { token } = await rawSecrets(); const r = await api(token, "getWebhookInfo"); out({ event: "TG_WEBHOOK_INFO", ok: r.ok, url: r.result?.url ?? null, pending: r.result?.pending_update_count ?? null, last_error: r.result?.last_error_message ?? null, last_error_date: r.result?.last_error_date ?? null, allowed: r.result?.allowed_updates ?? null, has_secret: typeof r.result === "object" ? undefined : undefined }); process.exit(r.ok ? 0 : 3); }
 if (cmd === "enable" || cmd === "disable") { const actor = String(arg1 || "ops").slice(0, 80); const s = await store.setEnabled(cmd === "enable", actor, { env }); out({ event: cmd === "enable" ? "TG_ENABLED" : "TG_DISABLED", actor, ...pub(s) }); process.exit(0); }
 if (cmd === "set-webhook") {
@@ -46,4 +56,4 @@ if (cmd === "verify-endpoint") {
   const url = String(arg1 || ""); const hit = async (headers) => { const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: "{}", signal: AbortSignal.timeout(10000) }); return r.status; };
   out({ event: "TG_VERIFY_ENDPOINT", url, no_secret: await hit({}), wrong_secret: await hit({ "x-telegram-bot-api-secret-token": crypto.randomBytes(16).toString("hex") }) }); process.exit(0);
 }
-console.error("usage: status | bot-info | webhook-info | enable <actor> | disable <actor> | set-webhook <url> | delete-webhook | verify-endpoint <url>"); process.exit(2);
+console.error("usage: status | bot-info | updates | webhook-info | enable <actor> | disable <actor> | set-webhook <url> | delete-webhook | verify-endpoint <url>"); process.exit(2);
