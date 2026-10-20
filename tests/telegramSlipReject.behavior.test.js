@@ -149,6 +149,11 @@ test("enqueue แจ้งลูกค้าล้ม: ปฏิเสธสำ�
   s5 = await stuckRun("lost");
   assert.match(s5.r.text, /แจ้งแอดมินไม่สำเร็จ ระบบจะลองแจ้งแอดมินใหม่เอง \(ไม่สร้างข้อความลูกค้าใหม่/); assert.equal(s5.d.marks.length, 0, "alert สูญหาย → ห้ามล้าง pending"); assert.deepEqual([s5.audit.notify.state, s5.audit.notify.marked], ["stuck_alert_lost", false]);
   s5 = await stuckRun(undefined); assert.equal(s5.d.marks.length, 0, "ไม่รู้ผล alert = lost"); assert.equal(s5.audit.notify.state, "stuck_alert_lost");
+  // รอบ 5: alert ติด dedupe (เคยส่งต่อแล้ว ไม่รู้ว่าส่งถึงหรือแค่เข้า outbox) → หยุด pending ได้ แต่ข้อความ/audit ห้ามบอกว่า "สำเร็จ"
+  s5 = await stuckRun("deduped");
+  assert.match(s5.r.text, /เคยส่งต่อให้แอดมินไปแล้วก่อนหน้า \(ส่งหรือเข้าคิวไว้ ยังไม่ยืนยันว่าแอดมินได้รับ\)/); assert.doesNotMatch(s5.r.text, /แจ้งแอดมินสำเร็จแล้ว/); assert.deepEqual(s5.d.marks, [PAY.paymentId]);
+  assert.deepEqual([s5.audit.notify.state, s5.audit.notify.adminAlert, s5.audit.notify.marked], ["stuck_alert_deduped", "deduped", true]);
+  s5 = await stuckRun("deduped", true); assert.match(s5.r.text, /ถูกปฏิเสธไปแล้วก่อนหน้านี้ — ข้อความแจ้งลูกค้าค้าง.*เคยส่งต่อให้แอดมินไปแล้วก่อนหน้า/); assert.doesNotMatch(s5.r.text, /สำเร็จ|เข้าคิวแจ้งลูกค้าที่ค้างอยู่ให้แล้ว/);
   // already + stuck → ห้ามตอบว่า "เข้าคิวแจ้งลูกค้าที่ค้างอยู่ให้แล้ว"
   s5 = await stuckRun("sent", true);
   assert.match(s5.r.text, /ถูกปฏิเสธไปแล้วก่อนหน้านี้ — ข้อความแจ้งลูกค้าค้าง/); assert.doesNotMatch(s5.r.text, /เข้าคิวแจ้งลูกค้าที่ค้างอยู่ให้แล้ว/); assert.deepEqual(s5.d.marks, [PAY.paymentId]); assert.equal(s5.audit.already, true); assert.equal(s5.audit.notify.state, "stuck_alert_sent");

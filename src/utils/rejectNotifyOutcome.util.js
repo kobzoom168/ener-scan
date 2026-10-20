@@ -5,14 +5,19 @@
  *  - ไม่มีโมดูลภายนอก (ใช้ในเทสต์ได้ตรง ๆ)
  */
 
-/** แปลงผล sendAdminAlert → "sent" | "queued" | "lost" (deduped = เคยส่ง/เข้าคิวแล้วในหน้าต่าง dedupe = ถือว่าส่งต่องานแล้ว) */
+/**
+ * แปลงผล sendAdminAlert → "sent" | "queued" | "deduped" | "lost"
+ *  - deduped (Codex รอบ 5): sendAdminAlert ตั้ง marker dedupe ทั้งตอนส่งสำเร็จ **และ** ตอนเข้า outbox → ยืนยันไม่ได้ว่าส่งถึง
+ *    = "เคยส่งต่อให้แอดมินไปแล้วก่อนหน้า (ส่งหรือเข้าคิวถาวร) ยังไม่ยืนยันว่าได้รับ" — ห้ามตีเป็น sent · หยุด pending ได้ (งานส่งต่อแล้ว)
+ */
 export function adminAlertStateFromResult(r) {
   if (!r || typeof r !== "object") return "lost";
   if (r.ok === true) return "sent";
-  if (r.skipped === "deduped") return "sent";
+  if (r.skipped === "deduped") return "deduped";
   if (r.queued === true) return "queued";
   return "lost";
 }
+export const ADMIN_ALERT_STATES = Object.freeze(["sent", "queued", "deduped", "lost"]);
 
 export const REJECT_NOTIFY_STATES = Object.freeze([
   "unconfirmed",        // ไม่มีแถว outbound ที่ยืนยันได้ (enqueue คืนไม่มี id) → ห้าม mark
@@ -20,6 +25,7 @@ export const REJECT_NOTIFY_STATES = Object.freeze([
   "deduped_live",       // มีแถวเดิมอยู่ในคิว/ส่งแล้ว (queued/sending/retry_wait/sent) ไม่สร้างซ้ำ
   "stuck_alert_sent",   // แถวเดิม failed/dead · แจ้งแอดมินสำเร็จ → หยุดวนได้
   "stuck_alert_queued", // แถวเดิม failed/dead · เข้าคิวแจ้งแอดมินถาวรแล้ว → หยุดวนได้
+  "stuck_alert_deduped",// แถวเดิม failed/dead · เคยส่งต่อให้แอดมินไปแล้วก่อนหน้า (ส่ง/เข้าคิว ไม่รู้ว่าอันไหน) ยังไม่ยืนยันว่าได้รับ → หยุดวนได้ แต่ห้ามบอกว่า "สำเร็จ"
   "stuck_alert_lost",   // แถวเดิม failed/dead · แจ้งแอดมินไม่สำเร็จ → คง pending (retry เฉพาะการแจ้งแอดมิน)
 ]);
 
@@ -31,7 +37,7 @@ export function rejectNotifyOutcome(r) {
   const outboundStatus = r?.status ? String(r.status) : null;
   if (!r?.id) return { state: "unconfirmed", markable: false, customerQueued: false, adminAlert: null, outboundStatus };
   if (!r.stuck) return { state: r.deduped ? "deduped_live" : "queued", markable: true, customerQueued: true, adminAlert: null, outboundStatus };
-  const adminAlert = ["sent", "queued", "lost"].includes(String(r.adminAlert)) ? String(r.adminAlert) : "lost";
+  const adminAlert = ADMIN_ALERT_STATES.includes(String(r.adminAlert)) ? String(r.adminAlert) : "lost";
   return { state: `stuck_alert_${adminAlert}`, markable: adminAlert !== "lost", customerQueued: false, adminAlert, outboundStatus };
 }
 
@@ -44,6 +50,7 @@ export function rejectNotifyOperatorText(outcome, { already = false } = {}) {
     case "deduped_live": return already ? `รายการนี้ถูกปฏิเสธไปแล้วก่อนหน้านี้ — ข้อความแจ้งลูกค้ามีในคิว/ส่งแล้วอยู่ก่อน (${o.outboundStatus || "-"}) ไม่สร้างซ้ำ` : `ข้อความแจ้งลูกค้ามีในคิว/ส่งแล้วอยู่ก่อน (${o.outboundStatus || "-"}) ไม่สร้างซ้ำ`;
     case "stuck_alert_sent": return `${already ? "รายการนี้ถูกปฏิเสธไปแล้วก่อนหน้านี้ — " : ""}${stuckHead} — แจ้งแอดมินสำเร็จแล้ว ให้คนตรวจที่หน้า Admin/DLQ`;
     case "stuck_alert_queued": return `${already ? "รายการนี้ถูกปฏิเสธไปแล้วก่อนหน้านี้ — " : ""}${stuckHead} — เข้าคิวแจ้งแอดมินแล้ว (ยังไม่ยืนยันว่าแอดมินได้รับ)`;
+    case "stuck_alert_deduped": return `${already ? "รายการนี้ถูกปฏิเสธไปแล้วก่อนหน้านี้ — " : ""}${stuckHead} — เคยส่งต่อให้แอดมินไปแล้วก่อนหน้า (ส่งหรือเข้าคิวไว้ ยังไม่ยืนยันว่าแอดมินได้รับ) ไม่ส่งซ้ำ`;
     case "stuck_alert_lost": return `${already ? "รายการนี้ถูกปฏิเสธไปแล้วก่อนหน้านี้ — " : ""}${stuckHead} — แจ้งแอดมินไม่สำเร็จ ระบบจะลองแจ้งแอดมินใหม่เอง (ไม่สร้างข้อความลูกค้าใหม่ ไม่กระทบสถานะรายการ)`;
     default: return already ? "รายการนี้ถูกปฏิเสธไปแล้วก่อนหน้านี้ — เข้าคิวแจ้งลูกค้าที่ค้างไม่สำเร็จ ระบบจะลองเข้าคิวใหม่เอง" : "เข้าคิวแจ้งลูกค้าไม่สำเร็จ — ระบบจะลองเข้าคิวใหม่เองภายในไม่กี่นาที (ไม่กระทบสถานะรายการ)";
   }

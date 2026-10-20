@@ -54,7 +54,7 @@ test("แถวเดิม sent แล้ว → ไม่สร้างให
     [async () => ({ ok: false, queued: false, reason: "not_configured" }), "lost"],
     [async () => ({ ok: true }), "sent"],
     [async () => ({ ok: false, queued: true, reason: "send_failed", outboxId: 7 }), "queued"], // outbox ถาวร
-    [async () => ({ ok: false, skipped: "deduped" }), "sent"],
+    [async () => ({ ok: false, skipped: "deduped" }), "deduped"], // รอบ 5: ห้ามตีเป็น sent
     [async () => undefined, "lost"],
   ];
   for (const [onStuck, expect] of cases) {
@@ -63,7 +63,30 @@ test("แถวเดิม sent แล้ว → ไม่สร้างให
     const oc = rejectNotifyOutcome(d);
     assert.equal(oc.state, `stuck_alert_${expect}`); assert.equal(oc.markable, expect !== "lost", "lost ต้องไม่ markable"); assert.equal(oc.customerQueued, false, "stuck ไม่ใช่ลูกค้าเข้าคิว");
   }
-  assert.equal(adminAlertStateFromResult({ ok: true }), "sent");
+  assert.equal(adminAlertStateFromResult({ ok: true }), "sent"); assert.equal(adminAlertStateFromResult({ ok: false, skipped: "deduped" }), "deduped");
+});
+
+test("รอบ 5 (Codex) ต่อกันด้วย sendAdminAlert จริง: Telegram 503 → เข้า outbox (queued) → เรียกซ้ำติด dedupe → ต้องรายงาน 'เคยส่งต่อแล้ว ยังไม่ยืนยัน' ไม่ใช่ 'แจ้งแอดมินสำเร็จแล้ว' · หยุด pending ได้ · ไม่สร้างข้อความลูกค้า", async () => {
+  const ENV = { APP_ENV: "staging", ADMIN_ALERT_TELEGRAM_CHAT_ID: "-1001000000000001", TELEGRAM_BOT_TOKEN: "123456:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" };
+  const redis = (() => { const m = new Map(); return { m, getValue: async (k) => m.get(k) ?? null, setValueWithTtl: async (k, v) => { m.set(k, String(v)); } }; })();
+  const outbox = []; const db = { from: () => { throw new Error("direct table access must not be used"); }, rpc: async (fn, args) => { if (fn === "admin_alert_outbox_enqueue") { outbox.push(args); return { data: { queued: true, duplicate: false, id: outbox.length } }; } return { error: { message: "unknown rpc " + fn } }; } };
+  const tg = []; const fetchPlan = [503, 200]; let i = 0;
+  const fetch = async (url, init) => { tg.push(JSON.parse(init.body)); const st = fetchPlan[Math.min(i++, fetchPlan.length - 1)]; return st === 200 ? { ok: true, status: 200, json: async () => ({ ok: true }) } : { ok: false, status: st, json: async () => ({}) }; };
+  const alertDeps = { env: ENV, fetch, redis, db };
+  const dead = fakeOutboundTable([{ id: "ob-d", seq: 1, related_payment_id: P.paymentId, kind: "reject_notify", status: "dead" }]);
+  // ครั้งที่ 1: Telegram 503 → outbox → "queued"
+  const a = await quiet(() => enqueueRejectNotify(P, { ...dead, alertDeps }));
+  assert.deepEqual([a.stuck, a.adminAlert, outbox.length, tg.length, dead.inserts.length], [true, "queued", 1, 1, 0]);
+  const oa = rejectNotifyOutcome(a); assert.deepEqual([oa.state, oa.markable], ["stuck_alert_queued", true]); assert.match(rejectNotifyOperatorText(oa), /เข้าคิวแจ้งแอดมินแล้ว \(ยังไม่ยืนยันว่าแอดมินได้รับ\)/);
+  // ครั้งที่ 2 (เช่น Telegram กดซ้ำ / sweep): marker dedupe ถูกตั้งตอนเข้า outbox → sendAdminAlert ตอบ deduped แม้ยังไม่ได้ส่ง → ห้ามบอกว่าสำเร็จ
+  const b = await quiet(() => enqueueRejectNotify(P, { ...dead, alertDeps }));
+  assert.deepEqual([b.stuck, b.adminAlert, outbox.length, tg.length, dead.inserts.length], [true, "deduped", 1, 1, 0], "ไม่ยิง Telegram ซ้ำ ไม่เข้า outbox ซ้ำ ไม่สร้างข้อความลูกค้า");
+  const ob = rejectNotifyOutcome(b); assert.deepEqual([ob.state, ob.markable, ob.customerQueued, ob.adminAlert], ["stuck_alert_deduped", true, false, "deduped"], "หยุด pending ได้ (ส่งต่องานแล้ว) แต่สถานะต้นทางต้องชัด");
+  for (const t of [rejectNotifyOperatorText(ob), rejectNotifyOperatorText(ob, { already: true })]) { assert.doesNotMatch(t, /แจ้งแอดมินสำเร็จแล้ว/); assert.match(t, /เคยส่งต่อให้แอดมินไปแล้วก่อนหน้า/); assert.match(t, /ยังไม่ยืนยันว่าแอดมินได้รับ/); assert.match(t, /ข้อความแจ้งลูกค้าค้าง/); }
+  // เทียบ: ถ้าส่งสำเร็จจริง → sent
+  redis.m.clear(); const c = await quiet(() => enqueueRejectNotify(P, { ...dead, alertDeps })); assert.equal(c.adminAlert, "sent"); assert.equal(tg.length, 2);
+  // และเรียกซ้ำหลังส่งสำเร็จก็ยังเป็น deduped (ต้นทางไม่รู้ว่า marker มาจาก sent หรือ outbox) — util ไม่เดา
+  const d = await quiet(() => enqueueRejectNotify(P, { ...dead, alertDeps })); assert.equal(d.adminAlert, "deduped");
 });
 
 test("rejectNotifyOutcome/OperatorText: แยกสถานะ ลูกค้าเข้าคิว / ค้าง+แอดมินสำเร็จ / ค้าง+เข้าคิวแอดมิน / ค้าง+แอดมินล้ม / ไม่มีแถว — ข้อความไม่ใช้คำว่า 'เข้าคิวแจ้งลูกค้า' แทนทุกกรณี", () => {
@@ -72,10 +95,12 @@ test("rejectNotifyOutcome/OperatorText: แยกสถานะ ลูกค้
   const un = rejectNotifyOutcome({ deduped: false }); assert.deepEqual([un.state, un.markable], ["unconfirmed", false]); assert.deepEqual(rejectNotifyOutcome(null).state, "unconfirmed");
   const sent = rejectNotifyOutcome({ id: "a", status: "dead", deduped: true, stuck: true, adminAlert: "sent" }); assert.deepEqual([sent.state, sent.markable, sent.customerQueued, sent.adminAlert], ["stuck_alert_sent", true, false, "sent"]);
   const lost = rejectNotifyOutcome({ id: "a", status: "failed", deduped: true, stuck: true }); assert.deepEqual([lost.state, lost.markable], ["stuck_alert_lost", false]);
+  const dd = rejectNotifyOutcome({ id: "a", status: "dead", deduped: true, stuck: true, adminAlert: "deduped" }); assert.deepEqual([dd.state, dd.markable, dd.customerQueued], ["stuck_alert_deduped", true, false]);
+  assert.doesNotMatch(rejectNotifyOperatorText(dd), /สำเร็จ/); assert.match(rejectNotifyOperatorText(dd), /เคยส่งต่อให้แอดมินไปแล้วก่อนหน้า/);
   assert.match(rejectNotifyOperatorText(q), /เข้าคิวแจ้งลูกค้าทาง LINE แล้ว \(ยังไม่ยืนยันว่าส่งถึง\)/);
   assert.match(rejectNotifyOperatorText(q, { already: true }), /ถูกปฏิเสธไปแล้วก่อนหน้านี้ — เข้าคิวแจ้งลูกค้าที่ค้างอยู่ให้แล้ว/);
   assert.match(rejectNotifyOperatorText(dl), /มีในคิว\/ส่งแล้วอยู่ก่อน \(sent\) ไม่สร้างซ้ำ/);
-  for (const [oc, re] of [[sent, /แจ้งแอดมินสำเร็จแล้ว/], [rejectNotifyOutcome({ id: "a", status: "dead", stuck: true, deduped: true, adminAlert: "queued" }), /เข้าคิวแจ้งแอดมินแล้ว/], [lost, /แจ้งแอดมินไม่สำเร็จ ระบบจะลองแจ้งแอดมินใหม่เอง/]]) {
+  for (const [oc, re] of [[sent, /แจ้งแอดมินสำเร็จแล้ว/], [rejectNotifyOutcome({ id: "a", status: "dead", stuck: true, deduped: true, adminAlert: "queued" }), /เข้าคิวแจ้งแอดมินแล้ว/], [dd, /เคยส่งต่อให้แอดมินไปแล้วก่อนหน้า/], [lost, /แจ้งแอดมินไม่สำเร็จ ระบบจะลองแจ้งแอดมินใหม่เอง/]]) {
     const t = rejectNotifyOperatorText(oc); assert.match(t, /ข้อความแจ้งลูกค้าค้าง/); assert.match(t, re); assert.doesNotMatch(t, /เข้าคิวแจ้งลูกค้า/);
     const ta = rejectNotifyOperatorText(oc, { already: true }); assert.match(ta, /^รายการนี้ถูกปฏิเสธไปแล้วก่อนหน้านี้ — ข้อความแจ้งลูกค้าค้าง/); assert.doesNotMatch(ta, /เข้าคิวแจ้งลูกค้าที่ค้างอยู่ให้แล้ว/);
   }
