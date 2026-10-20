@@ -46,6 +46,7 @@ import {
 } from "../stores/abuseGuard.store.js";
 import { clearPaymentState } from "../stores/manualPaymentAccess.store.js";
 import { rejectNotifyTextFromSnapshot } from "../services/payments/rejectNotifySweep.service.js";
+import { rejectNotifyOutcome } from "../utils/rejectNotifyOutcome.util.js";
 import {
   enqueueApproveNotify,
   enqueueAdminSystemText,
@@ -1625,7 +1626,9 @@ export default function createAdminPaymentsDashboardRouter(_lineClient, deps = {
             paymentId,
             text: rejectNotifyTextFromSnapshot(notifySnapshot, { reason: rejectReason, moneyPending: moneyPendingNow }),
           });
-          if (!rejectEnq?.id) throw new Error("outbound_row_unconfirmed"); // ไม่ mark ถ้ายังไม่เห็นแถว outbound จริง → sweep กู้
+          // เกณฑ์เดียวกับ Telegram/sweep: mark queued เฉพาะ markable (มีแถวจริง และ ไม่ค้าง หรือ ค้างแต่ส่งต่อแอดมินสำเร็จ/เข้าคิวถาวร) · lost = คง pending ให้ sweep
+          const oc = rejectNotifyOutcome(rejectEnq);
+          if (!oc.markable) throw Object.assign(new Error(`reject_notify_keep_pending:${oc.state}`), { keepPending: true, state: oc.state });
           try { const ops = await loadPaymentOps(); await ops.markRejectNotifyQueued(paymentId); }
           catch (markErr) { console.error(JSON.stringify({ event: "ADMIN_REJECT_NOTIFY_MARK_FAILED", paymentId, reason: String(markErr?.message || markErr).slice(0, 120) })); }
           console.log(
@@ -1636,14 +1639,16 @@ export default function createAdminPaymentsDashboardRouter(_lineClient, deps = {
               outboundIdPrefix: rejectEnq?.id
                 ? String(rejectEnq.id).slice(0, 8)
                 : null,
-              deduped: Boolean(rejectEnq?.deduped),
-              stuck: Boolean(rejectEnq?.stuck),
+              state: oc.state,
+              adminAlert: oc.adminAlert,
+              outboundStatus: oc.outboundStatus,
             }),
           );
         } catch (notifyErr) {
           console.log(
             JSON.stringify({
-              event: "ADMIN_REJECT_NOTIFY_ENQUEUE_FAILED",
+              event: notifyErr?.keepPending ? "ADMIN_REJECT_NOTIFY_KEEP_PENDING" : "ADMIN_REJECT_NOTIFY_ENQUEUE_FAILED",
+              state: notifyErr?.state || null,
               paymentId,
               lineUserIdPrefix: String(lineUserId).slice(0, 8),
               message:

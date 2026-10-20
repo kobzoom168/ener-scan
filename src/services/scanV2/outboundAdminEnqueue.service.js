@@ -11,6 +11,7 @@ import {
   LINE_STICKER_PACKAGE_BROWN_CONY_SALLY_ANIMATED,
 } from "../../utils/lineStickerMessage.util.js";
 import { insertLineConversationMessage } from "../../stores/conversationMessages.db.js";
+import { adminAlertStateFromResult } from "../../utils/rejectNotifyOutcome.util.js";
 
 /**
  * @param {object} opts
@@ -93,8 +94,9 @@ export const REJECT_NOTIFY_LIVE_STATUSES = Object.freeze(["queued", "sending", "
 /**
  * เข้าคิวข้อความ "ไม่อนุมัติ" ให้ลูกค้า (kind reject_notify) — 1 แถวต่อ payment ตลอดอายุ (unique index sql/069 รอบ 3)
  *  - ตรวจแถวเดิมทุกสถานะก่อน · insert แล้วชน 23505 (แข่งกันเข้าคิว) = dedupe ไม่ใช่ error
- *  - แถวเดิม failed/dead/suppressed: ไม่สร้างใหม่เงียบ ๆ → คืน stuck=true + onStuck (default: log + sendAdminAlert) ให้คนตัดสินใจ (ไม่ requeue เอง)
- *  - คืน { id, status, deduped, stuck } · id มีค่าเมื่อยืนยันแล้วว่ามีแถว outbound จริง (ผู้เรียก mark queued เฉพาะเมื่อมี id)
+ *  - แถวเดิม failed/dead/suppressed: ไม่สร้างใหม่เงียบ ๆ → คืน stuck=true + onStuck (default: sendAdminAlert) ให้คนตัดสินใจ (ไม่ requeue เอง)
+ *    และบอกผลการส่งต่อ adminAlert = "sent" | "queued" (outbox ถาวร) | "lost" (throw/ไม่สำเร็จ) — ผู้เรียกใช้ rejectNotifyOutcome(): lost = คง pending ไว้ retry การแจ้งแอดมิน
+ *  - คืน { id, status, deduped, stuck, adminAlert } · id มีค่าเมื่อยืนยันแล้วว่ามีแถว outbound จริง
  * @param {{ lineUserId: string, paymentId: string, text: string }} p
  * @param {{ findExisting?: Function, insert?: Function, onStuck?: Function }} [deps]
  */
@@ -110,8 +112,11 @@ export async function enqueueRejectNotify({ lineUserId, paymentId, text }, deps 
     }
     console.error(JSON.stringify({ event: "OUTBOUND_REJECT_NOTIFY_EXISTING_NOT_DELIVERED", via, status, paymentIdPrefix: pidPrefix, outboundIdPrefix: String(row.id).slice(0, 8), note: "ไม่สร้างข้อความซ้ำ — ต้องมีคนดู (ห้าม requeue อัตโนมัติ)" }));
     const onStuck = deps.onStuck ?? defaultRejectNotifyStuckAlert;
-    try { await onStuck({ paymentId, outboundId: row.id, status }); } catch (e) { console.error(JSON.stringify({ event: "OUTBOUND_REJECT_NOTIFY_STUCK_ALERT_FAILED", paymentIdPrefix: pidPrefix, reason: String(e?.message || e).slice(0, 120) })); }
-    return { id: row.id, status, deduped: true, stuck: true };
+    let adminAlert = "lost";
+    try { adminAlert = adminAlertStateFromResult(await onStuck({ paymentId, outboundId: row.id, status })); }
+    catch (e) { console.error(JSON.stringify({ event: "OUTBOUND_REJECT_NOTIFY_STUCK_ALERT_FAILED", paymentIdPrefix: pidPrefix, reason: String(e?.message || e).slice(0, 120) })); }
+    if (adminAlert === "lost") console.error(JSON.stringify({ event: "OUTBOUND_REJECT_NOTIFY_STUCK_ALERT_LOST", paymentIdPrefix: pidPrefix, note: "คง reject_notify_pending ไว้ → sweep ลองแจ้งแอดมินใหม่ (ไม่สร้างข้อความลูกค้าใหม่)" }));
+    return { id: row.id, status, deduped: true, stuck: true, adminAlert };
   };
 
   const existing = await findExisting(paymentId, "reject_notify");
@@ -137,7 +142,7 @@ export async function enqueueRejectNotify({ lineUserId, paymentId, text }, deps 
   }
 
   console.log(JSON.stringify({ event: "OUTBOUND_ADMIN_ENQUEUED", kind: "reject_notify", paymentIdPrefix: pidPrefix, outboundIdPrefix: row?.id ? String(row.id).slice(0, 8) : null }));
-  return { id: row?.id ?? null, status: "queued", deduped: false, stuck: false };
+  return { id: row?.id ?? null, status: "queued", deduped: false, stuck: false, adminAlert: null };
 }
 
 async function defaultRejectNotifyStuckAlert({ paymentId, outboundId, status }) {

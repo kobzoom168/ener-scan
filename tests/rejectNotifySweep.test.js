@@ -23,7 +23,7 @@ test("sweep: enqueue สำเร็จ → mark · enqueue ล้ม → ไม
   assert.equal(s3.error, "list_failed");
 });
 
-test("รอบ 3: ข้อความจาก snapshot แม้ settlement/reason ปัจจุบันเปลี่ยนแล้ว · enqueue ไม่คืน id → ไม่ mark (unconfirmed) · แถวเดิม sent = deduped+mark · แถว dead = stuck+mark (ไม่สร้างซ้ำ)", async () => {
+test("รอบ 3/4: ข้อความจาก snapshot แม้ settlement/reason ปัจจุบันเปลี่ยนแล้ว · enqueue ไม่คืน id → ไม่ mark (unconfirmed) · แถวเดิม sent = deduped+mark · แถว dead: แจ้งแอดมิน sent/queued = mark, lost = คง pending", async () => {
   const snapRow = { payment_id: "p9", line_user_id: "U9", reject_reason: "แก้ทีหลัง", settlement_status: "refunded", rejected_at: "2026-10-20T04:54:15Z", reject_notify_snapshot: { reasonText: "ยอดเงินไม่ตรง", reasonCode: "amount", moneyPending: true } };
   const marks = []; const enq = [];
   const store = { listRejectNotifyPending: async () => [snapRow], markRejectNotifyQueued: async (id) => { marks.push(id); return true; } };
@@ -37,9 +37,14 @@ test("รอบ 3: ข้อความจาก snapshot แม้ settlement/
   const marks2 = []; const oe = console.error; console.error = () => {}; let s2;
   try { s2 = await sweepRejectNotifyPending({ store: { listRejectNotifyPending: async () => [snapRow], markRejectNotifyQueued: async (id) => { marks2.push(id); return true; } }, enqueueRejectNotify: async () => ({ deduped: false }) }); } finally { console.error = oe; }
   assert.deepEqual([s2.unconfirmed, s2.queued, marks2.length], [1, 0, 0]);
-  // sent แล้ว → deduped + mark · dead → stuck + mark
-  const marks3 = [];
-  const st3 = { listRejectNotifyPending: async () => [snapRow, { ...snapRow, payment_id: "p10" }], markRejectNotifyQueued: async (id) => { marks3.push(id); return true; } };
-  const s3 = await sweepRejectNotifyPending({ store: st3, enqueueRejectNotify: async (a) => (a.paymentId === "p9" ? { id: "o9", status: "sent", deduped: true, stuck: false } : { id: "o10", status: "dead", deduped: true, stuck: true }) });
-  assert.deepEqual([s3.deduped, s3.stuck, s3.queued], [1, 1, 0]); assert.deepEqual(marks3, ["p9", "p10"]);
+  // sent แล้ว → deduped + mark · dead + แจ้งแอดมินสำเร็จ → stuck + mark · dead + เข้าคิวแจ้งเตือนถาวร → stuck + mark · dead + alert สูญหาย → stuckLost ไม่ mark (รอบหน้าลองแจ้งแอดมินใหม่ ไม่สร้างข้อความลูกค้า)
+  const marks3 = []; const enq3 = [];
+  const rowsStuck = [snapRow, { ...snapRow, payment_id: "p10" }, { ...snapRow, payment_id: "p11" }, { ...snapRow, payment_id: "p12" }];
+  const st3 = { listRejectNotifyPending: async () => rowsStuck, markRejectNotifyQueued: async (id) => { marks3.push(id); return true; } };
+  const oe3 = console.error; console.error = () => {}; let s3;
+  try { s3 = await sweepRejectNotifyPending({ store: st3, enqueueRejectNotify: async (a) => { enq3.push(a.paymentId); return ({ p9: { id: "o9", status: "sent", deduped: true, stuck: false }, p10: { id: "o10", status: "dead", deduped: true, stuck: true, adminAlert: "sent" }, p11: { id: "o11", status: "failed", deduped: true, stuck: true, adminAlert: "queued" }, p12: { id: "o12", status: "dead", deduped: true, stuck: true, adminAlert: "lost" } })[a.paymentId]; } }); } finally { console.error = oe3; }
+  assert.deepEqual([s3.deduped, s3.stuck, s3.stuckLost, s3.queued, s3.unconfirmed], [1, 2, 1, 0, 0]); assert.deepEqual(marks3, ["p9", "p10", "p11"], "p12 (alert lost) ต้องคง pending");
+  // รอบถัดไป p12 ถูก list อีก → enqueue อีกครั้ง (ไม่สร้างข้อความลูกค้าใหม่ — dedupe ที่ enqueue) → ถ้าแจ้งแอดมินสำเร็จแล้วค่อย mark
+  const marks4 = []; const s4 = await sweepRejectNotifyPending({ store: { listRejectNotifyPending: async () => [rowsStuck[3]], markRejectNotifyQueued: async (id) => { marks4.push(id); return true; } }, enqueueRejectNotify: async () => ({ id: "o12", status: "dead", deduped: true, stuck: true, adminAlert: "sent" }) });
+  assert.deepEqual([s4.stuck, marks4], [1, ["p12"]]);
 });

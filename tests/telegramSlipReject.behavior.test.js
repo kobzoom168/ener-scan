@@ -132,11 +132,32 @@ test("enqueue แจ้งลูกค้าล้ม: ปฏิเสธสำ�
   const oe4 = console.error; console.error = () => {};
   let r4; try { r4 = await svc.handleApprovalCallback(cb(rr4.replyMarkup.inline_keyboard[0][0].callback_data), d4); } finally { console.error = oe4; }
   assert.match(r4.text, /เข้าคิวแจ้งลูกค้าไม่สำเร็จ/); assert.equal(d4.marks.length, 0, "ไม่มีแถว outbound ยืนยัน = ห้าม mark");
-  // แถวเดิม failed/dead (stuck) → มีแถวจริง mark ได้ แต่ข้อความบอกว่าไม่สร้างซ้ำและแจ้งแอดมิน
-  const d5 = mkDeps({ notifyCustomerReject: async () => ({ id: "ob-dead", status: "dead", deduped: true, stuck: true }) });
-  const rr5 = await svc.handleApprovalCallback(cb(`rr:${PAY.paymentId}:amount`), d5);
-  const r5 = await svc.handleApprovalCallback(cb(rr5.replyMarkup.inline_keyboard[0][0].callback_data), d5);
-  assert.match(r5.text, /มีอยู่แล้วแต่ส่งไม่สำเร็จก่อนหน้า — ระบบไม่สร้างซ้ำ/); assert.deepEqual(d5.marks, [PAY.paymentId]);
+  // รอบ 4 (Codex): แถวเดิม failed/dead (stuck) — หยุดวน (mark) ได้เฉพาะเมื่อส่งต่อแอดมินสำเร็จ (sent) หรือเข้าคิวแจ้งเตือนถาวร (queued) · lost = คง pending · ข้อความ/audit แยกสถานะชัด
+  const stuckRun = async (adminAlert, already = false) => {
+    const d = mkDeps({ notifyCustomerReject: async () => ({ id: "ob-dead", status: "dead", deduped: true, stuck: true, adminAlert }), ...(already ? { rejectPayment: async () => ({ ok: true, already: true, lineUserId: PAY.lineUserId, settlementStatus: "money_pending", notifyPending: true, notifySnapshot: { reasonText: "x", moneyPending: true } }) } : {}) });
+    const rr = await svc.handleApprovalCallback(cb(`rr:${PAY.paymentId}:amount`), d);
+    const oe = console.error; console.error = () => {};
+    let r; try { r = await svc.handleApprovalCallback(cb(rr.replyMarkup.inline_keyboard[0][0].callback_data), d); } finally { console.error = oe; }
+    const audit = d.db.audit.filter((a) => a.p_action === "reject_confirmed").map((a) => a.p_detail)[0];
+    return { r, d, audit };
+  };
+  let s5 = await stuckRun("sent");
+  assert.match(s5.r.text, /ข้อความแจ้งลูกค้าค้าง \(outbound dead ก่อนหน้า\) ระบบไม่สร้างซ้ำ — แจ้งแอดมินสำเร็จแล้ว/); assert.doesNotMatch(s5.r.text, /เข้าคิวแจ้งลูกค้าทาง LINE แล้ว/); assert.deepEqual(s5.d.marks, [PAY.paymentId], "ส่งต่อแอดมินสำเร็จ → หยุดวนได้");
+  assert.deepEqual([s5.audit.notify.state, s5.audit.notify.marked, s5.audit.notify.customerQueued, s5.audit.notify.adminAlert], ["stuck_alert_sent", true, false, "sent"], "audit ต้องไม่บอกว่า queued ลูกค้า");
+  s5 = await stuckRun("queued");
+  assert.match(s5.r.text, /เข้าคิวแจ้งแอดมินแล้ว \(ยังไม่ยืนยันว่าแอดมินได้รับ\)/); assert.deepEqual(s5.d.marks, [PAY.paymentId]); assert.equal(s5.audit.notify.state, "stuck_alert_queued");
+  s5 = await stuckRun("lost");
+  assert.match(s5.r.text, /แจ้งแอดมินไม่สำเร็จ ระบบจะลองแจ้งแอดมินใหม่เอง \(ไม่สร้างข้อความลูกค้าใหม่/); assert.equal(s5.d.marks.length, 0, "alert สูญหาย → ห้ามล้าง pending"); assert.deepEqual([s5.audit.notify.state, s5.audit.notify.marked], ["stuck_alert_lost", false]);
+  s5 = await stuckRun(undefined); assert.equal(s5.d.marks.length, 0, "ไม่รู้ผล alert = lost"); assert.equal(s5.audit.notify.state, "stuck_alert_lost");
+  // already + stuck → ห้ามตอบว่า "เข้าคิวแจ้งลูกค้าที่ค้างอยู่ให้แล้ว"
+  s5 = await stuckRun("sent", true);
+  assert.match(s5.r.text, /ถูกปฏิเสธไปแล้วก่อนหน้านี้ — ข้อความแจ้งลูกค้าค้าง/); assert.doesNotMatch(s5.r.text, /เข้าคิวแจ้งลูกค้าที่ค้างอยู่ให้แล้ว/); assert.deepEqual(s5.d.marks, [PAY.paymentId]); assert.equal(s5.audit.already, true); assert.equal(s5.audit.notify.state, "stuck_alert_sent");
+  s5 = await stuckRun("lost", true);
+  assert.match(s5.r.text, /ถูกปฏิเสธไปแล้วก่อนหน้านี้ — ข้อความแจ้งลูกค้าค้าง.*แจ้งแอดมินไม่สำเร็จ/); assert.equal(s5.d.marks.length, 0);
+  // deduped แถวมีชีวิต (sent แล้ว) → ไม่สร้างซ้ำ แต่ mark ได้ · already + deduped_live ไม่พูดว่า "เข้าคิวให้แล้ว"
+  const d6 = mkDeps({ notifyCustomerReject: async () => ({ id: "ob-s", status: "sent", deduped: true, stuck: false }) });
+  const rr6 = await svc.handleApprovalCallback(cb(`rr:${PAY.paymentId}:amount`), d6); const r6 = await svc.handleApprovalCallback(cb(rr6.replyMarkup.inline_keyboard[0][0].callback_data), d6);
+  assert.match(r6.text, /มีในคิว\/ส่งแล้วอยู่ก่อน \(sent\) ไม่สร้างซ้ำ/); assert.deepEqual(d6.marks, [PAY.paymentId]);
   // already + notifyPending=false (เข้าคิวไปแล้ว) → ไม่แจ้งซ้ำ
   const d3 = mkDeps({ rejectPayment: async () => ({ ok: true, already: true, lineUserId: PAY.lineUserId, settlementStatus: "money_pending", notifyPending: false }) });
   const rr3 = await svc.handleApprovalCallback(cb(`rr:${PAY.paymentId}:amount`), d3);
@@ -168,14 +189,15 @@ test("static: role จำกัด payment_ops_writer (ไม่ใช่ anon) 
   assert.match(fnBody, /ยังไม่ต้องโอนเพิ่มหรือส่งสลิปใหม่/); assert.match(fnBody, /if \(moneyPending\) \{[\s\S]*?return lines\.join/, "เส้น moneyPending ต้อง return ก่อนบรรทัดชวนเริ่มชำระใหม่");
   const admin = read("src/routes/adminPaymentsDashboard.routes.js");
   assert.match(admin, /moneyPending: moneyPendingNow, notifyPending, notifySnapshot \} = await markPaymentRejected/); assert.match(admin, /channel: "web"/); assert.match(admin, /if \(lineUserId && notifyPending\)/);
-  assert.match(admin, /rejectNotifyTextFromSnapshot\(notifySnapshot/, "Admin ใช้ snapshot ทำข้อความลูกค้า"); assert.match(admin, /if \(!rejectEnq\?\.id\) throw/, "mark queued เฉพาะเมื่อมีแถว outbound จริง");
+  assert.match(admin, /rejectNotifyTextFromSnapshot\(notifySnapshot/, "Admin ใช้ snapshot ทำข้อความลูกค้า"); assert.match(admin, /const oc = rejectNotifyOutcome\(rejectEnq\);\s*\n\s*if \(!oc\.markable\) throw/, "Admin mark queued เฉพาะ markable (เกณฑ์เดียวกับ Telegram/sweep)");
+  assert.match(read("src/services/payments/telegramSlipApproval.service.js"), /if \(oc\.markable && typeof deps\.markRejectNotifyQueued/); assert.match(read("src/services/payments/rejectNotifySweep.service.js"), /const oc = rejectNotifyOutcome\(q\);\s*\n\s*if \(!oc\.markable\)/);
   assert.match(admin, /router\.post\("\/admin\/payments\/:id\/settlement", requireAdminSessionOnly/, "settlement ต้อง session-only (ไม่รับ legacy token)");
   assert.doesNotMatch(admin, /settlement", requireAdminSession,/); assert.match(admin, /req\.session\?\.admin\?\.loginAt/, "actor จาก session.admin.loginAt");
   assert.match(read("src/routes/adminAuth.routes.js"), /req\.session\.admin = \{ authenticated: true, loginAt: new Date\(\)\.toISOString\(\) \}/, "login ต้องตั้ง loginAt");
   const enq = read("src/services/scanV2/outboundAdminEnqueue.service.js");
   assert.match(enq, /findOutboundByPaymentAndKindAnyStatus/, "dedupe ต้องดูทุกสถานะ"); assert.match(enq, /"23505"/, "unique violation = dedupe"); assert.doesNotMatch(enq.split("export async function enqueueRejectNotify")[1].split("\nasync function")[0], /findActiveOutboundByPaymentAndKind\(/);
   const sweep = read("src/services/payments/rejectNotifySweep.service.js");
-  assert.match(sweep, /rejectNotifyTextFromSnapshot\(r\.reject_notify_snapshot/); assert.match(sweep, /if \(!q\?\.id\)/);
+  assert.match(sweep, /rejectNotifyTextFromSnapshot\(r\.reject_notify_snapshot/); assert.match(sweep, /if \(!oc\.markable\)/); assert.doesNotMatch(sweep, /if \(!q\?\.id\)/, "sweep ต้องตัดสินด้วย rejectNotifyOutcome ไม่ใช่แค่ id");
   const sel = store.split("const ADMIN_PAYMENT_LIST_SELECT")[1].split("`;")[0]; for (const c of ["settlement_status", "settlement_note", "settlement_by"]) assert.ok(sel.includes(c), "ADMIN_PAYMENT_LIST_SELECT ต้องมี " + c); assert.match(admin, /timingSafeEqual\(Buffer\.from\(csrf\), Buffer\.from\(expected\)\)/); assert.match(admin, /ops\.resolveSettlement\(/); assert.doesNotMatch(admin, /supabase\.rpc\("payment_settlement_resolve"/);
   assert.match(admin, /export function settlementBlockHtml\(p, postBase, csrf = ""\)/); assert.match(admin, /<div>settlement<\/div><div>\$\{settlementBlockHtml\(p, `\/admin\/payments\/\$\{encodeURIComponent\(String\(p\.id\)\)\}`, csrf\)\}<\/div>/, "หน้ารายละเอียดต้องเรียก block พร้อม csrf");
   assert.match(admin, /csrf: \(req\.session\.paymentOpsCsrf \|\|= randomBytes\(24\)\.toString\("hex"\)\)/);

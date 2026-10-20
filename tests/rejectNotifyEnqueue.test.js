@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 for (const [k, v] of Object.entries({ SUPABASE_URL: "http://127.0.0.1:9", LOCAL_POSTGREST_URL: "http://127.0.0.1:9", LOCAL_POSTGREST_ANON_KEY: "x", LOCAL_POSTGREST_SERVICE_KEY: "x", SUPABASE_SERVICE_ROLE_KEY: "x", OPENAI_API_KEY: "sk-test", CHANNEL_ACCESS_TOKEN: "t", CHANNEL_SECRET: "s", GEMINI_API_KEY: "g", REDIS_URL: "" })) process.env[k] ??= v;
 globalThis.fetch = async () => { throw new Error("external network forbidden"); };
 const { enqueueRejectNotify, REJECT_NOTIFY_LIVE_STATUSES } = await import("../src/services/scanV2/outboundAdminEnqueue.service.js");
+const { rejectNotifyOutcome, rejectNotifyOperatorText, adminAlertStateFromResult } = await import("../src/utils/rejectNotifyOutcome.util.js");
 
 /** ตาราง outbound ปลอมที่บังคับ unique (related_payment_id) WHERE kind='reject_notify' เหมือน DB — insert ชน = error.code 23505 */
 function fakeOutboundTable(seed = []) {
@@ -45,9 +46,40 @@ test("แถวเดิม sent แล้ว → ไม่สร้างให
     assert.equal(stuckCalls.length, 1); assert.equal(stuckCalls[0].paymentId, P.paymentId); assert.equal(stuckCalls[0].status, st);
     const other = await quiet(() => enqueueRejectNotify({ ...P, paymentId: "11111111-2222-4333-8444-555555555555" }, t)); assert.equal(other.deduped, false); assert.equal(t.rows.length, 2);
   }
-  // onStuck ล้ม (เช่น Telegram alert ส่งไม่ได้) → ยังคืนผล stuck ไม่โยน
-  const t2 = fakeOutboundTable([{ id: "ob-d", seq: 1, related_payment_id: P.paymentId, kind: "reject_notify", status: "dead" }]);
-  const d2 = await quiet(() => enqueueRejectNotify(P, { ...t2, onStuck: async () => { throw new Error("alert down"); } })); assert.equal(d2.stuck, true);
+  // รอบ 4 (Codex): ผลการแจ้งแอดมินต้องสะท้อนใน adminAlert — throw/LOST → "lost" (ห้ามล้าง pending) · ส่งสำเร็จ → "sent" · เข้าคิวถาวร → "queued" · dedupe (เคยส่งในหน้าต่าง) → "sent"
+  const dead = () => fakeOutboundTable([{ id: "ob-d", seq: 1, related_payment_id: P.paymentId, kind: "reject_notify", status: "dead" }]);
+  const cases = [
+    [async () => { throw new Error("alert down"); }, "lost"],
+    [async () => ({ ok: false, queued: false, reason: "send_failed" }), "lost"],     // ADMIN_ALERT_LOST
+    [async () => ({ ok: false, queued: false, reason: "not_configured" }), "lost"],
+    [async () => ({ ok: true }), "sent"],
+    [async () => ({ ok: false, queued: true, reason: "send_failed", outboxId: 7 }), "queued"], // outbox ถาวร
+    [async () => ({ ok: false, skipped: "deduped" }), "sent"],
+    [async () => undefined, "lost"],
+  ];
+  for (const [onStuck, expect] of cases) {
+    const t = dead(); const d = await quiet(() => enqueueRejectNotify(P, { ...t, onStuck }));
+    assert.deepEqual([d.stuck, d.adminAlert, t.inserts.length], [true, expect, 0], `adminAlert=${expect}`);
+    const oc = rejectNotifyOutcome(d);
+    assert.equal(oc.state, `stuck_alert_${expect}`); assert.equal(oc.markable, expect !== "lost", "lost ต้องไม่ markable"); assert.equal(oc.customerQueued, false, "stuck ไม่ใช่ลูกค้าเข้าคิว");
+  }
+  assert.equal(adminAlertStateFromResult({ ok: true }), "sent");
+});
+
+test("rejectNotifyOutcome/OperatorText: แยกสถานะ ลูกค้าเข้าคิว / ค้าง+แอดมินสำเร็จ / ค้าง+เข้าคิวแอดมิน / ค้าง+แอดมินล้ม / ไม่มีแถว — ข้อความไม่ใช้คำว่า 'เข้าคิวแจ้งลูกค้า' แทนทุกกรณี", () => {
+  const q = rejectNotifyOutcome({ id: "a", status: "queued", deduped: false, stuck: false }); assert.deepEqual([q.state, q.markable, q.customerQueued], ["queued", true, true]);
+  const dl = rejectNotifyOutcome({ id: "a", status: "sent", deduped: true, stuck: false }); assert.deepEqual([dl.state, dl.markable, dl.customerQueued], ["deduped_live", true, true]);
+  const un = rejectNotifyOutcome({ deduped: false }); assert.deepEqual([un.state, un.markable], ["unconfirmed", false]); assert.deepEqual(rejectNotifyOutcome(null).state, "unconfirmed");
+  const sent = rejectNotifyOutcome({ id: "a", status: "dead", deduped: true, stuck: true, adminAlert: "sent" }); assert.deepEqual([sent.state, sent.markable, sent.customerQueued, sent.adminAlert], ["stuck_alert_sent", true, false, "sent"]);
+  const lost = rejectNotifyOutcome({ id: "a", status: "failed", deduped: true, stuck: true }); assert.deepEqual([lost.state, lost.markable], ["stuck_alert_lost", false]);
+  assert.match(rejectNotifyOperatorText(q), /เข้าคิวแจ้งลูกค้าทาง LINE แล้ว \(ยังไม่ยืนยันว่าส่งถึง\)/);
+  assert.match(rejectNotifyOperatorText(q, { already: true }), /ถูกปฏิเสธไปแล้วก่อนหน้านี้ — เข้าคิวแจ้งลูกค้าที่ค้างอยู่ให้แล้ว/);
+  assert.match(rejectNotifyOperatorText(dl), /มีในคิว\/ส่งแล้วอยู่ก่อน \(sent\) ไม่สร้างซ้ำ/);
+  for (const [oc, re] of [[sent, /แจ้งแอดมินสำเร็จแล้ว/], [rejectNotifyOutcome({ id: "a", status: "dead", stuck: true, deduped: true, adminAlert: "queued" }), /เข้าคิวแจ้งแอดมินแล้ว/], [lost, /แจ้งแอดมินไม่สำเร็จ ระบบจะลองแจ้งแอดมินใหม่เอง/]]) {
+    const t = rejectNotifyOperatorText(oc); assert.match(t, /ข้อความแจ้งลูกค้าค้าง/); assert.match(t, re); assert.doesNotMatch(t, /เข้าคิวแจ้งลูกค้า/);
+    const ta = rejectNotifyOperatorText(oc, { already: true }); assert.match(ta, /^รายการนี้ถูกปฏิเสธไปแล้วก่อนหน้านี้ — ข้อความแจ้งลูกค้าค้าง/); assert.doesNotMatch(ta, /เข้าคิวแจ้งลูกค้าที่ค้างอยู่ให้แล้ว/);
+  }
+  assert.match(rejectNotifyOperatorText(un), /เข้าคิวแจ้งลูกค้าไม่สำเร็จ — ระบบจะลองเข้าคิวใหม่เอง/);
 });
 
 test("23505 แต่หาแถวผู้ชนะไม่พบ (DB ผิดปกติ) → โยน error ไม่คืน id ปลอม · error อื่นจาก insert → โยนต่อ", async () => {
