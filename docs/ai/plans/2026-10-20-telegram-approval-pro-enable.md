@@ -40,3 +40,10 @@
 - **สร้าง bot และกลุ่มใหม่สำหรับ Pro แยกจาก staging** · คง `@ener_kob_approval_test_bot` + กลุ่ม "approval ener scan" (-5440947116) ไว้สำหรับ staging ตามเดิม (ไม่แตะ)
 - ลำดับต่อไป (รอกบ): (1) กบสร้าง bot ใหม่ที่ @BotFather + กลุ่มใหม่ เชิญ bot เข้ากลุ่ม (2) กบกรอกหน้า Admin Pro `https://scan.my-ener.uk/admin/telegram-approval`: Bot Token · Chat ID ของกลุ่มใหม่ · ผู้อนุมัติ 1–2 คน (label + Telegram user id) → บันทึก (3) กบยืนยันรายชื่อผู้อนุมัติกับผม → ผม: `status` (configured=true) → `bot-info` (username ตรง) → `enable` → `verify-endpoint` 401 → `set-webhook` → `webhook-info` → ทดสอบจริงด้วย Test UID ตามข้อ 2.4/3.6 → รายงาน SHA/config/เวลา/ผลจริง
 - ยังไม่ปิดแจ้งสลิปทาง LINE จนทดสอบผ่านและกบสั่งปิดแยก · ไม่แตะนโยบาย/ยอดสิทธิ์
+
+## 6. เปิดใช้งานบน Pro (20 ต.ค. 2026 11:31–11:36 ไทย)
+- กบสร้าง bot ใหม่ `@ener_scan_approval_pro_bot` (id 8947287801, getMe ✓) + กลุ่มใหม่ "approval ener scan pro" chat id `-5564579265` (type group; อ่านจาก getUpdates หลัง `/start@bot` — ค่าเดิม `-1001` ชั่วคราวถูกแก้แล้ว) · ผู้อนุมัติ 1 คน: กบ `7486743496` (คนที่ 2 ยังไม่มี — กบสั่งเอาคนเดียวก่อน)
+- กบบันทึกหน้า Admin: token 11:31 · chat id/ผู้อนุมัติ 11:35 (`ADMIN_TELEGRAM_CFG_SAVED approverCount=1`)
+- ops (script `4e7c0eb` sha256 ตรง): `status` configured=true → endpoint ปิด 404/404 → **`enable` 11:36:01** (actor ops:pro-enable-20261020) → endpoint 401/401 (ไม่มี secret/secret ผิด; log `TELEGRAM_WEBHOOK_BAD_SECRET` ×2 = ของ verify เอง) → **`set-webhook` 11:36:04** url `https://scan.my-ener.uk/telegram/webhook` secret จาก DB allowed callback_query drop_pending → `webhook-info` url ตรง pending 0 last_error ว่าง → `webhook_set_at` บันทึก · หลักฐาน `/root/backup-ops-20261002/pro-tg-20261020-041326/enable.json`
+- config ที่มีผล: **DB authority** (ไม่มี env-authority) · โค้ด Pro `c102b71` ไม่เปลี่ยน · bot/กลุ่มทดสอบ staging ไม่แตะ (staging ยัง enabled=false webhook ว่าง)
+- baseline Test UID ก่อนทดสอบ (read-only) → ดู §7
