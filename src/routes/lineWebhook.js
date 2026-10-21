@@ -5140,13 +5140,14 @@ async function handleTextMessage({ client, event, userId, session }) {
 
   // 🆓 P2 (chat-quality 20 ต.ค. 2026 เคส A · Codex 21 ต.ค.): คำถามสิทธิ์ฟรี "ดูฟรีไหม/สแกนฟรีมั้ย" = AI=0
   // ตอบจากนโยบาย + สิทธิ์รายคน (checkScanAccess → resolveEntitlementState) ทั้งแง่ผลเก่าดูฟรี และสแกนใหม่
-  // ข้าม state awaiting_slip (กำลังชำระ มี handler ของตัวเอง) · ไม่ส่งการ์ดขาย · อ่านสิทธิ์ล้ม = ตอบเฉพาะที่ทราบ
-  if (getPaymentState(userId).state !== "awaiting_slip") {
+  // ขอบเขต idle/paywall เท่านั้น ตัดสินจาก geminiSnapshot ที่ resolve จาก DB + memory (Codex รอบ 2: ห้ามใช้ memory อย่างเดียว —
+  // DB awaiting_payment แต่ memory none หลัง restart ต้องไม่แย่งเส้น awaiting_slip/pending_verify) · ไม่ส่งการ์ดขาย · อ่านสิทธิ์ล้ม = ตอบเฉพาะที่ทราบ
+  {
     const fq = await import("../services/lineWebhook/freeQuestionReply.util.js");
     if (fq.matchFreeQuestion(text)) {
       const { resolveEntitlementState, thaiDateTime } = await import("../services/entitlementCopy.service.js");
       const done = await fq.handleFreeQuestion({
-        client, userId, replyToken: event.replyToken, text,
+        client, userId, replyToken: event.replyToken, text, snapshot: geminiSnapshot,
         deps: { sendNonScanReply, checkScanAccess, resolveEntitlementState, thaiDate: thaiDateTime },
       });
       if (done) return;

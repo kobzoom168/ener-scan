@@ -6,15 +6,37 @@
  */
 export const FREE_QUESTION_REPLY_TYPE = "free_question_entitlement";
 const QUESTION_MARK_RE = /(ไหม|มั้ย|หรือเปล่า|รึเปล่า|หรือไม่|ป่ะ|ปะ|\?|ได้ยัง|ยังฟรี|ฟรีอยู่|มีฟรี)/u;
-const VERB_FREE_RE = /(ดู|สแกน|ใช้|ลอง|ส่ง|ทำ|เช็ค|อ่าน|เปิด)\s*ฟรี/u;
-const EXCLUDE_RE = /(โอน|สลิป|จ่ายแล้ว|ชำระแล้ว|แนบ|ชวนเพื่อน|โปรโมชั่น|ส่วนลด|แจก|ของฟรี)/u;
+/** บริบท "สิทธิ์ใช้บริการสแกน/ดูผล" เท่านั้น — กริยาใช้งานติดกับ "ฟรี" (Codex รอบ 2: "ส่ง/ทำ" ตัดออก เพราะชน "ค่าส่งฟรี") */
+const VERB_FREE_RE = /(ดู|สแกน|ใช้|ลอง|เช็ค|อ่าน|เปิด)\s*ฟรี/u;
+const SERVICE_NOUN_RE = /(สแกน|ดูผล|ผลเก่า|รายงาน|สิทธิ์|ทดลอง|โควต้า|โควตา|ครั้ง)/u;
+/** ประโยคสั้นที่ถามเรื่องฟรีล้วน ๆ เช่น "ฟรีไหม" "ยังฟรีอยู่ไหม" "มีฟรีมั้ยคะ" */
+const BARE_FREE_RE = /^(ตอนนี้|วันนี้)?(ยัง)?(มี)?ฟรี(อยู่)?(ไหม|มั้ย|หรือเปล่า|รึเปล่า|ป่ะ|ปะ|หรือไม่|ได้ยัง|\?)(ครับ|คับ|คะ|ค่ะ|นะ)?\??$/u; // ต้องมีรูปคำถาม — "ฟรี" เฉย ๆ ไม่จับ
+const EXCLUDE_RE = /(โอน|สลิป|จ่ายแล้ว|ชำระแล้ว|แนบ|ชวนเพื่อน|โปรโมชั่น|ส่วนลด|แจก|ของฟรี|ค่าส่ง|จัดส่ง|ส่งฟรี|ค่าธรรมเนียม|ค่าบริการ|ค่าจัดส่ง|อาหาร|wifi|ไวไฟ|ที่จอด)/iu;
 
-/** @param {string} text @returns {boolean} */
+/** @param {string} text @returns {boolean} true = คำถามสิทธิ์ฟรีของบริการสแกน/ดูผล (ไม่ใช่แค่มีคำว่า "ฟรี" + คำถาม) */
 export function matchFreeQuestion(text) {
   const t = String(text || "").trim();
   if (!t || t.length > 60 || !t.includes("ฟรี")) return false;
   if (EXCLUDE_RE.test(t)) return false;
-  return QUESTION_MARK_RE.test(t) || VERB_FREE_RE.test(t);
+  if (BARE_FREE_RE.test(t.replace(/\s+/g, ""))) return true;
+  if (VERB_FREE_RE.test(t)) return true;
+  return SERVICE_NOUN_RE.test(t) && QUESTION_MARK_RE.test(t);
+}
+
+/**
+ * ขอบเขตที่ P2 รับผิดชอบ = idle / scan-ready idle / paywall (กำลังเลือกแพ็ก) เท่านั้น — ตัดสินจาก snapshot ที่ resolve จาก DB + memory แล้ว
+ * (Codex รอบ 2: memory อย่างเดียวหลุดหลัง restart — DB awaiting_payment แต่ memory none ต้องไม่แย่งเส้น awaiting_slip)
+ * @param {{ hasPendingVerify?: boolean, hasAwaitingSlip?: boolean, paymentMemoryState?: string, paymentState?: string, flowState?: string, canonicalStateOwner?: string }|null|undefined} s
+ */
+export function freeQuestionScopeAllowed(s) {
+  if (!s || typeof s !== "object") return false; // ไม่มี snapshot = ไม่รู้สถานะ → ไม่แย่งเส้น
+  if (s.hasPendingVerify === true || s.hasAwaitingSlip === true) return false;
+  if (String(s.paymentMemoryState || "") === "awaiting_slip") return false;
+  const owner = String(s.canonicalStateOwner || "");
+  if (owner === "hard_blocked" || owner === "soft_locked" || owner === "pending_verify" || owner === "awaiting_slip" || owner === "payment_package_selected") return false;
+  if (String(s.flowState || "") === "waiting_birthdate") return false;
+  const ps = String(s.paymentState || "none");
+  return ps === "none" || ps === "paywall_offer_single";
 }
 
 const OLD_RESULTS_LINE = "ผลสแกนเดิมของคุณเปิดดูได้ฟรีเสมอครับ กดเมนู ดูผลเก่า ได้เลย";
@@ -48,7 +70,8 @@ export function buildFreeQuestionText(ent, deps = {}) {
       lines.push(`สแกนใหม่: ฟรีวันละ ${ent.freeLimit} ครั้ง วันนี้ยังเหลือ ${ent.freeLeft} ครั้ง ส่งรูปมาได้เลยครับ${bonus}`);
       break;
     case "daily_exhausted":
-      lines.push(`สแกนใหม่: ฟรีวันละ ${ent.freeLimit} ครั้ง วันนี้ใช้ครบแล้วครับ พรุ่งนี้ใช้ได้อีก${bonus}`);
+      // Codex รอบ 2: ห้ามรับปาก "พรุ่งนี้ใช้ได้อีก" จากโหมดปัจจุบัน — อาจมีกำหนดการเปลี่ยนโหมดตอนเที่ยงคืน
+      lines.push(`สแกนใหม่: ฟรีวันละ ${ent.freeLimit} ครั้ง วันนี้ใช้ครบแล้วครับ${bonus}`);
       break;
     case "paid_expired":
       lines.push(`สแกนใหม่: แพ็กเดิมหมดอายุแล้ว${ent.expiredPaidUntil ? ` (${fmt(ent.expiredPaidUntil)})` : ""} ตอนนี้ไม่มีสิทธิ์ฟรีครับ ถ้าต้องการสแกนเพิ่มต้องเติมแพ็ก${bonus}`);
@@ -65,13 +88,17 @@ export function buildFreeQuestionText(ent, deps = {}) {
 }
 
 /**
- * Terminal handler — AI=0 · ไม่แตะ state · ไม่ส่งการ์ด/quick reply ขาย
- * @param {{ client: any, userId: string, replyToken: string, text: string,
+ * Terminal handler — AI=0 · ไม่แตะ state · ไม่ส่งการ์ด/quick reply ขาย · ตอบเฉพาะในขอบเขต freeQuestionScopeAllowed(snapshot)
+ * @param {{ client: any, userId: string, replyToken: string, text: string, snapshot: object|null,
  *   deps: { sendNonScanReply: Function, checkScanAccess: Function, resolveEntitlementState: Function, thaiDate?: Function, now?: Date } }} p
- * @returns {Promise<boolean>}
+ * @returns {Promise<boolean>} true = จบเทิร์น · false = ไม่ใช่คำถามนี้ หรืออยู่นอกขอบเขต (ให้เส้นเดิมทำงานต่อ)
  */
-export async function handleFreeQuestion({ client, userId, replyToken, text, deps }) {
+export async function handleFreeQuestion({ client, userId, replyToken, text, snapshot, deps }) {
   if (!matchFreeQuestion(text)) return false;
+  if (!freeQuestionScopeAllowed(snapshot)) {
+    console.log(JSON.stringify({ event: "FREE_QUESTION_SKIPPED_STATE", paymentState: snapshot?.paymentState ?? null, owner: snapshot?.canonicalStateOwner ?? null, hasAwaitingSlip: snapshot?.hasAwaitingSlip === true, hasPendingVerify: snapshot?.hasPendingVerify === true }));
+    return false;
+  }
   let ent = null;
   try {
     const access = await deps.checkScanAccess({ userId });
