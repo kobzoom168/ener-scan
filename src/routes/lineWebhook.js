@@ -5138,6 +5138,21 @@ async function handleTextMessage({ client, event, userId, session }) {
     }
   }
 
+  // 🆓 P2 (chat-quality 20 ต.ค. 2026 เคส A · Codex 21 ต.ค.): คำถามสิทธิ์ฟรี "ดูฟรีไหม/สแกนฟรีมั้ย" = AI=0
+  // ตอบจากนโยบาย + สิทธิ์รายคน (checkScanAccess → resolveEntitlementState) ทั้งแง่ผลเก่าดูฟรี และสแกนใหม่
+  // ข้าม state awaiting_slip (กำลังชำระ มี handler ของตัวเอง) · ไม่ส่งการ์ดขาย · อ่านสิทธิ์ล้ม = ตอบเฉพาะที่ทราบ
+  if (getPaymentState(userId).state !== "awaiting_slip") {
+    const fq = await import("../services/lineWebhook/freeQuestionReply.util.js");
+    if (fq.matchFreeQuestion(text)) {
+      const { resolveEntitlementState, thaiDateTime } = await import("../services/entitlementCopy.service.js");
+      const done = await fq.handleFreeQuestion({
+        client, userId, replyToken: event.replyToken, text,
+        deps: { sendNonScanReply, checkScanAccess, resolveEntitlementState, thaiDate: thaiDateTime },
+      });
+      if (done) return;
+    }
+  }
+
   // ✏️ แก้ข้อมูลลงทะเบียนผ่านแชท (เปลี่ยนชื่อ/เบอร์/เพศ) — deterministic, มาก่อน AI
   // (วันเกิดมี flow เดิม birthdateChangeFlow อยู่แล้ว ไม่แตะ)
   // กบ 14 ก.ค.: สองจังหวะแบบคนคุยกัน — "เปลี่ยนเบอร์" → อาจารย์ถามกลับ → ลูกค้าตอบค่าใหม่
@@ -8769,6 +8784,13 @@ async function handleTextMessage({ client, event, userId, session }) {
       invokePhase1GeminiOrchestrator,
     });
     return;
+  }
+
+  // ⏸ P1 (chat-quality 20 ต.ค. 2026 เคส A · Codex 21 ต.ค.): "ไว้ก่อน" ใน true idle = พักสนทนาแบบกลาง ๆ AI=0
+  // ไม่ชวนส่งรูป ไม่ขายแพ็ก ไม่สัญญาฟรี ไม่แตะงาน/การชำระ · มาก่อน consult เพื่อไม่พึ่งผล consult (เดิม consult null → "ส่งรูปมาได้เลย")
+  {
+    const { handleIdleDeferral } = await import("../services/lineWebhook/idleDeferral.util.js");
+    if (await handleIdleDeferral({ client, userId, replyToken: event.replyToken, text, deps: { sendNonScanReply } })) return;
   }
 
   // True idle — generic fallback / recovery. (จุดเดียวที่เปิด idle consult bypass)

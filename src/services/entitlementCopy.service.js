@@ -126,7 +126,7 @@ export function activePackagesSorted(offer) {
   return (offer?.packages || []).filter((p) => p && p.active !== false).slice().sort((a, b) => a.priceThb - b.priceThb);
 }
 
-function thaiDateTime(iso) {
+export function thaiDateTime(iso) {
   const ms = Date.parse(String(iso || ""));
   if (!Number.isFinite(ms)) return "";
   const d = new Date(ms);

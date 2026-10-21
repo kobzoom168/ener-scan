@@ -1,0 +1,90 @@
+/**
+ * P2 (chat-quality 20 ต.ค. 2026 เคส A · Codex 21 ต.ค.): คำถามสิทธิ์ฟรี ("ดูฟรีไหม/สแกนฟรีมั้ย") ตอบ AI=0 จากนโยบาย + สิทธิ์รายคน ณ เวลานั้น
+ *  - ตอบ 2 แง่เสมอ ไม่เดาเจตนา: (1) ผลเก่าของเจ้าของเปิดดูได้โดยไม่ซื้อแพ็ก (2) สแกนใหม่: แพ็ก/โบนัส/วันหมดอายุ/trial/โควต้ารายวัน ตามสถานะจริง
+ *  - อ่านสิทธิ์ล้ม → ตอบเฉพาะส่วนที่ทราบ (ผลเก่า) + บอกว่าตรวจสิทธิ์สแกนใหม่ไม่ได้ตอนนี้ ห้ามเดาว่าไม่มีสิทธิ์
+ *  - router แคบ: ต้องมี "ฟรี" + รูปคำถาม/กริยาการใช้ · ไม่จับคำว่า "ฟรี" ทุกบริบท · ไม่ส่งการ์ดขาย ไม่มีราคา ไม่สัญญาฟรีนอกโหมด
+ */
+export const FREE_QUESTION_REPLY_TYPE = "free_question_entitlement";
+const QUESTION_MARK_RE = /(ไหม|มั้ย|หรือเปล่า|รึเปล่า|หรือไม่|ป่ะ|ปะ|\?|ได้ยัง|ยังฟรี|ฟรีอยู่|มีฟรี)/u;
+const VERB_FREE_RE = /(ดู|สแกน|ใช้|ลอง|ส่ง|ทำ|เช็ค|อ่าน|เปิด)\s*ฟรี/u;
+const EXCLUDE_RE = /(โอน|สลิป|จ่ายแล้ว|ชำระแล้ว|แนบ|ชวนเพื่อน|โปรโมชั่น|ส่วนลด|แจก|ของฟรี)/u;
+
+/** @param {string} text @returns {boolean} */
+export function matchFreeQuestion(text) {
+  const t = String(text || "").trim();
+  if (!t || t.length > 60 || !t.includes("ฟรี")) return false;
+  if (EXCLUDE_RE.test(t)) return false;
+  return QUESTION_MARK_RE.test(t) || VERB_FREE_RE.test(t);
+}
+
+const OLD_RESULTS_LINE = "ผลสแกนเดิมของคุณเปิดดูได้ฟรีเสมอครับ กดเมนู ดูผลเก่า ได้เลย";
+const UNAVAILABLE_LINE = "ส่วนสิทธิ์สแกนใหม่ ตอนนี้ตรวจให้ไม่ได้ชั่วคราว ลองถามใหม่อีกครั้งครับ";
+
+/**
+ * @param {ReturnType<import("../entitlementCopy.service.js").resolveEntitlementState>|null} ent
+ * @param {{ thaiDate?: (iso: string) => string }} [deps]
+ */
+export function buildFreeQuestionText(ent, deps = {}) {
+  const fmt = deps.thaiDate || ((s) => String(s || "").slice(0, 10));
+  const lines = [OLD_RESULTS_LINE];
+  if (!ent || ent.state === "unavailable") { lines.push(UNAVAILABLE_LINE); return lines.join("\n"); }
+  const bonus = ent.bonusLeft > 0 ? ` (มีสิทธิ์โบนัสอีก ${ent.bonusLeft} ครั้ง)` : "";
+  switch (ent.state) {
+    case "paid":
+      lines.push(ent.paidUnlimited
+        ? `สแกนใหม่: ตอนนี้มีแพ็กไม่จำกัดเปิดอยู่${ent.paidUntil ? ` ใช้ได้ถึง ${fmt(ent.paidUntil)}` : ""} ส่งรูปมาได้เลยครับ`
+        : `สแกนใหม่: ตอนนี้มีแพ็กเปิดอยู่ เหลือ ${ent.paidLeft} ครั้ง${ent.paidUntil ? ` ใช้ได้ถึง ${fmt(ent.paidUntil)}` : ""}${bonus} ส่งรูปมาได้เลยครับ`);
+      break;
+    case "bonus":
+      lines.push(`สแกนใหม่: มีสิทธิ์โบนัสเหลือ ${ent.bonusLeft} ครั้ง ส่งรูปมาได้เลยครับ ไม่ต้องซื้อแพ็ก`);
+      break;
+    case "trial_left":
+      lines.push(`สแกนใหม่: บัญชีใหม่ทดลองฟรีเหลือ ${ent.freeLeft} จาก ${ent.trialLimit || ent.freeLimit} ครั้ง ส่งรูปมาได้เลยครับ${bonus}`);
+      break;
+    case "trial_exhausted":
+      lines.push(`สแกนใหม่: สิทธิ์ทดลองฟรี ${ent.trialLimit || ent.freeLimit} ครั้งใช้ครบแล้วครับ ถ้าต้องการสแกนเพิ่มต้องใช้แพ็ก${bonus}`);
+      break;
+    case "daily_left":
+      lines.push(`สแกนใหม่: ฟรีวันละ ${ent.freeLimit} ครั้ง วันนี้ยังเหลือ ${ent.freeLeft} ครั้ง ส่งรูปมาได้เลยครับ${bonus}`);
+      break;
+    case "daily_exhausted":
+      lines.push(`สแกนใหม่: ฟรีวันละ ${ent.freeLimit} ครั้ง วันนี้ใช้ครบแล้วครับ พรุ่งนี้ใช้ได้อีก${bonus}`);
+      break;
+    case "paid_expired":
+      lines.push(`สแกนใหม่: แพ็กเดิมหมดอายุแล้ว${ent.expiredPaidUntil ? ` (${fmt(ent.expiredPaidUntil)})` : ""} ตอนนี้ไม่มีสิทธิ์ฟรีครับ ถ้าต้องการสแกนเพิ่มต้องเติมแพ็ก${bonus}`);
+      break;
+    case "existing_no_rights":
+      lines.push(ent.policy === "new_customer"
+        ? `สแกนใหม่: ตอนนี้ไม่มีสิทธิ์ฟรีครับ (ทดลองฟรีมีเฉพาะบัญชีใหม่ บัญชีนี้ไม่เข้าเกณฑ์) ถ้าต้องการสแกนเพิ่มต้องใช้แพ็ก${bonus}`
+        : `สแกนใหม่: ตอนนี้ไม่มีสิทธิ์ฟรีครับ ถ้าต้องการสแกนเพิ่มต้องใช้แพ็ก${bonus}`);
+      break;
+    default:
+      lines.push(UNAVAILABLE_LINE);
+  }
+  return lines.join("\n");
+}
+
+/**
+ * Terminal handler — AI=0 · ไม่แตะ state · ไม่ส่งการ์ด/quick reply ขาย
+ * @param {{ client: any, userId: string, replyToken: string, text: string,
+ *   deps: { sendNonScanReply: Function, checkScanAccess: Function, resolveEntitlementState: Function, thaiDate?: Function, now?: Date } }} p
+ * @returns {Promise<boolean>}
+ */
+export async function handleFreeQuestion({ client, userId, replyToken, text, deps }) {
+  if (!matchFreeQuestion(text)) return false;
+  let ent = null;
+  try {
+    const access = await deps.checkScanAccess({ userId });
+    ent = deps.resolveEntitlementState(access, { now: deps.now });
+  } catch (e) {
+    console.error(JSON.stringify({ event: "FREE_QUESTION_ACCESS_READ_FAILED", reason: String(e?.message || e).slice(0, 120) }));
+    ent = null; // ตอบเฉพาะส่วนที่ทราบ ห้ามเดาว่าไม่มีสิทธิ์
+  }
+  await deps.sendNonScanReply({
+    client, userId, replyToken,
+    replyType: FREE_QUESTION_REPLY_TYPE, semanticKey: FREE_QUESTION_REPLY_TYPE,
+    text: buildFreeQuestionText(ent, { thaiDate: deps.thaiDate }), alternateTexts: [],
+    speakerRoleOverride: "admin",
+  });
+  return true;
+}
